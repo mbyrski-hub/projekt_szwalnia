@@ -1282,3 +1282,25 @@ def complete_order_part(order_id):
             flash(f'Część zlecenia {order.order_code} została ukończona przez {completed_by_team}.', 'info')
     db.session.commit()
     return jsonify({'success': True, 'status': order.status})
+
+# =================================================
+# === NOWE TRASY DO POBIERANIA SYNCHRONIZATORA ====
+# =================================================
+
+@app.route('/download/synchronizator')
+def download_synchronizator():
+    """Udostępnia do pobrania plik wykonywalny synchronizatora."""
+    return send_from_directory(
+        os.path.join(current_app.static_folder, 'sychronizator'),
+        'Synchronizator 3.0.exe',
+        as_attachment=True
+    )
+
+@app.route('/download/config')
+def download_config():
+    """Udostępnia do pobrania plik konfiguracyjny JSON."""
+    return send_from_directory(
+        os.path.join(current_app.static_folder, 'sychronizator'),
+        'config.json',
+        as_attachment=True
+    )
