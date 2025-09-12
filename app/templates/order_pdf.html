@@ -1,120 +1,87 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-  <meta charset="UTF-8">
-  <title>Zlecenie - Szwalnia - {{ order.order_code }}</title>
-  <style>
-    body {
-      font-family: 'Helvetica', sans-serif;
-      margin: 40px;
-      color: #333;
-      position: relative;
-      padding-top: 50px;
-    }
-    .top-right {
-      position: absolute;
-      top: 20px;
-      right: 40px;
-      font-size: 16px;
-      font-weight: bold;
-    }
-    .center-header {
-      text-align: center;
-      margin-top: 100px;
-      margin-bottom: 20px;
-    }
-    .center-header h1 {
-      font-size: 28px;
-      margin: 0;
-      color: #0056b3;
-    }
-    .center-header p {
-      font-size: 18px;
-      margin: 5px 0;
-    }
-    .details {
-      margin-bottom: 30px;
-      font-size: 18px;
-      line-height: 1.5;
-    }
-    .details p {
-      margin: 5px 0;
-    }
-    .products {
-      margin-bottom: 20px;
-      font-size: 18px;
-    }
-    .product-group {
-      margin-bottom: 15px;
-    }
-    .product-group .product-name {
-      font-weight: bold;
-      font-size: 18px;
-      margin-bottom: 5px;
-    }
-    .product-variant {
-      margin-left: 20px;
-      margin-bottom: 2px;
-      font-size: 16px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Zlecenie {{ order.order_code }}</title>
+    <style>
+        body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10pt; }
+        h1 { font-size: 18pt; text-align: center; }
+        h2 { font-size: 14pt; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-top: 20px;}
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .info-box {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin-bottom: 20px;
+            background-color: #f9f9f9;
+        }
+    </style>
 </head>
 <body>
-  <div class="top-right">
-    Data utworzenia: {{ order.created_at.strftime('%Y-%m-%d %H:%M') }}
-  </div>
-  
-  <div class="center-header">
-    <h1>Zlecenie - Szwalnia</h1>
-    <p><strong>Nr zlecenia:</strong> {{ order.order_code }}</p>
-  </div>
-  
-  <div class="details">
-    <p><strong>Klient:</strong> {{ order.client.name }}</p>
-    <p><strong>Opis:</strong> {{ order.description }}</p>
-    {% if order.fabric %}
-      <p><strong>Tkanina:</strong> {{ order.fabric.name }}</p>
-    {% else %}
-      <p><strong>Tkanina:</strong> brak</p>
+    <h1>Zlecenie Produkcyjne: {{ order.order_code }}</h1>
+
+    <div class="info-box">
+        <strong>Klient:</strong> {{ order.client.name }}<br>
+        <strong>Termin realizacji:</strong> {{ order.deadline.strftime('%Y-%m-%d') }}<br>
+        <strong>Zlecający:</strong> {{ order.zlecajacy }}
+    </div>
+
+    <h2>Tkaniny</h2>
+    <ul>
+        {% for order_fabric in order.fabrics %}
+            <li>{{ order_fabric.fabric.name }}</li>
+        {% else %}
+            <li>Brak przypisanych tkanin.</li>
+        {% endfor %}
+    </ul>
+    <h2>Opis zlecenia</h2>
+    <p>{{ order.description | nl2br }}</p>
+
+    {% if order.login_info %}
+    <h2>Informacje do logowania</h2>
+    <p>{{ order.login_info | nl2br }}</p>
     {% endif %}
-    <p><strong>Logowanie:</strong> {{ order.login_info or 'brak' }}</p>
-    <p><strong>Termin:</strong> {{ order.deadline.strftime('%Y-%m-%d') }}</p>
-    <p><strong>Zlecający:</strong> {{ order.zlecajacy }}</p>
-  </div>
-  
-  <div class="products">
-    {% for product_name, items in order.order_items|groupby('product.name') %}
-      <div class="product-group">
-        <div class="product-name">{{ product_name }}:</div>
-        {% for item in items %}
-          <div class="product-variant">{{ item.size }} - {{ item.quantity }} szt.</div>
-        {% endfor %}
-      </div>
-    {% endfor %}
-  </div>
-{% if material_summary %}
-    <div class="details" style="margin-top: 30px; border-top: 1px solid #ccc; padding-top: 15px;">
-      <p style="font-weight: bold; font-size: 18px;">Podsumowanie materiałów dla zlecenia:</p>
-      <ul>
-  {% for item in material_summary %}
-    <li style="font-size: 16px;">{{ item.name }}: {{ item.quantity }}</li>
-  {% endfor %}
-</ul>
-    </div>
-  {% endif %}
-  
-</body>
-</html>
-  {% if order.materials_used %}
-    <div class="details">
-      <p><strong>Zużycie materiałów:</strong></p>
-      <ul>
-        {% for material in order.materials_used %}
-          <li>{{ material.material_name }} – {{ material.quantity }}</li>
-        {% endfor %}
-      </ul>
-    </div>
-  {% endif %}
-  
+
+    <h2>Zamówione produkty</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Produkt</th>
+                <th>Rozmiar</th>
+                <th>Ilość</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in order.order_items %}
+            <tr>
+                <td>{{ item.product.name }}</td>
+                <td>{{ item.size }}</td>
+                <td>{{ item.quantity }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if material_summary %}
+    <h2>Planowane zużycie materiałów</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Materiał</th>
+                <th>Ilość</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for material in material_summary %}
+            <tr>
+                <td>{{ material.name }}</td>
+                <td>{{ material.quantity }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
 </body>
 </html>

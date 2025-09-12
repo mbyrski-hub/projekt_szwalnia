@@ -21,8 +21,18 @@
     </div>
 
     <div class="form-group">
-        {{ form.fabric_id.label(class="form-label") }}
-        {{ form.fabric_id(class="form-control") }}
+        <label>Tkaniny</label>
+        <div id="fabrics-list">
+            {% for fabric_form in form.fabrics %}
+            <div class="input-group mb-2 fabric-row">
+                {{ fabric_form.fabric_id(class="form-control") }}
+                <div class="input-group-append">
+                    <button class="btn btn-danger remove-fabric" type="button"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="add-fabric"><i class="fas fa-plus"></i> Dodaj tkaninę</button>
     </div>
     <div class="form-group">
         {{ form.login_info.label(class="form-label") }}
@@ -31,4 +41,59 @@
 
     {{ form.submit(class="btn btn-primary") }}
 </form>
+
+<template id="fabric-row-template">
+    <div class="input-group mb-2 fabric-row">
+        <select class="form-control">
+            {% for id, name in fabric_choices %}
+            <option value="{{ id }}">{{ name }}</option>
+            {% endfor %}
+        </select>
+        <div class="input-group-append">
+            <button class="btn btn-danger remove-fabric" type="button"><i class="fas fa-trash"></i></button>
+        </div>
+    </div>
+</template>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function reindexFabrics() {
+        document.querySelectorAll('#fabrics-list .fabric-row').forEach((row, index) => {
+            const select = row.querySelector('select');
+            if (select) {
+                select.name = `fabrics-${index}-fabric_id`;
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const fabricsList = document.getElementById('fabrics-list');
+        const fabricTemplate = document.getElementById('fabric-row-template');
+
+        // Jeśli lista jest pusta przy ładowaniu, dodaj jeden wiersz
+        if (fabricsList.children.length === 0) {
+            const newRow = fabricTemplate.content.cloneNode(true);
+            fabricsList.appendChild(newRow);
+        }
+
+        document.getElementById('add-fabric').addEventListener('click', () => {
+            const newRow = fabricTemplate.content.cloneNode(true);
+            fabricsList.appendChild(newRow);
+            reindexFabrics();
+        });
+
+        fabricsList.addEventListener('click', e => {
+            const removeBtn = e.target.closest('.remove-fabric');
+            if (removeBtn) {
+                // Pozwól na usunięcie ostatniego
+                removeBtn.closest('.fabric-row').remove();
+                reindexFabrics();
+            }
+        });
+        
+        reindexFabrics();
+    });
+</script>
 {% endblock %}

@@ -10,13 +10,21 @@ class Client(db.Model):
     def __repr__(self):
         return f'<Client {self.name}>'
 
+# --- NOWA TABELA POŚREDNICZĄCA ---
+class OrderFabric(db.Model):
+    __tablename__ = 'order_fabric'
+    order_id = db.Column(db.Integer, db.ForeignKey('order.id'), primary_key=True)
+    fabric_id = db.Column(db.Integer, db.ForeignKey('fabric.id'), primary_key=True)
+    fabric = db.relationship('Fabric')
+
 class Fabric(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
     price = db.Column(db.Float, nullable=True)
     subiekt_symbol = db.Column(db.String(50), nullable=True, unique=True, index=True)
-    orders = db.relationship('Order', backref='fabric')
-
+    
+    # Usunięto backref='fabric' z Order, ponieważ teraz jest relacja wiele-do-wielu
+    
     def __repr__(self):
         return f'<Fabric {self.name}>'
 
@@ -39,11 +47,15 @@ class Order(db.Model):
     status = db.Column(db.String(50), nullable=False, default='NOWE')
     zlecajacy = db.Column(db.String(50), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    fabric_id = db.Column(db.Integer, db.ForeignKey('fabric.id'), nullable=True)
+    
+    # --- ZMIANA: Usunięcie fabric_id ---
+    # fabric_id = db.Column(db.Integer, db.ForeignKey('fabric.id'), nullable=True)
+    
+    # --- NOWA RELACJA WIELE-DO-WIELU ---
+    fabrics = db.relationship('OrderFabric', backref='order', cascade="all, delete-orphan")
+
     assigned_team = db.Column(db.String(50), nullable=True)
     cutting_table = db.Column(db.String(50), nullable=True)
-    # --- NOWE POLA ---
-    # Będą śledzić, czy dany zespół ukończył swoją część podzielonego zlecenia
     team1_completed = db.Column(db.Boolean, default=False, nullable=False)
     team2_completed = db.Column(db.Boolean, default=False, nullable=False)
     
@@ -61,22 +73,36 @@ class ProductCategory(db.Model):
     def __repr__(self):
         return f'<ProductCategory {self.name}>'
 
+# --- NOWA TABELA POŚREDNICZĄCA DLA PRODUKTÓW ---
+class ProductFabric(db.Model):
+    __tablename__ = 'product_fabric'
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    fabric_id = db.Column(db.Integer, db.ForeignKey('fabric.id'), nullable=False)
+    usage_meters = db.Column(db.Float, nullable=False, default=0.0)
+    fabric = db.relationship('Fabric')
+
+
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
     description = db.Column(db.Text, nullable=True) 
-    fabric_usage_meters = db.Column(db.Float, nullable=False, default=0.0)
     
-    # NOWE POLE - CENA PRODUKCJI (np. koszt robocizny)
+    # --- USUNIĘTE POLE ---
+    # fabric_usage_meters = db.Column(db.Float, nullable=False, default=0.0)
+    
     production_price = db.Column(db.Float, nullable=False, default=0.0)
     
     category_id = db.Column(db.Integer, db.ForeignKey('product_category.id'), nullable=True)
     category = db.relationship('ProductCategory', backref='products')
     
+    # --- NOWA RELACJA ---
+    fabrics_needed = db.relationship('ProductFabric', backref='product', lazy=True, cascade="all, delete-orphan")
+
     materials_needed = db.relationship('ProductMaterial', backref='product', lazy=True, cascade="all, delete-orphan")
     order_items = db.relationship('OrderItem', backref='product')
 
-    @validates('fabric_usage_meters', 'production_price')
+    @validates('production_price')
     def validate_positive_values(self, key, value):
         if value < 0:
             raise ValueError(f"{key} nie może być wartością ujemną.")
@@ -104,6 +130,14 @@ class Attachment(db.Model):
     def __repr__(self):
         return f'<Attachment {self.filename}>'
 
+# --- NOWA TABELA POŚREDNICZĄCA DLA SZABLONÓW ---
+class TemplateFabric(db.Model):
+    __tablename__ = 'template_fabric'
+    template_id = db.Column(db.Integer, db.ForeignKey('order_template.id'), primary_key=True)
+    fabric_id = db.Column(db.Integer, db.ForeignKey('fabric.id'), primary_key=True)
+    fabric = db.relationship('Fabric')
+
+
 class OrderTemplate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     template_name = db.Column(db.String(100), nullable=False, unique=True)
@@ -111,8 +145,12 @@ class OrderTemplate(db.Model):
     description = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     login_info = db.Column(db.Text, nullable=True)
-    fabric_id = db.Column(db.Integer, db.ForeignKey('fabric.id'), nullable=True)
-    fabric = db.relationship('Fabric')
+    
+    # --- USUNIĘTE POLE ---
+    # fabric_id = db.Column(db.Integer, db.ForeignKey('fabric.id'), nullable=True)
+    
+    # --- NOWA RELACJA ---
+    fabrics = db.relationship('TemplateFabric', cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<OrderTemplate {self.template_name}>'

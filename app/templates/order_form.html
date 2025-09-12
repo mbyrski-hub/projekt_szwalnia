@@ -36,9 +36,20 @@
                         {{ form.description.label(class="form-label") }}
                         {{ form.description(class="form-control", rows=4) }}
                     </div>
+
                     <div class="form-group">
-                        {{ form.fabric_id.label(class="form-label") }}
-                        {{ form.fabric_id(class="form-control") }}
+                        <label>Tkaniny</label>
+                        <div id="fabrics-list">
+                            {% for fabric_form in form.fabrics %}
+                            <div class="input-group mb-2 fabric-row">
+                                {{ fabric_form.fabric_id(class="form-control") }}
+                                <div class="input-group-append">
+                                    <button class="btn btn-danger remove-fabric" type="button"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm" id="add-fabric"><i class="fas fa-plus"></i> Dodaj kolejną tkaninę</button>
                     </div>
                     <div class="form-group">
                         {{ form.login_info.label(class="form-label") }}
@@ -151,31 +162,80 @@
     </div>
 
 </form>
+
+<template id="fabric-row-template">
+    <div class="input-group mb-2 fabric-row">
+        <select class="form-control">
+            {% for id, name in fabric_choices %}
+            <option value="{{ id }}">{{ name }}</option>
+            {% endfor %}
+        </select>
+        <div class="input-group-append">
+            <button class="btn btn-danger remove-fabric" type="button"><i class="fas fa-trash"></i></button>
+        </div>
+    </div>
+</template>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-    // Funkcja do reindeksowania pól
-    function reindexProducts() {
-        var productCards = document.querySelectorAll('#products-list .product-card');
-        productCards.forEach(function(card, productIndex) {
-            var productNameInput = card.querySelector('input[name*="product_name"]');
-            if (productNameInput) {
-                productNameInput.setAttribute('name', 'products-' + productIndex + '-product_name');
+    // Funkcja do reindeksowania wszystkich pól dynamicznych
+    function reindexAll() {
+        // Reindeksowanie tkanin
+        document.querySelectorAll('#fabrics-list .fabric-row').forEach((row, index) => {
+            const select = row.querySelector('select');
+            if (select) {
+                select.name = `fabrics-${index}-fabric_id`;
             }
-            var variantRows = card.querySelectorAll('.variant-row');
-            variantRows.forEach(function(row, variantIndex) {
-                var sizeInput = row.querySelector('input[name*="size"]');
-                var quantityInput = row.querySelector('input[name*="quantity"]');
+        });
+
+        // Reindeksowanie produktów
+        document.querySelectorAll('#products-list .product-card').forEach((card, productIndex) => {
+            const productNameInput = card.querySelector('input[name*="product_name"]');
+            if (productNameInput) {
+                productNameInput.name = `products-${productIndex}-product_name`;
+            }
+            card.querySelectorAll('.variant-row').forEach((row, variantIndex) => {
+                const sizeInput = row.querySelector('input[name*="size"]');
+                const quantityInput = row.querySelector('input[name*="quantity"]');
                 if(sizeInput) {
-                    sizeInput.setAttribute('name', 'products-' + productIndex + '-variants-' + variantIndex + '-size');
+                    sizeInput.name = `products-${productIndex}-variants-${variantIndex}-size`;
                 }
                 if(quantityInput) {
-                    quantityInput.setAttribute('name', 'products-' + productIndex + '-variants-' + variantIndex + '-quantity');
+                    quantityInput.name = `products-${productIndex}-variants-${variantIndex}-quantity`;
                 }
             });
         });
     }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const fabricsList = document.getElementById('fabrics-list');
+        const fabricTemplate = document.getElementById('fabric-row-template');
+
+        // Dodawanie tkaniny
+        document.getElementById('add-fabric').addEventListener('click', () => {
+            const newRow = fabricTemplate.content.cloneNode(true);
+            fabricsList.appendChild(newRow);
+            reindexAll();
+        });
+
+        // Usuwanie tkaniny (delegacja zdarzeń)
+        fabricsList.addEventListener('click', e => {
+            const removeBtn = e.target.closest('.remove-fabric');
+            if (removeBtn) {
+                if (fabricsList.children.length > 1) {
+                    removeBtn.closest('.fabric-row').remove();
+                    reindexAll();
+                } else {
+                    alert("Musi pozostać co najmniej jedna tkanina.");
+                }
+            }
+        });
+        
+        // Inicjalizacja indeksów przy pierwszym ładowaniu strony
+        reindexAll();
+    });
 
     // Dodawanie nowego produktu
     document.getElementById('add-product').addEventListener('click', function(){
@@ -188,23 +248,22 @@
         var newProduct = firstProductCard.cloneNode(true);
         newProduct.querySelectorAll('input').forEach(function(input) { input.value = ''; });
         productsList.appendChild(newProduct);
-        reindexProducts();
+        reindexAll();
     });
 
-    // Delegacja zdarzeń dla przycisków usuwania
+    // Delegacja zdarzeń dla przycisków usuwania (produkty i warianty)
     document.addEventListener('click', function(e) {
-        // Usuwanie produktu
         if(e.target.closest('.remove-product')) {
             var productCard = e.target.closest('.product-card');
             if(document.querySelectorAll('.product-card').length > 1) {
                 productCard.remove();
-                reindexProducts();
+                reindexAll();
             } else {
                 alert("Nie można usunąć ostatniego produktu.");
             }
         }
-        // Dodawanie wariantu
         if(e.target.closest('.add-variant')) {
+            e.preventDefault(); // Zapobiegaj wysyłaniu formularza
             var productCard = e.target.closest('.product-card');
             var variantList = productCard.querySelector('.variant-list');
             var firstVariant = variantList.querySelector('.variant-row');
@@ -212,15 +271,14 @@
             var newVariant = firstVariant.cloneNode(true);
             newVariant.querySelectorAll('input').forEach(function(input) { input.value = ''; });
             variantList.appendChild(newVariant);
-            reindexProducts();
+            reindexAll();
         }
-        // Usuwanie wariantu
         if(e.target.closest('.remove-variant')) {
             var variantRow = e.target.closest('.variant-row');
             var variantList = variantRow.parentNode;
             if(variantList.children.length > 1) {
                 variantRow.remove();
-                reindexProducts();
+                reindexAll();
             } else {
                 alert("Nie można usunąć ostatniego wariantu.");
             }
@@ -233,52 +291,42 @@
             window.location.href = "{{ url_for('new_order') }}";
         }, 1500);
     });
-</script>
 
-<script>
     // Skrypt do filtrowania produktów po kategorii
-    document.addEventListener('DOMContentLoaded', function() {
-        const allProducts = JSON.parse('{{ products_json|safe }}');
-        const categoryFilter = document.getElementById('productCategoryFilter');
-        const productDatalist = document.getElementById('products-datalist');
+    const allProducts = JSON.parse('{{ products_json|safe }}');
+    const categoryFilter = document.getElementById('productCategoryFilter');
+    const productDatalist = document.getElementById('products-datalist');
 
-        function updateProductDatalist(selectedCategoryId) {
-            productDatalist.innerHTML = '';
-            const filteredProducts = allProducts.filter(product => {
-                return selectedCategoryId === 'all' || product.category_id == selectedCategoryId;
-            });
-            filteredProducts.forEach(product => {
-                const option = document.createElement('option');
-                option.value = product.name;
-                productDatalist.appendChild(option);
-            });
-        }
-        categoryFilter.addEventListener('change', function() {
-            updateProductDatalist(this.value);
+    function updateProductDatalist(selectedCategoryId) {
+        productDatalist.innerHTML = '';
+        const filteredProducts = allProducts.filter(product => {
+            return selectedCategoryId === 'all' || product.category_id == selectedCategoryId;
         });
-        updateProductDatalist('all');
+        filteredProducts.forEach(product => {
+            const option = document.createElement('option');
+            option.value = product.name;
+            productDatalist.appendChild(option);
+        });
+    }
+    categoryFilter.addEventListener('change', function() {
+        updateProductDatalist(this.value);
     });
-</script>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
+    updateProductDatalist('all');
+    
+    // Skrypt do wczytywania danych z szablonu
     const templateSelector = document.getElementById('templateSelector');
-
     templateSelector.addEventListener('change', function() {
         const templateId = this.value;
         if (templateId) {
-            // Przeładuj stronę z ID wybranego szablonu jako parametrem
             window.location.href = `{{ url_for('new_order') }}?template_id=${templateId}`;
         }
     });
 
-    // Jeśli strona została załadowana z szablonem, ustaw go jako wybrany na liście
+    // Ustawienie wybranej opcji, jeśli strona została przeładowana z ID szablonu
     const urlParams = new URLSearchParams(window.location.search);
     const loadedTemplateId = urlParams.get('template_id');
     if (loadedTemplateId) {
         templateSelector.value = loadedTemplateId;
     }
-});
 </script>
-
 {% endblock %}

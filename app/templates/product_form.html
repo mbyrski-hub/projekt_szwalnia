@@ -2,7 +2,78 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
-<h2><i class="fas fa-box-open"></i> {{ title }}</h2>
+<h2><i class="fas fa-box"></i> {{ title }}</h2>
+
+<form method="POST" class="mt-4">
+    {{ form.hidden_tag() }}
+    <div class="card">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        {{ form.name.label(class="form-label") }}
+                        {{ form.name(class="form-control") }}
+                    </div>
+                    <div class="form-group">
+                        {{ form.category_id.label(class="form-label") }}
+                        {{ form.category_id(class="form-control") }}
+                    </div>
+                    <div class="form-group">
+                        {{ form.production_price.label(class="form-label") }}
+                        {{ form.production_price(class="form-control") }}
+                    </div>
+                    <div class="form-group">
+                        {{ form.description.label(class="form-label") }}
+                        {{ form.description(class="form-control", rows=5) }}
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <h5><i class="fas fa-scroll"></i> Tkaniny Potrzebne do Produkcji</h5>
+                    <div id="fabrics-list">
+                        {% for fabric_form in form.fabrics_needed %}
+                        <div class="form-row align-items-center mb-2 fabric-row">
+                            <div class="col-7">
+                                {{ fabric_form.fabric_id(class="form-control form-control-sm") }}
+                            </div>
+                            <div class="col-3">
+                                {{ fabric_form.usage_meters(class="form-control form-control-sm", placeholder="Zużycie [m]") }}
+                            </div>
+                            <div class="col-2">
+                                <button type="button" class="btn btn-danger btn-sm remove-fabric"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm mb-3" id="add-fabric"><i class="fas fa-plus"></i> Dodaj tkaninę</button>
+                    <hr>
+                    <h5><i class="fas fa-cogs"></i> Materiały Dodatkowe</h5>
+                    <div id="materials-list">
+                        {% for material_form in form.materials_needed %}
+                        <div class="form-row align-items-center mb-2 material-row">
+                             <div class="col-7">
+                                {{ material_form.material_name(class="form-control form-control-sm", list="materials-datalist", placeholder="Nazwa materiału") }}
+                            </div>
+                            <div class="col-3">
+                                {{ material_form.quantity(class="form-control form-control-sm", placeholder="Ilość") }}
+                            </div>
+                            <div class="col-2">
+                                <button type="button" class="btn btn-danger btn-sm remove-material"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="add-material"><i class="fas fa-plus"></i> Dodaj materiał</button>
+                    </div>
+            </div>
+
+            <div class="text-center mt-4">
+                {{ form.submit(class="btn btn-primary btn-lg") }}
+                <a href="{{ url_for('products_list') }}" class="btn btn-secondary btn-lg">Anuluj</a>
+            </div>
+        </div>
+    </div>
+</form>
 
 <datalist id="materials-datalist">
     {% for material in available_materials %}
@@ -10,101 +81,93 @@
     {% endfor %}
 </datalist>
 
-<form method="POST" class="mt-4">
-    {{ form.hidden_tag() }}
-    <div class="form-group">
-        {{ form.name.label(class="form-label") }}
-        {{ form.name(class="form-control") }}
-    </div>
-    <div class="form-group">
-        {{ form.description.label(class="form-label") }}
-        {{ form.description(class="form-control", rows=3) }}
-    </div>
-    <div class="form-group">
-        {{ form.category_id.label(class="form-label") }}
-        {{ form.category_id(class="form-control") }}
-    </div>
-    <div class="form-group">
-        {{ form.fabric_usage_meters.label(class="form-label") }}
-        {{ form.fabric_usage_meters(class="form-control", type="number", step="0.01") }}
-    </div>
-
-
-    <div class="form-group">
-        {{ form.production_price.label(class="form-label") }}
-        {{ form.production_price(class="form-control", type="number", step="0.01") }}
-    </div>
-
-    <h4 class="mt-4">Dodatkowe materiały</h4>
-    <div id="materials-list">
-        {% for material_form in form.materials_needed %}
-        <div class="form-row align-items-end mb-2 material-row">
-            <div class="col">
-                {{ material_form.material_name(class="form-control", list="materials-datalist", placeholder="Nazwa materiału") }}
-            </div>
-            <div class="col">
-                {{ material_form.quantity(class="form-control", placeholder="Ilość") }}
-            </div>
-            <div class="col-auto d-flex align-items-end">
-                <button type="button" class="btn btn-danger remove-material"><i class="fas fa-trash"></i></button>
-            </div>
+<template id="fabric-row-template">
+    <div class="form-row align-items-center mb-2 fabric-row">
+        <div class="col-7">
+            <select class="form-control form-control-sm">
+                {% for id, name in fabric_choices %}
+                <option value="{{ id }}">{{ name }}</option>
+                {% endfor %}
+            </select>
         </div>
-        {% endfor %}
+        <div class="col-3">
+            <input type="number" class="form-control form-control-sm" placeholder="Zużycie [m]" value="0.0" step="0.01">
+        </div>
+        <div class="col-2">
+            <button type="button" class="btn btn-danger btn-sm remove-fabric"><i class="fas fa-trash"></i></button>
+        </div>
     </div>
+</template>
 
-    <button type="button" class="btn btn-secondary mt-2" id="add-material"><i class="fas fa-plus"></i> Dodaj materiał</button>
-    <hr>
-    {{ form.submit(class="btn btn-primary btn-lg mt-3") }}
-    <a href="{{ url_for('products_list') }}" class="btn btn-secondary btn-lg mt-3">Anuluj</a>
-</form>
+<template id="material-row-template">
+    <div class="form-row align-items-center mb-2 material-row">
+        <div class="col-7">
+            <input type="text" class="form-control form-control-sm" list="materials-datalist" placeholder="Nazwa materiału">
+        </div>
+        <div class="col-3">
+            <input type="text" class="form-control form-control-sm" placeholder="Ilość">
+        </div>
+        <div class="col-2">
+            <button type="button" class="btn btn-danger btn-sm remove-material"><i class="fas fa-trash"></i></button>
+        </div>
+    </div>
+</template>
 {% endblock %}
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const materialsList = document.getElementById('materials-list');
-    const addMaterialBtn = document.getElementById('add-material');
-
-    function reindexMaterials() {
-        const rows = materialsList.querySelectorAll('.material-row');
-        rows.forEach((row, index) => {
-            row.querySelectorAll('input').forEach(input => {
-                const name = input.getAttribute('name').replace(/-\d+-/, `-${index}-`);
-                input.setAttribute('name', name);
-            });
-        });
-    }
-
-    addMaterialBtn.addEventListener('click', () => {
-        const newRow = document.createElement('div');
-        newRow.className = 'form-row align-items-end mb-2 material-row';
-        const newIndex = materialsList.querySelectorAll('.material-row').length;
-        
-        const template = `
-            <div class="col">
-                <input class="form-control" list="materials-datalist" name="materials_needed-${newIndex}-material_name" placeholder="Nazwa materiału">
-            </div>
-            <div class="col">
-                <input class="form-control" name="materials_needed-${newIndex}-quantity" placeholder="Ilość">
-            </div>
-            <div class="col-auto d-flex align-items-end">
-                <button type="button" class="btn btn-danger remove-material"><i class="fas fa-trash"></i></button>
-            </div>
-        `;
-        
-        newRow.innerHTML = template;
-        materialsList.appendChild(newRow);
-        reindexMaterials();
+function reindexForms() {
+    // Reindeksowanie tkanin
+    document.querySelectorAll('#fabrics-list .fabric-row').forEach((row, index) => {
+        const select = row.querySelector('select');
+        const usageInput = row.querySelector('input[type="number"]');
+        if (select) select.name = `fabrics_needed-${index}-fabric_id`;
+        if (usageInput) usageInput.name = `fabrics_needed-${index}-usage_meters`;
     });
 
-    materialsList.addEventListener('click', (e) => {
-        const removeBtn = e.target.closest('.remove-material');
-        if (removeBtn) {
-            const row = removeBtn.closest('.material-row');
-            row.remove();
-            reindexMaterials();
+    // Reindeksowanie materiałów
+    document.querySelectorAll('#materials-list .material-row').forEach((row, index) => {
+        const nameInput = row.querySelector('input[list="materials-datalist"]');
+        const quantityInput = row.querySelector('input[placeholder="Ilość"]');
+        if (nameInput) nameInput.name = `materials_needed-${index}-material_name`;
+        if (quantityInput) quantityInput.name = `materials_needed-${index}-quantity`;
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const fabricsList = document.getElementById('fabrics-list');
+    const fabricTemplate = document.getElementById('fabric-row-template');
+    const materialsList = document.getElementById('materials-list');
+    const materialTemplate = document.getElementById('material-row-template');
+
+    // Dodawanie tkaniny
+    document.getElementById('add-fabric').addEventListener('click', () => {
+        const newRow = fabricTemplate.content.cloneNode(true);
+        fabricsList.appendChild(newRow);
+        reindexForms();
+    });
+
+    // Dodawanie materiału
+    document.getElementById('add-material').addEventListener('click', () => {
+        const newRow = materialTemplate.content.cloneNode(true);
+        materialsList.appendChild(newRow);
+        reindexForms();
+    });
+
+    // Delegacja zdarzeń do usuwania
+    document.body.addEventListener('click', e => {
+        if (e.target.closest('.remove-fabric')) {
+            e.target.closest('.fabric-row').remove();
+            reindexForms();
+        }
+        if (e.target.closest('.remove-material')) {
+            e.target.closest('.material-row').remove();
+            reindexForms();
         }
     });
+
+    // Inicjalizacja indeksów
+    reindexForms();
 });
 </script>
 {% endblock %}

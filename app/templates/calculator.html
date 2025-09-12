@@ -18,11 +18,10 @@
         font-weight: 700;
         color: #28a745;
     }
-    /* NOWA REGUŁA */
     .result-box strong {
-        font-size: 1.1rem; /* Lekko powiększamy czcionkę */
-        display: inline-block; /* Dodajemy, aby margines zadziałał */
-        margin-top: 5px; /* Mały odstęp od górnej linii */
+        font-size: 1.1rem;
+        display: inline-block;
+        margin-top: 5px;
     }
 </style>
 {% endblock %}
@@ -92,7 +91,7 @@
                     <span id="finalPrice">0.00 zł</span>
                     <hr>
                     <small class="text-muted">
-                        Koszt tkaniny: <span id="fabricCost">0.00 zł</span><br>
+                        Koszt tkanin: <span id="fabricCost">0.00 zł</span><br>
                         Koszt materiałów: <span id="materialsCost">0.00 zł</span><br>
                         Koszt produkcji: <span id="prodCost">0.00 zł</span><br>
                         <strong>Koszt całkowity: <span id="totalCost">0.00 zł</span></strong>
@@ -117,7 +116,7 @@
             <input type="number" class="form-control calc-input fabric-usage" placeholder="Zużycie [m]" value="0.0" step="0.01">
         </div>
         <div class="col-2">
-            <button type="button" class="btn btn-danger btn-sm remove-fabric-btn"><i class="fas fa-trash"></i></button>
+            <button type="button" class="btn btn-danger btn-sm remove-btn"><i class="fas fa-trash"></i></button>
         </div>
     </div>
 </template>
@@ -136,7 +135,7 @@
             <input type="text" class="form-control calc-input material-quantity" placeholder="Ilość" value="1">
         </div>
         <div class="col-2">
-            <button type="button" class="btn btn-danger btn-sm remove-material-btn"><i class="fas fa-trash"></i></button>
+            <button type="button" class="btn btn-danger btn-sm remove-btn"><i class="fas fa-trash"></i></button>
         </div>
     </div>
 </template>
@@ -147,10 +146,9 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- BAZA WIEDZY ---
     const productsData = JSON.parse('{{ products_json|safe }}');
-
-    // --- ELEMENTY DOM ---
+    
+    // ... (elementy DOM - bez zmian) ...
     const categoryFilter = document.getElementById('categoryFilter');
     const productSelector = document.getElementById('productSelector');
     const productionPrice = document.getElementById('productionPrice');
@@ -167,27 +165,27 @@ document.addEventListener('DOMContentLoaded', function() {
     const prodCostEl = document.getElementById('prodCost');
     const totalCostEl = document.getElementById('totalCost');
 
-    // --- GŁÓWNA FUNKCJA OBLICZENIOWA ---
+
     function calculate() {
         let fabricCost = 0;
         document.querySelectorAll('.fabric-row').forEach(row => {
             const select = row.querySelector('.fabric-select');
             const usageInput = row.querySelector('.fabric-usage');
-            const selectedFabricOption = select.options[select.selectedIndex];
-            const fabricPrice = parseFloat(selectedFabricOption.dataset.price);
-            const fabricAmount = parseFloat(usageInput.value) || 0;
-            fabricCost += fabricPrice * fabricAmount;
+            const selectedOption = select.options[select.selectedIndex];
+            const price = parseFloat(selectedOption.dataset.price);
+            const amount = parseFloat(usageInput.value) || 0;
+            fabricCost += price * amount;
         });
 
         let materialsCost = 0;
         document.querySelectorAll('.material-row').forEach(row => {
             const select = row.querySelector('.material-select');
             const quantityInput = row.querySelector('.material-quantity');
-            const selectedMaterialOption = select.options[select.selectedIndex];
-            const materialPrice = parseFloat(selectedMaterialOption.dataset.price);
+            const selectedOption = select.options[select.selectedIndex];
+            const price = parseFloat(selectedOption.dataset.price);
             const quantityMatch = (String(quantityInput.value).match(/(\d+\.?\d*)/) || [0, 0]);
-            const materialAmount = parseFloat(quantityMatch[1]);
-            materialsCost += materialPrice * materialAmount;
+            const amount = parseFloat(quantityMatch[1]);
+            materialsCost += price * amount;
         });
 
         const prodPrice = parseFloat(productionPrice.value) || 0;
@@ -202,7 +200,6 @@ document.addEventListener('DOMContentLoaded', function() {
         finalPriceEl.textContent = `${finalPrice.toFixed(2)} zł`;
     }
 
-    // --- FUNKCJE POMOCNICZE ---
     function addFabricRow(fabricId = null, usage = '0.0') {
         const newRow = fabricRowTemplate.content.cloneNode(true);
         if (fabricId) newRow.querySelector('.fabric-select').value = fabricId;
@@ -221,21 +218,20 @@ document.addEventListener('DOMContentLoaded', function() {
         const previouslySelected = productSelector.value;
         productSelector.innerHTML = '<option value="custom">-- Produkt niestandardowy --</option>';
         
-        const filteredProducts = Object.entries(productsData).filter(([id, product]) => {
-            return selectedCategoryId === 'all' || String(product.category_id) === String(selectedCategoryId);
-        });
-
-        filteredProducts.forEach(([id, product]) => {
-            const option = document.createElement('option');
-            option.value = id;
-            option.textContent = product.name;
-            productSelector.appendChild(option);
+        Object.entries(productsData).forEach(([id, product]) => {
+            if (selectedCategoryId === 'all' || String(product.category_id) === String(selectedCategoryId)) {
+                const option = document.createElement('option');
+                option.value = id;
+                option.textContent = product.name;
+                productSelector.appendChild(option);
+            }
         });
         
-        productSelector.value = previouslySelected;
+        if (productSelector.querySelector(`option[value="${previouslySelected}"]`)) {
+            productSelector.value = previouslySelected;
+        }
     }
 
-    // --- OBSŁUGA ZDARZEŃ ---
     productSelector.addEventListener('change', function() {
         const productId = this.value;
         fabricsList.innerHTML = '';
@@ -243,32 +239,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (productId === 'custom') {
             productionPrice.value = "0.0";
-            addFabricRow();
+            addFabricRow(); // Dodaj jeden pusty wiersz
         } else {
             const data = productsData[productId];
             productionPrice.value = data.production_price || 0.0;
-            addFabricRow(null, data.fabric_usage);
+            
+            // --- ZMIANA: Dodawanie wielu tkanin z produktu ---
+            if (data.fabrics_needed && data.fabrics_needed.length > 0) {
+                data.fabrics_needed.forEach(fabric => addFabricRow(fabric.id, fabric.usage));
+            } else {
+                addFabricRow(); // Dodaj pusty, jeśli produkt nie ma zdefiniowanych
+            }
+
             data.materials_needed.forEach(material => addMaterialRow(material.id, material.quantity));
         }
         calculate();
     });
 
-    categoryFilter.addEventListener('change', function() {
-        updateProductSelector(this.value);
-    });
+    categoryFilter.addEventListener('change', () => updateProductSelector(categoryFilter.value));
 
     addFabricBtn.addEventListener('click', () => addFabricRow());
-    fabricsList.addEventListener('click', e => {
-        if (e.target.closest('.remove-fabric-btn')) {
-            e.target.closest('.fabric-row').remove();
-            calculate();
-        }
-    });
-
     addMaterialBtn.addEventListener('click', () => addMaterialRow());
-    materialsList.addEventListener('click', e => {
-        if (e.target.closest('.remove-material-btn')) {
-            e.target.closest('.material-row').remove();
+    
+    // Delegacja do usuwania wierszy
+    document.body.addEventListener('click', e => {
+        if (e.target.closest('.remove-btn')) {
+            e.target.closest('.form-row').remove();
             calculate();
         }
     });
@@ -280,7 +276,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.target.classList.contains('calc-input')) calculate();
     });
     
-    // --- INICJALIZACJA ---
     updateProductSelector('all');
     addFabricRow();
     calculate();

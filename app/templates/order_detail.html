@@ -6,13 +6,22 @@
 <p><strong>Klient:</strong> {{ order.client.name }}</p>
 <p><strong>Opis:</strong> {{ order.description }}</p>
 <p><strong>Termin:</strong> {{ order.deadline.strftime('%Y-%m-%d') }}</p>
-</form>
+
+<h4>Tkaniny</h4>
+<ul>
+    {% for order_fabric in order.fabrics %}
+        <li>{{ order_fabric.fabric.name }}</li>
+    {% else %}
+        <li>Brak przypisanych tkanin.</li>
+    {% endfor %}
+</ul>
 <h4>Produkty</h4>
 <table class="table table-bordered">
     <thead>
         <tr>
             <th>Produkt</th>
             <th>Rozmiar</th>
+            <th>Ilość</th>
         </tr>
     </thead>
     <tbody>
@@ -20,10 +29,12 @@
         <tr>
             <td>{{ item.product.name }}</td>
             <td>{{ item.size }}</td>
+            <td>{{ item.quantity }}</td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+
 <h4>Załączniki</h4>
 <ul>
     {% for attachment in order.attachments %}

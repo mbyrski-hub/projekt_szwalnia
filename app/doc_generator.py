@@ -1,91 +1,87 @@
 # app/doc_generator.py
 
-import os
 from docx import Document
-from docx.shared import Pt, RGBColor
+from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+import os
 from datetime import datetime
 
-# Zmieniamy sygnaturę funkcji, aby przyjmowała podsumowanie materiałów
-# app/doc_generator.py
+def set_run_properties(run, bold=False, size=11):
+    run.font.name = 'Calibri'
+    run.font.size = Pt(size)
+    run.bold = bold
 
-import os
-from docx import Document
-from docx.shared import Pt, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from datetime import datetime
-
-def save_order_as_word(order, material_summary, folder_path='order_docs'):
-    doc = Document()
+def save_order_as_word(order, material_summary, folder_path='app/order_docs'):
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
     
-    # --- Data utworzenia w prawym górnym rogu ---
-    date_p = doc.add_paragraph()
-    date_p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    date_run = date_p.add_run("Data utworzenia: " + order.created_at.strftime('%Y-%m-%d %H:%M'))
-    date_run.font.size = Pt(12)
+    document = Document()
     
-    # --- Nagłówek ---
-    header = doc.add_paragraph()
+    # Nagłówek
+    header = document.add_paragraph()
     header.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    header_run = header.add_run("Zlecenie - Szwalnia")
-    header_run.font.size = Pt(24)
-    header_run.bold = True
-    header_run.font.color.rgb = RGBColor(0x00, 0x56, 0xB3)
+    run = header.add_run(f"Zlecenie Produkcyjne: {order.order_code}")
+    set_run_properties(run, bold=True, size=16)
 
-    order_code_par = doc.add_paragraph()
-    order_code_par.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    order_code_run = order_code_par.add_run("Nr zlecenia: " + order.order_code)
-    order_code_run.font.size = Pt(16)
-    order_code_run.bold = True
+    # Informacje podstawowe
+    p = document.add_paragraph()
+    set_run_properties(p.add_run('Klient: '), bold=True)
+    set_run_properties(p.add_run(f'{order.client.name}\n'))
+    set_run_properties(p.add_run('Termin realizacji: '), bold=True)
+    set_run_properties(p.add_run(f'{order.deadline.strftime("%Y-%m-%d")}\n'))
+    set_run_properties(p.add_run('Zlecający: '), bold=True)
+    set_run_properties(p.add_run(f'{order.zlecajacy}'))
 
-    doc.add_paragraph()
+    # --- ZMIANA: Obsługa wielu tkanin ---
+    p = document.add_paragraph()
+    set_run_properties(p.add_run('Tkaniny:\n'), bold=True)
+    # Tworzymy listę z nazwami tkanin
+    fabric_names = [of.fabric.name for of in order.fabrics]
+    # Dołączamy je jako string z przecinkami
+    set_run_properties(p.add_run(', '.join(fabric_names)))
+    # --- KONIEC ZMIANY ---
 
-    # --- Szczegóły zlecenia ---
-    details_font_size = Pt(12)
-    p = doc.add_paragraph(); p.add_run("Klient: ").bold = True; p.add_run(order.client.name).font.size = details_font_size
-    p = doc.add_paragraph(); p.add_run("Opis: ").bold = True; p.add_run(order.description).font.size = details_font_size
-    if order.fabric:
-        p = doc.add_paragraph(); p.add_run("Tkanina: ").bold = True; p.add_run(order.fabric.name).font.size = details_font_size
-    p = doc.add_paragraph(); p.add_run("Logowanie: ").bold = True; p.add_run(order.login_info or 'brak').font.size = details_font_size
-    p = doc.add_paragraph(); p.add_run("Termin: ").bold = True; p.add_run(order.deadline.strftime('%Y-%m-%d')).font.size = details_font_size
-    p = doc.add_paragraph(); p.add_run("Zlecający: ").bold = True; p.add_run(order.zlecajacy).font.size = details_font_size
-    doc.add_paragraph()
+    # Opis i logowanie
+    document.add_heading('Opis zlecenia', level=1)
+    document.add_paragraph(order.description)
 
-    # --- Tabela produktów ---
-    doc.add_heading("Produkty", level=2)
-    table = doc.add_table(rows=1, cols=3)
+    if order.login_info:
+        document.add_heading('Informacje do logowania', level=1)
+        document.add_paragraph(order.login_info)
+
+    # Tabela z produktami
+    document.add_heading('Zamówione produkty', level=1)
+    table = document.add_table(rows=1, cols=3)
     table.style = 'Table Grid'
     hdr_cells = table.rows[0].cells
-    hdr_cells[0].text = 'Produkt'; hdr_cells[1].text = 'Rozmiar'; hdr_cells[2].text = 'Ilość'
-    for cell in hdr_cells:
-        cell.paragraphs[0].runs[0].bold = True
+    set_run_properties(hdr_cells[0].paragraphs[0].add_run('Produkt'), bold=True)
+    set_run_properties(hdr_cells[1].paragraphs[0].add_run('Rozmiar'), bold=True)
+    set_run_properties(hdr_cells[2].paragraphs[0].add_run('Ilość'), bold=True)
+
     for item in order.order_items:
         row_cells = table.add_row().cells
-        row_cells[0].text = item.product.name
-        row_cells[1].text = item.size
-        row_cells[2].text = str(item.quantity)
-    doc.add_paragraph()
+        set_run_properties(row_cells[0].paragraphs[0].add_run(item.product.name))
+        set_run_properties(row_cells[1].paragraphs[0].add_run(item.size))
+        set_run_properties(row_cells[2].paragraphs[0].add_run(str(item.quantity)))
 
-    # --- POCZĄTEK POPRAWKI ---
-    # Sekcja: Podsumowanie materiałów
+    # Tabela z materiałami
     if material_summary:
-        doc.add_heading("Podsumowanie materiałów dla zlecenia:", level=2)
-        for summary_item in material_summary:
-            # Odczytujemy dane ze słownika i tworzymy poprawny tekst
-            name = summary_item.get('name', 'Brak nazwy')
-            quantity = summary_item.get('quantity', 'Brak ilości')
-            line_text = f"{name}: {quantity}"
-            # Dopiero sformatowany tekst dodajemy do dokumentu
-            doc.add_paragraph(line_text, style='List Bullet')
-    # --- KONIEC POPRAWKI ---
+        document.add_heading('Planowane zużycie materiałów', level=1)
+        mat_table = document.add_table(rows=1, cols=2)
+        mat_table.style = 'Table Grid'
+        mat_hdr_cells = mat_table.rows[0].cells
+        set_run_properties(mat_hdr_cells[0].paragraphs[0].add_run('Materiał'), bold=True)
+        set_run_properties(mat_hdr_cells[1].paragraphs[0].add_run('Ilość'), bold=True)
 
-    # --- Zapisywanie pliku ---
-    base_dir = os.path.abspath(os.path.dirname(__file__))
-    docs_dir = os.path.join(base_dir, folder_path)
-    if not os.path.exists(docs_dir):
-        os.makedirs(docs_dir)
-    filename = f"{order.order_code.replace('/', '_')}_{order.id}.docx"
-    filepath = os.path.join(docs_dir, filename)
+        for material in material_summary:
+            row_cells = mat_table.add_row().cells
+            set_run_properties(row_cells[0].paragraphs[0].add_run(material['name']))
+            set_run_properties(row_cells[1].paragraphs[0].add_run(material['quantity']))
 
-    doc.save(filepath)
+    # Zapis pliku
+    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    filename = f"{order.order_code.replace('/', '_')}_{timestamp}.docx"
+    filepath = os.path.join(folder_path, filename)
+    document.save(filepath)
+    
     return filepath

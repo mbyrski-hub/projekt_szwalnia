@@ -3,7 +3,9 @@ from wtforms import StringField, TextAreaField, DateField, SelectField, FieldLis
 from wtforms.validators import DataRequired, NumberRange, Optional
 from wtforms import Form
 
-
+# --- NOWY, MAŁY FORMULARZ DO WYBORU TKANINY ---
+class FabricSelectionForm(Form):
+    fabric_id = SelectField('Tkanina', coerce=int, validators=[DataRequired()])
 
 # Formularz dla pojedynczego wariantu produktu (rozmiar + ilość)
 class ProductVariantForm(Form):
@@ -15,11 +17,14 @@ class OrderProductForm(Form):
     product_name = StringField('Nazwa produktu', validators=[DataRequired()])
     variants = FieldList(FormField(ProductVariantForm), min_entries=1, max_entries=10)
 
-# Główny formularz zlecenia – lista produktów (każdy z wariantami)
+# Główny formularz zlecenia
 class OrderForm(FlaskForm):
     client_name = StringField('Nazwa klienta', validators=[DataRequired()])
     description = TextAreaField('Opis zlecenia', validators=[DataRequired()])
-    fabric_id = SelectField('Tkanina', coerce=int, validators=[DataRequired()])
+    
+    # --- ZMIANA: Z SelectField na FieldList ---
+    fabrics = FieldList(FormField(FabricSelectionForm), min_entries=1)
+
     login_info = TextAreaField('Logowanie (opcjonalne)')
     deadline = DateField('Termin realizacji (RRRR-MM-DD)', format='%Y-%m-%d', validators=[DataRequired()])
     products = FieldList(FormField(OrderProductForm), min_entries=1, max_entries=10)
@@ -31,26 +36,27 @@ class OrderForm(FlaskForm):
     template_name = StringField('Nazwa szablonu (jeśli zapisujesz)')
     submit = SubmitField('Dodaj zlecenie')
 
-
 # Formularz do dodawania/edycji szablonu
 class OrderTemplateForm(FlaskForm):
     template_name = StringField('Nazwa szablonu', validators=[DataRequired()])
     client_name = StringField('Nazwa klienta', validators=[DataRequired()])
     description = TextAreaField('Opis zlecenia', validators=[DataRequired()])
     
-    # --- POCZĄTEK POPRAWKI ---
-    # Upewnij się, że te dwa pola istnieją w tej klasie
-    fabric_id = SelectField('Tkanina (opcjonalnie)', coerce=int)
-    login_info = TextAreaField('Logowanie (opcjonalne)')
-    # --- KONIEC POPRAWKI ---
+    # --- ZMIANA: Z SelectField na FieldList ---
+    fabrics = FieldList(FormField(FabricSelectionForm), min_entries=0)
     
+    login_info = TextAreaField('Logowanie (opcjonalne)')
     submit = SubmitField('Zapisz szablon')
-
 
 # Formularz dla pojedynczego materiału w produkcie
 class ProductMaterialForm(Form):
     material_name = StringField('Materiał', validators=[DataRequired()])
     quantity = StringField('Ilość', validators=[DataRequired()])
+
+# --- NOWY FORMULARZ DLA TKANIN W PRODUKCIE ---
+class ProductFabricForm(Form):
+    fabric_id = SelectField('Tkanina', coerce=int, validators=[DataRequired()])
+    usage_meters = FloatField('Zużycie [m]', validators=[DataRequired(), NumberRange(min=0)])
 
 # NOWY FORMULARZ DLA KATEGORII
 class ProductCategoryForm(FlaskForm):
@@ -60,11 +66,13 @@ class ProductCategoryForm(FlaskForm):
 class ProductForm(FlaskForm):
     name = StringField('Nazwa produktu', validators=[DataRequired()])
     description = TextAreaField('Opis produktu (opcjonalnie)')
-    
-    # NOWE POLE WYBORU KATEGORII
     category_id = SelectField('Kategoria', coerce=int, validators=[Optional()])
     production_price = FloatField('Cena Produkcji (np. robocizna)', validators=[DataRequired(), NumberRange(min=0)])
-    fabric_usage_meters = FloatField('Zużycie tkaniny (w metrach)', validators=[DataRequired(), NumberRange(min=0)])
+    
+    # --- ZMIANA: usunięcie starego pola, dodanie nowego ---
+    # fabric_usage_meters = FloatField('Zużycie tkaniny (w metrach)', validators=[DataRequired(), NumberRange(min=0)])
+    fabrics_needed = FieldList(FormField(ProductFabricForm), min_entries=0)
+
     materials_needed = FieldList(FormField(ProductMaterialForm), min_entries=0)
     submit = SubmitField('Zapisz produkt')
 
@@ -78,7 +86,6 @@ class MaterialForm(FlaskForm):
     price = FloatField('Cena netto (opcjonalnie)', validators=[Optional()])
     submit = SubmitField('Zapisz')
 
-    # Zaawansowany, uniwersalny formularz do EDYCJI
 class MaterialEditForm(FlaskForm):
     name = StringField('Nazwa', validators=[DataRequired()])
     subiekt_symbol = StringField('Symbol Subiekt (opcjonalnie)')
