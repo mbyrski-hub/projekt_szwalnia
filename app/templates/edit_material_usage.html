@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Edycja zużycia materiałów{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-edit"></i> Edycja zużycia materiałów – {{ order.order_code }}</h2>
+
+<datalist id="materials-datalist">
+    {% for material_name in existing_materials %}
+        <option value="{{ material_name }}">
+    {% endfor %}
+</datalist>
+
+<form method="POST">
+    <div class="form-group">
+        <label><strong>Klient:</strong></label>
+        <p>{{ order.client.name }}</p>
+    </div>
+    <div class="form-group">
+        <label><strong>Opis zamówienia:</strong></label>
+        <p>{{ order.description }}</p>
+    </div>
+    <div class="form-group">
+        <label><strong>Produkty:</strong></label>
+        <ul>
+            {% for item in order.order_items %}
+                <li>{{ item.product.name }} – Rozmiar: {{ item.size }}, Ilość: {{ item.quantity }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <label><strong>Zużycie materiałów:</strong></label>
+    <div id="materials">
+        {% for m in materials %}
+        <div class="form-row mb-2">
+            <div class="col">
+                <input type="text" name="material_name[]" class="form-control material-name" placeholder="Rodzaj" value="{{ m.material_name }}" list="materials-datalist" required>
+            </div>
+            <div class="col">
+                <input type="text" name="quantity[]" class="form-control" placeholder="Ilość" value="{{ m.quantity }}" required>
+            </div>
+            <div class="col-auto">
+                <button type="button" class="btn btn-danger remove-material"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>
+        {% else %}
+        <div class="form-row mb-2">
+            <div class="col">
+                <input type="text" name="material_name[]" class="form-control material-name" placeholder="Rodzaj" list="materials-datalist" required>
+            </div>
+            <div class="col">
+                <input type="text" name="quantity[]" class="form-control" placeholder="Ilość" required>
+            </div>
+            <div class="col-auto">
+                <button type="button" class="btn btn-danger remove-material"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <button type="button" id="addMaterial" class="btn btn-info mb-3"><i class="fas fa-plus"></i> Dodaj kolejny materiał</button><br>
+
+    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Aktualizuj zamówienie</button>
+    <a href="{{ url_for('orders_list') }}" class="btn btn-secondary">Anuluj</a>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+
+<script>
+$(document).ready(function(){
+    $('#addMaterial').click(function(){
+        // Ten szablon jest poprawny i zawiera list="materials-datalist"
+        const newField = `
+        <div class="form-row mb-2">
+            <div class="col">
+                <input type="text" name="material_name[]" class="form-control material-name" placeholder="Rodzaj" list="materials-datalist" required>
+            </div>
+            <div class="col">
+                <input type="text" name="quantity[]" class="form-control" placeholder="Ilość" required>
+            </div>
+            <div class="col-auto">
+                <button type="button" class="btn btn-danger remove-material"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>`;
+        $('#materials').append(newField);
+    });
+
+    $(document).on('click', '.remove-material', function(){
+        $(this).closest('.form-row').remove();
+    });
+});
+</script>
+{% endblock %}

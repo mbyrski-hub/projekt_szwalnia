@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Wybierz szablon metki{% endblock %}
+{% block content %}
+<h2>Wybierz szablon metki dla zlecenia {{ order.order_code }}</h2>
+<div class="row">
+  <div class="col-md-4 template-option" data-template="cotton" style="text-align:center; cursor:pointer;">
+    {% if order_template_images.cotton %}
+      <img src="{{ order_template_images.cotton }}" alt="100% BAWEŁNA" class="img-fluid" onerror="this.onerror=null;this.style.display='none';" />
+    {% else %}
+      <p>100% BAWEŁNA</p>
+    {% endif %}
+    <p>100% BAWEŁNA</p>
+  </div>
+  <div class="col-md-4 template-option" data-template="polyester" style="text-align:center; cursor:pointer;">
+    {% if order_template_images.polyester %}
+      <img src="{{ order_template_images.polyester }}" alt="50% POLIESTER" class="img-fluid" onerror="this.onerror=null;this.style.display='none';" />
+    {% else %}
+      <p>50% POLIESTER</p>
+    {% endif %}
+    <p>50% POLIESTER</p>
+  </div>
+  <div class="col-md-4 template-option" data-template="mixed" style="text-align:center; cursor:pointer;">
+    {% if order_template_images.mixed %}
+      <img src="{{ order_template_images.mixed }}" alt="Testowy skład" class="img-fluid" onerror="this.onerror=null;this.style.display='none';" />
+    {% else %}
+      <p>Testowy skład</p>
+    {% endif %}
+    <p>Testowy skład</p>
+  </div>
+</div>
+<button type="button" class="btn btn-secondary mt-3" onclick="window.history.back();">Wróć</button>
+<script>
+  document.querySelectorAll('.template-option').forEach(function(option) {
+    option.addEventListener('click', function() {
+      var template = this.getAttribute('data-template');
+      var url = '/orders/{{ order.id }}/labels_debug?template=' + template;
+      window.open(url, '_blank');
+    });
+  });
+</script>
+{% endblock %}

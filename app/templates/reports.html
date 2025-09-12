@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Zestawienia{% endblock %}
+{% block content %}
+<h2><i class="fas fa-chart-pie"></i> Zestawienia Zużycia Materiałów</h2>
+<p>Podsumowanie dotyczy tylko zleceń o statusie "ZREALIZOWANE".</p>
+
+<form method="GET" class="form-inline mb-4">
+    <div class="form-group">
+        <label for="material" class="mr-2">Filtruj po nazwie:</label>
+        <input type="text" name="material" id="material" class="form-control mr-2" list="materials-list" value="{{ current_filter }}">
+        <datalist id="materials-list">
+            {% for m in all_materials %}<option value="{{ m }}">{% endfor %}
+        </datalist>
+    </div>
+    <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filtruj</button>
+    <a href="{{ url_for('reports') }}" class="btn btn-secondary ml-2">Wyczyść</a>
+</form>
+
+<div class="row">
+    <div class="col-md-6">
+        <h4>Zużycie Tkanin</h4>
+        <ul class="list-group">
+            {% for name, total in fabric_summary.items() %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                {{ name }}
+                <span class="badge badge-primary badge-pill">{{ "%.2f"|format(total) }} metra</span>
+            </li>
+            {% else %}
+            <li class="list-group-item">Brak danych</li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="col-md-6">
+        <h4>Zużycie Dodatkowych Materiałów</h4>
+        <ul class="list-group">
+            {% for name, units in material_summary.items() %}
+                {% for unit, total in units.items() %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    {{ name }}
+                    <span class="badge badge-info badge-pill">{{ "%.2f"|format(total) }} {{ unit }}</span>
+                </li>
+                {% endfor %}
+            {% else %}
+            <li class="list-group-item">Brak danych</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}

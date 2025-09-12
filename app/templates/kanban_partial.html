@@ -1,0 +1,43 @@
+<div class="row">
+  <!-- Zespół I -->
+  <div class="col-md-6">
+    <div class="kanban-zone" id="zespol-1">
+      <h4 class="zone-header bg-primary text-white"><i class="fas fa-users"></i> Zespół I</h4>
+      <div class="d-flex flex-wrap">
+        {% for order in team1_orders %}
+          <div class="kanban-card {{ order.status|lower|replace(' ', '-') }}" data-id="{{ order.id }}">
+            <strong>{{ order.order_code }}</strong><br>{{ order.client.name }}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Zespół II -->
+  <div class="col-md-6">
+    <div class="kanban-zone" id="zespol-2">
+      <h4 class="zone-header bg-success text-white"><i class="fas fa-users"></i> Zespół II</h4>
+      <div class="d-flex flex-wrap">
+        {% for order in team2_orders %}
+          <div class="kanban-card {{ order.status|lower|replace(' ', '-') }}" data-id="{{ order.id }}">
+            <strong>{{ order.order_code }}</strong><br>{{ order.client.name }}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- Nieprzypisane -->
+<div class="kanban-zone mt-3" id="nieprzypisane">
+  <h4 class="zone-header bg-secondary text-white"><i class="fas fa-inbox"></i> Nieprzypisane Zlecenia</h4>
+  <div class="d-flex flex-wrap">
+    {% for order in unassigned_orders %}
+      <div class="kanban-card {{ order.status|lower|replace(' ', '-') }}" data-id="{{ order.id }}">
+        <strong>{{ order.order_code }}</strong><br>{{ order.client.name }}
+      </div>
+    {% endfor %}
+  </div>
+</div>

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Szablon Zlecenia{% endblock %}
+{% block content %}
+<h2>{% if form.template_name.data %}Edytuj szablon{% else %}Dodaj szablon{% endif %}</h2>
+<form method="POST">
+    {{ form.hidden_tag() }}
+    <div class="form-group">
+        {{ form.template_name.label(class="form-label") }}
+        {{ form.template_name(class="form-control") }}
+    </div>
+    <div class="form-group">
+        {{ form.client_name.label(class="form-label") }}
+        {{ form.client_name(class="form-control", list="clients-list") }}
+        <datalist id="clients-list">
+            {% for client in clients %}<option value="{{ client.name }}">{% endfor %}
+        </datalist>
+    </div>
+    <div class="form-group">
+        {{ form.description.label(class="form-label") }}
+        {{ form.description(class="form-control", rows=4) }}
+    </div>
+
+    <div class="form-group">
+        {{ form.fabric_id.label(class="form-label") }}
+        {{ form.fabric_id(class="form-control") }}
+    </div>
+    <div class="form-group">
+        {{ form.login_info.label(class="form-label") }}
+        {{ form.login_info(class="form-control", rows=2) }}
+    </div>
+
+    {{ form.submit(class="btn btn-primary") }}
+</form>
+{% endblock %}

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>Metki - {{ order.order_code }}</title>
+  <style>
+    @page {
+      size: 30mm auto;
+      margin: 0;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+    .label {
+      width: 30mm;
+      position: relative;
+      background: url('{{ url_for("static", filename="images/" + template_choice + ".jpg", _external=True) }}') no-repeat center center;
+      background-size: 100% auto;
+      box-sizing: border-box;
+    }
+    .label .size {
+      position: absolute;
+      top: 27mm;
+      left: 0;
+      right: 0;
+      font-size: 12pt;
+      font-weight: bold;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  {# Obliczamy łączną liczbę etykiet #}
+  {% set total_labels = 0 %}
+  {% for item in order.order_items %}
+    {% set total_labels = total_labels + item.quantity %}
+  {% endfor %}
+
+  {# Licznik etykiet #}
+  {% set label_counter = 0 %}
+  {% for item in order.order_items %}
+    {% for i in range(item.quantity) %}
+      {% set label_counter = label_counter + 1 %}
+      <div class="label"
+           style="height: {{ page_height }}; {% if label_counter != total_labels %}page-break-after: always; margin-bottom: 2mm;{% else %}margin-bottom: 0mm;{% endif %}">
+        <div class="size">{{ item.size }}</div>
+      </div>
+    {% endfor %}
+  {% endfor %}
+</body>
+</html>

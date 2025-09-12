@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-box-open"></i> {{ title }}</h2>
+
+<datalist id="materials-datalist">
+    {% for material in available_materials %}
+        <option value="{{ material.name }}">
+    {% endfor %}
+</datalist>
+
+<form method="POST" class="mt-4">
+    {{ form.hidden_tag() }}
+    <div class="form-group">
+        {{ form.name.label(class="form-label") }}
+        {{ form.name(class="form-control") }}
+    </div>
+    <div class="form-group">
+        {{ form.description.label(class="form-label") }}
+        {{ form.description(class="form-control", rows=3) }}
+    </div>
+    <div class="form-group">
+        {{ form.category_id.label(class="form-label") }}
+        {{ form.category_id(class="form-control") }}
+    </div>
+    <div class="form-group">
+        {{ form.fabric_usage_meters.label(class="form-label") }}
+        {{ form.fabric_usage_meters(class="form-control", type="number", step="0.01") }}
+    </div>
+
+
+    <div class="form-group">
+        {{ form.production_price.label(class="form-label") }}
+        {{ form.production_price(class="form-control", type="number", step="0.01") }}
+    </div>
+
+    <h4 class="mt-4">Dodatkowe materiały</h4>
+    <div id="materials-list">
+        {% for material_form in form.materials_needed %}
+        <div class="form-row align-items-end mb-2 material-row">
+            <div class="col">
+                {{ material_form.material_name(class="form-control", list="materials-datalist", placeholder="Nazwa materiału") }}
+            </div>
+            <div class="col">
+                {{ material_form.quantity(class="form-control", placeholder="Ilość") }}
+            </div>
+            <div class="col-auto d-flex align-items-end">
+                <button type="button" class="btn btn-danger remove-material"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <button type="button" class="btn btn-secondary mt-2" id="add-material"><i class="fas fa-plus"></i> Dodaj materiał</button>
+    <hr>
+    {{ form.submit(class="btn btn-primary btn-lg mt-3") }}
+    <a href="{{ url_for('products_list') }}" class="btn btn-secondary btn-lg mt-3">Anuluj</a>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const materialsList = document.getElementById('materials-list');
+    const addMaterialBtn = document.getElementById('add-material');
+
+    function reindexMaterials() {
+        const rows = materialsList.querySelectorAll('.material-row');
+        rows.forEach((row, index) => {
+            row.querySelectorAll('input').forEach(input => {
+                const name = input.getAttribute('name').replace(/-\d+-/, `-${index}-`);
+                input.setAttribute('name', name);
+            });
+        });
+    }
+
+    addMaterialBtn.addEventListener('click', () => {
+        const newRow = document.createElement('div');
+        newRow.className = 'form-row align-items-end mb-2 material-row';
+        const newIndex = materialsList.querySelectorAll('.material-row').length;
+        
+        const template = `
+            <div class="col">
+                <input class="form-control" list="materials-datalist" name="materials_needed-${newIndex}-material_name" placeholder="Nazwa materiału">
+            </div>
+            <div class="col">
+                <input class="form-control" name="materials_needed-${newIndex}-quantity" placeholder="Ilość">
+            </div>
+            <div class="col-auto d-flex align-items-end">
+                <button type="button" class="btn btn-danger remove-material"><i class="fas fa-trash"></i></button>
+            </div>
+        `;
+        
+        newRow.innerHTML = template;
+        materialsList.appendChild(newRow);
+        reindexMaterials();
+    });
+
+    materialsList.addEventListener('click', (e) => {
+        const removeBtn = e.target.closest('.remove-material');
+        if (removeBtn) {
+            const row = removeBtn.closest('.material-row');
+            row.remove();
+            reindexMaterials();
+        }
+    });
+});
+</script>
+{% endblock %}

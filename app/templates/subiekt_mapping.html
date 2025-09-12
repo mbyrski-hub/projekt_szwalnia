@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Mapowanie Towarów z Subiekta{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="fas fa-link"></i> Mapowanie Towarów z Subiekta</h2>
+</div>
+
+<div class="alert alert-info">
+    <h5 class="alert-heading">Jak to działa?</h5>
+    <p>Poniżej znajduje się lista towarów pobranych z Subiekta. Twoim zadaniem jest przypisanie każdego z nich do odpowiedniej kategorii w tej aplikacji.</p>
+    <hr>
+    <p class="mb-0">Jeśli lista jest pusta lub nieaktualna, uruchom lokalny program `sync_prices.exe` z poleceniem `fetch-catalog`, aby pobrać świeżą listę towarów z Subiekta.</p>
+</div>
+
+<div class="card bg-light mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Importuj katalog z pliku CSV</h5>
+        <form method="POST" action="{{ url_for('import_subiekt_csv') }}" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="csv_file">Wybierz plik .csv lub .xlsx wyeksportowany z Subiekta</label>
+                <input type="file" class="form-control-file" name="csv_file" id="csv_file" accept=".csv, .xlsx" required>
+            </div>
+            <p class="text-muted small">Upewnij się, że plik zawiera kolumny o nazwach "Symbol" i "Nazwa". Dane w tabeli mapowania zostaną nadpisane.</p>
+            <button type="submit" class="btn btn-success"><i class="fas fa-upload"></i> Importuj i odśwież listę</button>
+        </form>
+    </div>
+</div>
+
+<table class="table table-hover">
+    <thead class="thead-light">
+        <tr>
+            <th>Symbol w Subiekcie</th>
+            <th>Nazwa w Subiekcie</th>
+            <th class="text-right">Akcje</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for product in products %}
+        <tr>
+            <td><strong>{{ product.symbol }}</strong></td>
+            <td>{{ product.name }}</td>
+            <td class="text-right">
+                <form method="POST" action="{{ url_for('map_subiekt_product') }}" class="d-inline">
+                    <input type="hidden" name="symbol" value="{{ product.symbol }}">
+                    <input type="hidden" name="name" value="{{ product.name }}">
+                    <input type="hidden" name="map_type" value="fabric">
+                    <button type="submit" class="btn btn-sm btn-info">Ustaw jako Tkaninę</button>
+                </form>
+                <form method="POST" action="{{ url_for('map_subiekt_product') }}" class="d-inline">
+                    <input type="hidden" name="symbol" value="{{ product.symbol }}">
+                    <input type="hidden" name="name" value="{{ product.name }}">
+                    <input type="hidden" name="map_type" value="material">
+                    <button type="submit" class="btn btn-sm btn-primary">Ustaw jako Materiał Dod.</button>
+                </form>
+                <form method="POST" action="{{ url_for('map_subiekt_product') }}" class="d-inline">
+                    <input type="hidden" name="symbol" value="{{ product.symbol }}">
+                    <input type="hidden" name="name" value="{{ product.name }}">
+                    <input type="hidden" name="map_type" value="ignore">
+                    <button type="submit" class="btn btn-sm btn-secondary">Ignoruj</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="3" class="text-center text-muted">Brak towarów do zmapowania. Uruchom synchronizator, aby pobrać listę z Subiekta.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

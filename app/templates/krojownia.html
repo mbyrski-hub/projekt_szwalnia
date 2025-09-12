@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% block title %}Krojownia{% endblock %}
+
+{% block head %}
+<style>
+.kanban-zone { border-radius: 6px; padding-bottom: 15px; margin-bottom: 10px; }
+.zone-header { padding: 10px; border-radius: 6px 6px 0 0; color:#fff; margin-bottom:10px; }
+
+#stol-1 { background-color: #ffebee; } /* czerwony jasny */
+#stol-2 { background-color: #e8f5e9; } /* zielony jasny */
+#stol-3 { background-color: #e3f2fd; } /* niebieski jasny */
+#skrojone { background-color: #fff8e1; } /* żółty jasny */
+#nieprzypisane { background-color: #f0f0f0; } /* szary jasny */
+
+.kanban-card { 
+  background-color: #ffffff; 
+  border-radius: 8px; 
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+  margin: 10px; 
+  padding: 10px; 
+  width: calc(25% - 20px);
+  cursor: grab; 
+  transition: 0.2s; 
+  font-size:0.9rem;
+}
+
+.kanban-card:hover { transform: translateY(-3px); box-shadow:0 5px 10px rgba(0,0,0,0.15); }
+.kanban-card strong { font-size:0.85rem; word-break:break-word; }
+
+@media (max-width:992px){ .kanban-card{width:calc(33.3% - 20px);} }
+@media (max-width:768px){ .kanban-card{width:calc(50% - 20px);} }
+@media (max-width:576px){ .kanban-card{width:100%;} }
+
+.nowe { border-left: 6px solid #007bff; }
+.w-realizacji { border-left: 6px solid #ffc107; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-scissors"></i> Krojownia </h2>
+<div class="container-fluid">
+  <div class="row">
+    {% for id, name, orders, color in [
+      ('stol-1','Stół I',stol_1_orders,'bg-danger'),
+      ('stol-2','Stół II',stol_2_orders,'bg-success'),
+      ('stol-3','Stół III',stol_3_orders,'bg-primary'),
+      ('skrojone','Skrojone',skrojone_orders,'bg-warning text-dark')] %}
+    <div class="col-md-6">
+      <div class="kanban-zone" id="{{id}}">
+        <h4 class="zone-header {{color}}"><i class="fas fa-cut"></i> {{name}}</h4>
+        <div class="d-flex flex-wrap">
+          {% for order in orders %}
+          <div class="kanban-card {{order.status|lower|replace(' ','-')}}" data-id="{{order.id}}">
+            <strong>{{order.order_code}}</strong><br>{{order.client.name}}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="kanban-zone mt-3" id="nieprzypisane">
+    <h4 class="zone-header bg-secondary"><i class="fas fa-inbox"></i> Nieprzypisane Zlecenia</h4>
+    <div class="d-flex flex-wrap">
+      {% for order in unassigned_orders %}
+      <div class="kanban-card {{order.status|lower|replace(' ','-')}}" data-id="{{order.id}}">
+        <strong>{{order.order_code}}</strong><br>{{order.client.name}}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Modal podsumowanie produktów -->
+<div class="modal fade" id="orderSummaryModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="fas fa-boxes"></i> Podsumowanie produktów</h5>
+        <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <h5 id="modalOrderCode"></h5>
+        <p id="modalClient"></p>
+        <ul id="modalProductList" class="list-group"></ul>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Zamknij</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<script>
+['stol-1','stol-2','stol-3','skrojone','nieprzypisane'].forEach(zone=>{
+  new Sortable(document.getElementById(zone).querySelector('.d-flex'),{
+    group:'shared',animation:200,
+    onEnd:evt=>{
+      const orderId=evt.item.dataset.id;
+      const table=evt.to.closest('.kanban-zone').id;
+      fetch('/assign_cutting_table',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({order_id:orderId,table})
+      })
+      .then(res=>res.json()).then(data=>console.log('Przypisano:',data))
+      .catch(err=>console.error('Błąd:',err));
+    }
+  });
+});
+</script>
+<!--zliczanie ogolnych ilosci i wysiwetlanie po kliknieciu w kafelek-->
+<script>
+  $(document).ready(function(){
+    $('.kanban-card').click(function(){
+      const orderId = $(this).data('id');
+      
+      fetch(`/order_summary/${orderId}`)
+        .then(res => res.json())
+        .then(data => {
+          $('#modalOrderCode').text(`Zlecenie: ${data.order_code}`);
+          $('#modalClient').text(`Klient: ${data.client}`);
+          const list = $('#modalProductList');
+          list.empty();
+  
+          for(const [product, quantity] of Object.entries(data.summary)){
+            list.append(`<li class="list-group-item d-flex justify-content-between align-items-center">
+                          ${product}
+                          <span class="badge badge-primary badge-pill">${quantity} szt.</span>
+                        </li>`);
+          }
+  
+          $('#orderSummaryModal').modal('show');
+        })
+        .catch(err => {
+          alert('Błąd pobierania danych!');
+          console.error(err);
+        });
+    });
+  });
+  </script>
+  
+{% endblock %}

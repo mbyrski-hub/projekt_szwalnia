@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% block title %}Nowe Zlecenie{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="fas fa-plus-circle"></i> Nowe Zlecenie</h2>
+    
+    <div class="form-inline">
+        <label for="templateSelector" class="mr-2"><strong>Utwórz z szablonu:</strong></label>
+        <select id="templateSelector" class="form-control">
+            <option value="">-- Wybierz szablon --</option>
+            {% for template in templates %}
+            <option value="{{ template.id }}">{{ template.template_name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+<form method="POST" enctype="multipart/form-data" class="mt-4">
+    {{ form.hidden_tag() }}
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h4>Dane Główne Zlecenia</h4>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        {{ form.client_name.label(class="form-label") }}
+                        {{ form.client_name(class="form-control", list="clients-list") }}
+                        <datalist id="clients-list">
+                            {% for client in clients %}<option value="{{ client.name }}">{% endfor %}
+                        </datalist>
+                    </div>
+                    <div class="form-group">
+                        {{ form.description.label(class="form-label") }}
+                        {{ form.description(class="form-control", rows=4) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form.fabric_id.label(class="form-label") }}
+                        {{ form.fabric_id(class="form-control") }}
+                    </div>
+                    <div class="form-group">
+                        {{ form.login_info.label(class="form-label") }}
+                        {{ form.login_info(class="form-control", rows=2, placeholder="Opcjonalnie...") }}
+                    </div>
+                    <div class="form-group">
+                        {{ form.deadline.label(class="form-label") }}
+                        {{ form.deadline(class="form-control") }}
+                    </div>
+                    <div class="form-group">
+                        {{ form.zlecajacy.label(class="form-label") }}
+                        {{ form.zlecajacy(class="form-control") }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h4><i class="fas fa-box-open"></i> Produkty</h4>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label for="productCategoryFilter">Filtruj produkty po kategorii:</label>
+                        <select id="productCategoryFilter" class="form-control form-control-sm">
+                            <option value="all">-- Pokaż wszystkie kategorie --</option>
+                            {% for category in categories %}<option value="{{ category.id }}">{{ category.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <hr>
+                    <div id="products-list">
+                        {% for product_form in form.products %}
+                        <div class="card mb-3 p-3 product-card">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    {{ product_form.product_name.label() }}
+                                    {{ product_form.product_name(class="form-control", list="products-datalist") }}
+                                    <datalist id="products-datalist">
+                                        </datalist>
+                                </div>
+                                <div>
+                                    <button type="button" class="btn btn-danger btn-sm remove-product" title="Usuń produkt"><i class="fas fa-minus"></i></button>
+                                </div>
+                            </div>
+                            <div class="variants mt-3">
+                                <h5>Rozmiary:</h5>
+                                <div class="variant-list">
+                                    {% for variant in product_form.variants %}
+                                    <div class="form-row variant-row">
+                                        <div class="form-group col-md-5">
+                                            {{ variant.size(class="form-control", placeholder="Rozmiar") }}
+                                        </div>
+                                        <div class="form-group col-md-5">
+                                            {{ variant.quantity(class="form-control", placeholder="Ilość") }}
+                                        </div>
+                                        <div class="form-group col-md-2 d-flex align-items-end">
+                                            <button type="button" class="btn btn-danger btn-sm remove-variant" title="Usuń wariant"><i class="fas fa-minus"></i></button>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                <button type="button" class="btn btn-secondary btn-sm add-variant"><i class="fas fa-plus"></i> Dodaj kolejny</button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <button type="button" class="btn btn-secondary mt-2" id="add-product">
+                        <i class="fas fa-plus"></i> Dodaj kolejny produkt
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <hr class="my-4">
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h4><i class="fas fa-paperclip"></i> Załączniki</h4>
+                </div>
+                <div class="card-body">
+                    <input type="file" name="attachments" id="attachments" multiple class="form-control-file">
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h4><i class="fas fa-bookmark"></i> Opcje Szablonu</h4>
+                </div>
+                <div class="card-body">
+                    <div class="form-group form-check">
+                        {{ form.save_template(class="form-check-input") }}
+                        {{ form.save_template.label(class="form-check-label") }}
+                    </div>
+                    <div class="form-group">
+                        {{ form.template_name.label(class="form-label") }}
+                        {{ form.template_name(class="form-control", placeholder="Podaj nazwę szablonu") }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="text-center mt-4">
+        {{ form.submit(class="btn btn-primary btn-lg") }}
+    </div>
+
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Funkcja do reindeksowania pól
+    function reindexProducts() {
+        var productCards = document.querySelectorAll('#products-list .product-card');
+        productCards.forEach(function(card, productIndex) {
+            var productNameInput = card.querySelector('input[name*="product_name"]');
+            if (productNameInput) {
+                productNameInput.setAttribute('name', 'products-' + productIndex + '-product_name');
+            }
+            var variantRows = card.querySelectorAll('.variant-row');
+            variantRows.forEach(function(row, variantIndex) {
+                var sizeInput = row.querySelector('input[name*="size"]');
+                var quantityInput = row.querySelector('input[name*="quantity"]');
+                if(sizeInput) {
+                    sizeInput.setAttribute('name', 'products-' + productIndex + '-variants-' + variantIndex + '-size');
+                }
+                if(quantityInput) {
+                    quantityInput.setAttribute('name', 'products-' + productIndex + '-variants-' + variantIndex + '-quantity');
+                }
+            });
+        });
+    }
+
+    // Dodawanie nowego produktu
+    document.getElementById('add-product').addEventListener('click', function(){
+        var productsList = document.getElementById('products-list');
+        var firstProductCard = productsList.querySelector('.product-card');
+        if (!firstProductCard) {
+            alert('Błąd: Brak wzorca produktu do sklonowania.');
+            return;
+        }
+        var newProduct = firstProductCard.cloneNode(true);
+        newProduct.querySelectorAll('input').forEach(function(input) { input.value = ''; });
+        productsList.appendChild(newProduct);
+        reindexProducts();
+    });
+
+    // Delegacja zdarzeń dla przycisków usuwania
+    document.addEventListener('click', function(e) {
+        // Usuwanie produktu
+        if(e.target.closest('.remove-product')) {
+            var productCard = e.target.closest('.product-card');
+            if(document.querySelectorAll('.product-card').length > 1) {
+                productCard.remove();
+                reindexProducts();
+            } else {
+                alert("Nie można usunąć ostatniego produktu.");
+            }
+        }
+        // Dodawanie wariantu
+        if(e.target.closest('.add-variant')) {
+            var productCard = e.target.closest('.product-card');
+            var variantList = productCard.querySelector('.variant-list');
+            var firstVariant = variantList.querySelector('.variant-row');
+            if (!firstVariant) return;
+            var newVariant = firstVariant.cloneNode(true);
+            newVariant.querySelectorAll('input').forEach(function(input) { input.value = ''; });
+            variantList.appendChild(newVariant);
+            reindexProducts();
+        }
+        // Usuwanie wariantu
+        if(e.target.closest('.remove-variant')) {
+            var variantRow = e.target.closest('.variant-row');
+            var variantList = variantRow.parentNode;
+            if(variantList.children.length > 1) {
+                variantRow.remove();
+                reindexProducts();
+            } else {
+                alert("Nie można usunąć ostatniego wariantu.");
+            }
+        }
+    });
+
+    // Przekierowanie po wysłaniu formularza
+    document.querySelector('form').addEventListener('submit', function(){
+        setTimeout(function(){
+            window.location.href = "{{ url_for('new_order') }}";
+        }, 1500);
+    });
+</script>
+
+<script>
+    // Skrypt do filtrowania produktów po kategorii
+    document.addEventListener('DOMContentLoaded', function() {
+        const allProducts = JSON.parse('{{ products_json|safe }}');
+        const categoryFilter = document.getElementById('productCategoryFilter');
+        const productDatalist = document.getElementById('products-datalist');
+
+        function updateProductDatalist(selectedCategoryId) {
+            productDatalist.innerHTML = '';
+            const filteredProducts = allProducts.filter(product => {
+                return selectedCategoryId === 'all' || product.category_id == selectedCategoryId;
+            });
+            filteredProducts.forEach(product => {
+                const option = document.createElement('option');
+                option.value = product.name;
+                productDatalist.appendChild(option);
+            });
+        }
+        categoryFilter.addEventListener('change', function() {
+            updateProductDatalist(this.value);
+        });
+        updateProductDatalist('all');
+    });
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const templateSelector = document.getElementById('templateSelector');
+
+    templateSelector.addEventListener('change', function() {
+        const templateId = this.value;
+        if (templateId) {
+            // Przeładuj stronę z ID wybranego szablonu jako parametrem
+            window.location.href = `{{ url_for('new_order') }}?template_id=${templateId}`;
+        }
+    });
+
+    // Jeśli strona została załadowana z szablonem, ustaw go jako wybrany na liście
+    const urlParams = new URLSearchParams(window.location.search);
+    const loadedTemplateId = urlParams.get('template_id');
+    if (loadedTemplateId) {
+        templateSelector.value = loadedTemplateId;
+    }
+});
+</script>
+
+{% endblock %}

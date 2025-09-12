@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    /* 1. Zmiana koloru nagłówków tabel */
+    .table thead.thead-dark th {
+        background-color: #f1f3f5; /* Jasny, neutralny szary */
+        color: #495057;           /* Ciemny tekst dla kontrastu */
+        border-color: #dee2e6;
+    }
+
+    /* 2. Zmniejszenie odstępów między wierszami */
+    .table td, .table th {
+        padding-top: 0.6rem;
+        padding-bottom: 0.6rem;
+        vertical-align: middle; /* Lepsze wyrównanie tekstu i przycisków w pionie */
+    }
+
+    /* 3. Rozszerzenie kolumn (całej sekcji) na szerokich ekranach */
+    /* Ta reguła sprawi, że na monitorach >1200px główny kontener będzie szerszy */
+    @media (min-width: 1200px) {
+        .container {
+            max-width: 1400px; 
+        }
+    }
+</style>
+{% endblock %}
+{% block title %}Zarządzanie Materiałami{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-boxes"></i> Zarządzanie Materiałami</h2>
+
+<div class="row mt-4">
+    <div class="col-lg-6">
+        <h4><i class="fas fa-scroll"></i> Tkaniny</h4>
+        <div class="mb-3">
+            <a href="{{ url_for('add_fabric') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Dodaj nową tkaninę</a>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Nazwa</th>
+                        <th>Cena Netto</th>
+                        <th>Akcje</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for fabric in fabrics %}
+                    <tr>
+                        <td>{{ fabric.name }}<br><small class="text-muted">{{ fabric.subiekt_symbol or '' }}</small></td>
+                        <td>{{ "%.2f zł"|format(fabric.price) if fabric.price is not none else 'Brak' }}</td>
+                        <td>
+    <div class="d-flex">
+        <a href="{{ url_for('edit_mapped_item', item_type='fabric', item_id=fabric.id) }}" class="btn btn-sm btn-warning"><i class="fas fa-edit"></i></a>
+        <form method="POST" action="{{ url_for('delete_fabric', fabric_id=fabric.id) }}" class="d-inline ml-1" onsubmit="return confirm('Czy na pewno usunąć?');">
+            <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+        </form>
+    </div>
+</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="3" class="text-center">Brak tkanin.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <h4><i class="fas fa-cogs"></i> Materiały Dodatkowe</h4>
+        <div class="mb-3">
+            <a href="{{ url_for('add_material') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Dodaj nowy materiał</a>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Nazwa</th>
+                        <th>Cena Netto</th>
+                        <th>Akcje</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for material in materials %}
+                    <tr>
+                        <td>{{ material.name }}<br><small class="text-muted">{{ material.subiekt_symbol or '' }}</small></td>
+                        <td>{{ "%.2f zł"|format(material.price) if material.price is not none else 'Brak' }}</td>
+                        <td>
+                            <a href="{{ url_for('edit_mapped_item', item_type='material', item_id=material.id) }}" class="btn btn-sm btn-warning"><i class="fas fa-edit"></i></a>
+                            <form method="POST" action="{{ url_for('delete_material', material_id=material.id) }}" class="d-inline" onsubmit="return confirm('Czy na pewno usunąć?');">
+                                <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="3" class="text-center">Brak materiałów.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

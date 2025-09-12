@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Krojownia</title>
+    <link rel="manifest" href="{{ url_for('static', filename='mobile_assets/manifest_krojownia.json') }}">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+    <style>
+    body { background-color: #f4f6f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    .kanban-section h4 { font-weight: 600; color: #495057; padding: 0.5rem 0; }
+    
+    /* Styl dla kart/kafelków W STOŁACH */
+    .table-column .kanban-card {
+        background-color: #fff;
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        cursor: grab;
+        min-height: 80px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .kanban-card:active { cursor: grabbing; }
+    .kanban-card-title { font-weight: 600; margin-bottom: 2px; font-size: 0.9rem; }
+    .kanban-card-client { font-size: 0.8rem; color: #6c757d; }
+
+    /* --- NOWE REGUŁY --- */
+    /* 1. Mniejsze, bardziej kompaktowe karty w sekcji "Nieprzypisane" */
+    #unassigned .kanban-card {
+        background-color: #fff;
+        padding: 8px 15px; /* Mniejszy pionowy padding */
+        border-radius: 8px;
+        margin-bottom: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        cursor: grab;
+        min-height: auto; /* Anulujemy minimalną wysokość */
+        display: flex;
+        flex-direction: row; /* Ustawiamy tekst w jednej linii */
+        justify-content: space-between; /* Rozsuwamy tekst na boki */
+        align-items: center;
+    }
+
+    /* 2. Automatycznie pokazuj wiadomość, gdy sekcja "Nieprzypisane" jest pusta */
+    #unassigned:empty::after {
+        content: "Wszystkie zlecenia zostały przypisane.";
+        display: block;
+        text-align: center;
+        padding: 20px;
+        color: #6c757d;
+        font-style: italic;
+        background-color: #e9ecef;
+        border-radius: 8px;
+    }
+    /* --- KONIEC NOWYCH REGUŁ --- */
+
+    /* Styl dla kolumn ze stołami */
+    .table-column {
+        padding: 10px;
+        border-radius: 8px;
+        height: 100%;
+    }
+    .table-column h5 { color: #fff; font-weight: 600; }
+    .kanban-cards { min-height: 150px; }
+
+    /* Kolory dla stołów */
+    #stol-1-col { background-color: #007bff; }
+    #stol-2-col { background-color: #28a745; }
+    #stol-3-col { background-color: #dc3545; }
+    #skrojone-col { background-color: #ffc107; }
+    #skrojone-col h5 { color: #212529; }
+</style>
+</head>
+<body>
+
+<div class="container-fluid pt-3">
+    <h3 class="px-2">Krojownia</h3>
+
+    <div class="kanban-section px-2 mt-3">
+        <h4><i class="fas fa-inbox"></i> Nieprzypisane</h4>
+        <div class="kanban-cards" id="unassigned">
+            </div>
+    </div>
+    
+    <hr>
+
+    <div class="kanban-section px-2 mt-3">
+        <h4><i class="fas fa-th-large"></i> Stoły Robocze</h4>
+        <div class="row">
+            <div class="col-6 mb-3">
+                <div class="table-column" id="stol-1-col">
+                    <h5>Stół 1</h5>
+                    <div class="kanban-cards" id="stol-1"></div>
+                </div>
+            </div>
+            <div class="col-6 mb-3">
+                <div class="table-column" id="stol-2-col">
+                    <h5>Stół 2</h5>
+                    <div class="kanban-cards" id="stol-2"></div>
+                </div>
+            </div>
+            <div class="col-6 mb-3">
+                <div class="table-column" id="stol-3-col">
+                    <h5>Stół 3</h5>
+                    <div class="kanban-cards" id="stol-3"></div>
+                </div>
+            </div>
+            <div class="col-6 mb-3">
+                <div class="table-column" id="skrojone-col">
+                    <h5>Skrojone</h5>
+                    <div class="kanban-cards" id="skrojone"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Funkcja do renderowania (bez zmian)
+    function fetchAndRenderOrders() {
+        fetch('/api/krojownia/orders')
+            .then(response => response.json())
+            .then(orders => {
+                document.querySelectorAll('.kanban-cards').forEach(col => col.innerHTML = '');
+                orders.forEach(order => {
+                    const card = document.createElement('div');
+                    card.className = 'kanban-card';
+                    card.dataset.orderId = order.id;
+                    card.innerHTML = `
+                        <div class="kanban-card-title">${order.order_code}</div>
+                        <div class="kanban-card-client">${order.client_name}</div>
+                    `;
+                    const targetColumnId = order.cutting_table || 'unassigned';
+                    const targetColumn = document.getElementById(targetColumnId);
+                    if (targetColumn) {
+                        targetColumn.appendChild(card);
+                    }
+                });
+            });
+    }
+
+    // Inicjalizacja drag-and-drop (bez zmian)
+    const columns = document.querySelectorAll('.kanban-cards');
+    columns.forEach(column => {
+        new Sortable(column, {
+            group: 'krojownia',
+            animation: 150,
+            onEnd: function (evt) {
+                const orderId = evt.item.dataset.orderId;
+                const newColumnId = evt.to.id;
+                const tableToSend = newColumnId === 'unassigned' ? null : newColumnId;
+
+                fetch(`/api/order/${orderId}/assign_table`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ table: tableToSend })
+                })
+                .then(response => response.json())
+                .then(data => console.log('Success:', data))
+                .catch((error) => console.error('Error:', error));
+            }
+        });
+    });
+
+    fetchAndRenderOrders();
+});
+</script>
+
+</body>
+</html>

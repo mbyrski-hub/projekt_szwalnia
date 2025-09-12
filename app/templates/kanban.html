@@ -1,0 +1,288 @@
+{% extends 'base.html' %}
+{% block title %}Zarządzanie Zleceniami{% endblock %}
+
+{% block head %}
+<style>
+.kanban-zone {
+  border-radius: 6px;
+  padding-bottom: 15px;
+  margin-bottom: 10px;
+}
+
+.zone-header {
+  padding: 10px 15px;
+  border-radius: 6px 6px 0 0;
+  margin-bottom: 10px;
+}
+
+/* Nowe kolory tła dla zespołów */
+#zespol-1 {
+  background-color: #b6ddf8; /* jasnoniebieski, dopasowany do primary */
+}
+
+#zespol-2 {
+  background-color: #bcf8c1; /* jasnozielony, dopasowany do success */
+}
+
+#nieprzypisane {
+  background-color: #f1f1f1; /* jasnoszary dla nieprzypisanych */
+}
+
+/* NOWY STYL DLA STREFY DZIELENIA */
+#zespol-oba { 
+    background-color: #e2d9f3; /* Delikatny fiolet */
+    border: 2px dashed #845ef7;
+}
+#zespol-oba .zone-header {
+    background-color: #845ef7; /* Fioletowy */
+}
+
+/* NOWE STYLE - ZREALIZOWANE */
+#zrealizowane { 
+    background-color: #d1e7dd; /* Jasnozielony dla zrealizowanych */
+    border: 2px dashed #198754; /* Zielona ramka */
+}
+#zrealizowane .zone-header { 
+    background-color: #198754; /* Ciemnozielony */
+}
+
+.kanban-card {
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin: 10px;
+  padding: 10px 15px;
+  width: calc(25% - 20px);
+  cursor: grab;
+  transition: transform 0.2s, box-shadow 0.2s;
+  font-size: 0.9rem;
+  position: relative; /* Potrzebne do pozycjonowania ikonki */
+}
+
+.kanban-card strong {
+  font-size: 0.85rem;
+  word-break: break-word;
+}
+
+.kanban-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 5px 10px rgba(0,0,0,0.15);
+}
+
+/* NOWY STYL DLA IKONKI PODZIAŁU */
+.split-icon {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    color: #007bff;
+}
+
+@media (max-width: 992px) {
+  .kanban-card {
+    width: calc(33.3% - 20px);
+  }
+}
+
+@media (max-width: 768px) {
+  .kanban-card {
+    width: calc(50% - 20px);
+  }
+}
+
+@media (max-width: 576px) {
+  .kanban-card {
+    width: 100%;
+  }
+}
+
+.nowe {
+  border-left: 6px solid #007bff;
+}
+
+.w-realizacji {
+  border-left: 6px solid #ffc107;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-table-columns"></i> Kto co szyje?</h2>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="kanban-zone" id="zespol-1">
+                <h4 class="zone-header bg-primary text-white"><i class="fas fa-users"></i> Zespół I</h4>
+                <div class="d-flex flex-wrap">
+                    {% for order in team1_orders %}{% if not order.team1_completed %}
+                    <div class="kanban-card" data-id="{{ order.id }}">
+                        {% if order.assigned_team == 'OBA' %}<i class="fas fa-users split-icon" title="Zlecenie podzielone"></i>{% endif %}
+                        <strong>{{ order.order_code }}</strong><br>{{ order.client.name }}
+                    </div>
+                    {% endif %}{% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="kanban-zone" id="zespol-2">
+                <h4 class="zone-header bg-success text-white"><i class="fas fa-users"></i> Zespół II</h4>
+                <div class="d-flex flex-wrap">
+                    {% for order in team2_orders %}{% if not order.team2_completed %}
+                    <div class="kanban-card" data-id="{{ order.id }}">
+                        {% if order.assigned_team == 'OBA' %}<i class="fas fa-users split-icon" title="Zlecenie podzielone"></i>{% endif %}
+                        <strong>{{ order.order_code }}</strong><br>{{ order.client.name }}
+                    </div>
+                    {% endif %}{% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <hr>
+    <div class="row">
+        <div class="col-md-4">
+            <div class="kanban-zone mt-3" id="nieprzypisane">
+                <h4 class="zone-header bg-secondary text-white"><i class="fas fa-inbox"></i> Do przydzielenia</h4>
+                <div class="d-flex flex-wrap">
+                    {% for order in unassigned_orders %}<div class="kanban-card" data-id="{{ order.id }}"><strong>{{ order.order_code }}</strong><br>{{ order.client.name }}</div>{% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="kanban-zone mt-3" id="zespol-oba">
+                <h4 class="zone-header text-white"><i class="fas fa-compress-arrows-alt"></i> Podziel na oba zespoły</h4>
+                <div class="d-flex flex-wrap" style="min-height: 100px;"></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="kanban-zone mt-3" id="zrealizowane">
+                <h4 class="zone-header text-white"><i class="fas fa-check-circle"></i> Przeciągnij tutaj, aby ukończyć</h4>
+                <div class="d-flex flex-wrap" style="min-height: 100px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="orderSummaryModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-boxes"></i> Podsumowanie produktów</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h5 id="modalOrderCode"></h5>
+                <p id="modalClient"></p>
+                <ul id="modalProductList" class="list-group"></ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Zamknij</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+<script>
+    ['zespol-1', 'zespol-2', 'nieprzypisane', 'zespol-oba', 'zrealizowane'].forEach(zoneId => {
+        const zoneElement = document.getElementById(zoneId);
+        if (!zoneElement) return;
+
+        new Sortable(zoneElement.querySelector('.d-flex'), {
+            group: 'shared',
+            animation: 200,
+            onEnd: evt => {
+                const orderId = evt.item.dataset.id;
+                const newZoneId = evt.to.closest('.kanban-zone').id;
+                const sourceZoneId = evt.from.closest('.kanban-zone').id; // Skąd przeciągnięto
+
+                // Jeśli upuszczono na "Zrealizowane"
+                if (newZoneId === 'zrealizowane') {
+                    if (confirm('Czy na pewno chcesz oznaczyć to zlecenie (lub jego część) jako zrealizowane?')) {
+                        fetch(`/api/order/${orderId}/complete`, {
+                            method: 'POST',
+                            headers: {'Content-Type':'application/json'},
+                            body: JSON.stringify({completed_by: sourceZoneId })
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            console.log('Ukończono:', data);
+                            location.reload(); 
+                        })
+                        .catch(err => {
+                            console.error('Błąd ukończenia:', err);
+                            alert('Wystąpił błąd podczas oznaczania zlecenia jako ukończone.');
+                            location.reload(); // Spróbuj odświeżyć nawet po błędzie
+                        });
+                    } else {
+                        // Anuluj przeciągnięcie, jeśli użytkownik kliknie "Anuluj"
+                        evt.from.appendChild(evt.item);
+                    }
+                } 
+                // W każdym innym przypadku - przypisz do zespołu (lub cofnij przypisanie)
+                else {
+                    let teamToSend;
+                    if (newZoneId === 'zespol-oba') {
+                        teamToSend = 'OBA';
+                    } else if (newZoneId === 'nieprzypisane') {
+                        teamToSend = null; // Ustaw na null, aby cofnąć przypisanie
+                    } else {
+                        teamToSend = newZoneId;
+                    }
+
+                    fetch('/assign_team', {
+                        method: 'POST',
+                        headers: {'Content-Type':'application/json'},
+                        body: JSON.stringify({order_id: orderId, team: teamToSend})
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        console.log('Przypisano/Cofnięto przypisanie:', data);
+                        location.reload(); 
+                    })
+                    .catch(err => {
+                        console.error('Błąd przypisania:', err);
+                        alert('Wystąpił błąd podczas przypisywania zlecenia.');
+                        location.reload(); // Spróbuj odświeżyć nawet po błędzie
+                    });
+                }
+            }
+        });
+    });
+
+    // Skrypt do wyświetlania modala z podsumowaniem (bez zmian, ale dostosowany do nowej struktury)
+    $(document).ready(function(){
+        $(document).on('click', '.kanban-card', function(e){ // Używamy delegacji, aby obsługiwać dynamicznie dodane karty
+            // Zapobiegaj uruchomieniu modala podczas przeciągania
+            if ($(this).is('.sortable-ghost')) {
+                return;
+            }
+            const orderId = $(this).data('id');
+            
+            fetch(`/order_summary/${orderId}`)
+                .then(res => res.json())
+                .then(data => {
+                    $('#modalOrderCode').text(`Zlecenie: ${data.order_code}`);
+                    $('#modalClient').text(`Klient: ${data.client}`);
+                    const list = $('#modalProductList');
+                    list.empty();
+    
+                    for(const [product, quantity] of Object.entries(data.summary)){
+                        list.append(`<li class="list-group-item d-flex justify-content-between align-items-center">
+                                        ${product}
+                                        <span class="badge badge-primary badge-pill">${quantity} szt.</span>
+                                    </li>`);
+                    }
+    
+                    $('#orderSummaryModal').modal('show');
+                })
+                .catch(err => {
+                    alert('Błąd pobierania danych!');
+                    console.error(err);
+                });
+        });
+    });
+</script>
+{% endblock %}

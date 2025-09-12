@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Szablony Zleceń{% endblock %}
+{% block content %}
+<h2>Szablony Zleceń</h2>
+<a href="{{ url_for('new_template') }}" class="btn btn-primary mb-3">
+    <i class="fas fa-plus"></i> Dodaj nowy szablon
+</a>
+<table class="table table-bordered table-hover">
+    <thead class="thead-dark">
+        <tr>
+            <th>Nazwa szablonu</th>
+            <th>Klient</th>
+            <th>Opis</th>
+            <th>Tkanina</th>
+            <th>Logowanie</th>
+            <th>Akcje</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for template in templates %}
+        <tr>
+            <td>{{ template.template_name }}</td>
+            <td>{{ template.client_name }}</td>
+            <td>{{ template.description }}</td>
+            <td>{{ template.fabric.name if template.fabric else 'Brak' }}</td>
+            <td>{{ template.login_info or 'Brak' }}</td>
+            <td>
+                <a href="{{ url_for('new_order', template_id=template.id) }}" class="btn btn-sm btn-primary" title="Utwórz z szablonu"><i class="fas fa-plus-circle"></i></a>
+                <a href="{{ url_for('edit_template', template_id=template.id) }}" class="btn btn-sm btn-warning" title="Edytuj"><i class="fas fa-edit"></i></a>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

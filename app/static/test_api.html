@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Test API Aplikacji Mobilnych</title>
+    <style> body { font-family: sans-serif; padding: 20px; } form { margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; } pre { background-color: #f4f4f4; padding: 10px; border: 1px solid #ddd; } </style>
+</head>
+<body>
+    <h1>Test API Aplikacji Mobilnych</h1>
+
+    <hr>
+    <h2>API Krojowni</h2>
+    <button onclick="fetchKrojownia()">Pobierz zlecenia dla krojowni</button>
+    <pre id="responseKrojownia"></pre>
+
+    <form id="formKrojownia">
+        <h3>Przypisz do stołu</h3>
+        <label>ID Zlecenia: <input type="number" id="orderIdKrojownia" value="1"></label>
+        <label>Stół: 
+            <select id="table">
+                <option value="stol-1">Stół 1</option>
+                <option value="stol-2">Stół 2</option>
+                <option value="stol-3">Stół 3</option>
+                <option value="skrojone">Skrojone</option>
+                <option value="none">Nieprzypisane</option>
+            </select>
+        </label>
+        <button type="submit">Wyślij</button>
+    </form>
+    <pre id="responseAssignTable"></pre>
+
+    <hr>
+    <h2>API Szwalni</h2>
+    <button onclick="fetchSzwalnia()">Pobierz zlecenia dla szwalni (tylko skrojone)</button>
+    <pre id="responseSzwalnia"></pre>
+
+    <form id="formSzwalnia">
+        <h3>Przypisz do zespołu</h3>
+        <label>ID Zlecenia: <input type="number" id="orderIdSzwalnia" value="1"></label>
+        <label>Zespół: 
+            <select id="team">
+                <option value="zespol-1">Zespół 1</option>
+                <option value="zespol-2">Zespół 2</option>
+                <option value="none">Nieprzypisane</option>
+            </select>
+        </label>
+        <button type="submit">Wyślij</button>
+    </form>
+    <pre id="responseAssignTeam"></pre>
+
+    <script>
+        const display = (id, data) => document.getElementById(id).textContent = JSON.stringify(data, null, 2);
+
+        const fetchKrojownia = () => fetch('/api/krojownia/orders').then(r => r.json()).then(d => display('responseKrojownia', d));
+        const fetchSzwalnia = () => fetch('/api/szwalnia/orders').then(r => r.json()).then(d => display('responseSzwalnia', d));
+
+        document.getElementById('formKrojownia').addEventListener('submit', e => {
+            e.preventDefault();
+            const orderId = document.getElementById('orderIdKrojownia').value;
+            let table = document.getElementById('table').value;
+            if (table === 'none') table = null;
+            fetch(`/api/order/${orderId}/assign_table`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ table })
+            }).then(r => r.json()).then(d => display('responseAssignTable', d));
+        });
+
+        document.getElementById('formSzwalnia').addEventListener('submit', e => {
+            e.preventDefault();
+            const orderId = document.getElementById('orderIdSzwalnia').value;
+            let team = document.getElementById('team').value;
+            if (team === 'none') team = null;
+            fetch(`/api/order/${orderId}/assign_team`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ team })
+            }).then(r => r.json()).then(d => display('responseAssignTeam', d));
+        });
+    </script>
+</body>
+</html>

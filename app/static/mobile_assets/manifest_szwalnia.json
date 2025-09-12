@@ -1,0 +1,15 @@
+{
+  "name": "Szwalnia App",
+  "short_name": "Szwalnia",
+  "start_url": "/mobile/szwalnia",
+  "display": "standalone",
+  "background_color": "#51cf66",
+  "theme_color": "#51cf66",
+  "icons": [
+    {
+      "src": "/static/mobile_assets/icon_szwalnia_192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

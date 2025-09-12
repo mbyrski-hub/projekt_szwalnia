@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>Zlecenie - Szwalnia - {{ order.order_code }}</title>
+  <style>
+    body {
+      font-family: 'Helvetica', sans-serif;
+      margin: 40px;
+      color: #333;
+      position: relative;
+      padding-top: 50px;
+    }
+    .top-right {
+      position: absolute;
+      top: 20px;
+      right: 40px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .center-header {
+      text-align: center;
+      margin-top: 100px;
+      margin-bottom: 20px;
+    }
+    .center-header h1 {
+      font-size: 28px;
+      margin: 0;
+      color: #0056b3;
+    }
+    .center-header p {
+      font-size: 18px;
+      margin: 5px 0;
+    }
+    .details {
+      margin-bottom: 30px;
+      font-size: 18px;
+      line-height: 1.5;
+    }
+    .details p {
+      margin: 5px 0;
+    }
+    .products {
+      margin-bottom: 20px;
+      font-size: 18px;
+    }
+    .product-group {
+      margin-bottom: 15px;
+    }
+    .product-group .product-name {
+      font-weight: bold;
+      font-size: 18px;
+      margin-bottom: 5px;
+    }
+    .product-variant {
+      margin-left: 20px;
+      margin-bottom: 2px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="top-right">
+    Data utworzenia: {{ order.created_at.strftime('%Y-%m-%d %H:%M') }}
+  </div>
+  
+  <div class="center-header">
+    <h1>Zlecenie - Szwalnia</h1>
+    <p><strong>Nr zlecenia:</strong> {{ order.order_code }}</p>
+  </div>
+  
+  <div class="details">
+    <p><strong>Klient:</strong> {{ order.client.name }}</p>
+    <p><strong>Opis:</strong> {{ order.description }}</p>
+    {% if order.fabric %}
+      <p><strong>Tkanina:</strong> {{ order.fabric.name }}</p>
+    {% else %}
+      <p><strong>Tkanina:</strong> brak</p>
+    {% endif %}
+    <p><strong>Logowanie:</strong> {{ order.login_info or 'brak' }}</p>
+    <p><strong>Termin:</strong> {{ order.deadline.strftime('%Y-%m-%d') }}</p>
+    <p><strong>Zlecający:</strong> {{ order.zlecajacy }}</p>
+  </div>
+  
+  <div class="products">
+    {% for product_name, items in order.order_items|groupby('product.name') %}
+      <div class="product-group">
+        <div class="product-name">{{ product_name }}:</div>
+        {% for item in items %}
+          <div class="product-variant">{{ item.size }} - {{ item.quantity }} szt.</div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+{% if material_summary %}
+    <div class="details" style="margin-top: 30px; border-top: 1px solid #ccc; padding-top: 15px;">
+      <p style="font-weight: bold; font-size: 18px;">Podsumowanie materiałów dla zlecenia:</p>
+      <ul>
+  {% for item in material_summary %}
+    <li style="font-size: 16px;">{{ item.name }}: {{ item.quantity }}</li>
+  {% endfor %}
+</ul>
+    </div>
+  {% endif %}
+  
+</body>
+</html>
+  {% if order.materials_used %}
+    <div class="details">
+      <p><strong>Zużycie materiałów:</strong></p>
+      <ul>
+        {% for material in order.materials_used %}
+          <li>{{ material.material_name }} – {{ material.quantity }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+  
+</body>
+</html>
