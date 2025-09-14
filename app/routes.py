@@ -1291,7 +1291,7 @@ def complete_order_part(order_id):
 def download_synchronizator():
     """Udostępnia do pobrania plik wykonywalny synchronizatora."""
     return send_from_directory(
-        os.path.join(current_app.static_folder, 'sychronizator'),
+        os.path.join(current_app.static_folder, 'synchronizator'),
         'Synchronizator 3.0.exe',
         as_attachment=True
     )
@@ -1300,7 +1300,7 @@ def download_synchronizator():
 def download_config():
     """Udostępnia do pobrania plik konfiguracyjny JSON."""
     return send_from_directory(
-        os.path.join(current_app.static_folder, 'sychronizator'),
+        os.path.join(current_app.static_folder, 'synchronizator'),
         'config.json',
         as_attachment=True
     )
