@@ -4,192 +4,258 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Szwalnia</title>
-    <link rel="manifest" href="{{ url_for('static', filename='mobile_assets/manifest_szwalnia.json') }}">
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-
+    <link rel="manifest" href="{{ url_for('static', filename='mobile_assets/manifest_szwalnia.json') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='mobile_assets/icon_szwalnia_192.png') }}">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f4f6f9; color: #343a40; }
-        .container-fluid { padding-left: 10px; padding-right: 10px; }
-        h3, h4 { font-weight: 600; color: #495057; }
-        h3 { margin-bottom: 1.5rem; }
-        h4 { font-size: 1.2rem; margin-bottom: 1rem; display: flex; align-items: center; }
-        h4 i { margin-right: 8px; color: #6c757d; }
-        h5 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
-        hr { border-top: 1px solid #e9ecef; margin: 1.5rem 0; }
-        .kanban-section { padding: 1rem; margin-bottom: 1.5rem; }
-        
-        .team-column { border-radius: 8px; padding: 0.75rem; min-height: 150px; }
-        .kanban-cards { min-height: 100px; }
-
-        .kanban-card {
-            background-color: #fff;
-            border: 1px solid #ced4da;
-            border-radius: 6px;
-            padding: 0.75rem;
-            margin-bottom: 0.75rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-            cursor: grab;
-            position: relative;
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 8px;
+            background-color: #f4f4f8;
+            background-image: url("{{ url_for('static', filename='images/bg_szwalnia.png') }}");
+            background-size: cover;
+            overscroll-behavior: contain;
+            user-select: none;
+            -webkit-user-select: none;
         }
-        .kanban-card-title { font-weight: 700; color: #343a40; font-size: 0.95rem; }
-        .kanban-card-client { font-size: 0.85rem; color: #6c757d; }
-        .kanban-card-split { position: absolute; top: 8px; right: 8px; color: #007bff; }
+        .container {
+            display: flex;
+            gap: 8px;
+            height: calc(100vh - 16px);
+            overflow-x: auto;
+        }
+        .column {
+            background-color: rgba(235, 235, 240, 0.9);
+            border-radius: 10px;
+            padding: 10px;
+            min-width: 280px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .column-header {
+            padding: 10px;
+            font-weight: bold;
+            font-size: 1.2em;
+            color: #333;
+            text-align: center;
+            border-bottom: 2px solid #ddd;
+            margin-bottom: 10px;
+        }
+        .item {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            cursor: grab;
+            touch-action: none;
+        }
+        .item.dragging { opacity: 0.5; }
+        .item.completed-part { border-left: 5px solid #4CAF50; }
+        .item-code { font-weight: bold; font-size: 1.1em; }
+        .item-client { color: #555; font-size: 0.9em; }
 
-        #unassigned.kanban-cards:empty::after { content: "Brak nowych zleceń do przydzielenia."; display: block; text-align: center; padding: 20px; color: #6c757d; font-style: italic; }
-        .team-column .kanban-cards:empty::after { content: "Brak zleceń."; display: block; text-align: center; padding: 20px; color: #6c757d; font-style: italic; opacity: 0.7; }
-
-        /* Kolory dla zespołów i ukończonych */
-        #zespol-1-col .team-column { background-color: #e3f2fd; }
-        #zespol-2-col .team-column { background-color: #e6ffed; }
-        #zrealizowane-col .team-column { background-color: #e9ecef; border-style: dashed; }
+        /* IKONA ODŚWIEŻANIA */
+        #refresh-btn {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            font-size: 24px;
+            color: #333;
+            cursor: pointer;
+            z-index: 1000;
+        }
+        
+        /* NOWY SYSTEM POWIADOMIEŃ */
+        #notification-container {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            width: 90%;
+            max-width: 500px;
+            padding-top: 10px;
+        }
+        .notification {
+            padding: 12px 15px;
+            border-radius: 8px;
+            color: #fff;
+            margin-bottom: 10px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            opacity: 0;
+            transform: translateY(-20px);
+            animation: fadeInDown 0.5s forwards;
+        }
+        .notification.success { background-color: #4CAF50; }
+        .notification.error { background-color: #F44336; }
+        .notification.info { background-color: #2196F3; }
+        @keyframes fadeInDown {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
     </style>
 </head>
 <body>
-<div class="container-fluid pt-3">
-    <h3 class="px-2">Szwalnia</h3>
 
-    <div class="kanban-section">
-        <h4><i class="fas fa-inbox"></i> Do przydzielenia (Skrojone)</h4>
-        <div class="kanban-cards" id="unassigned"></div>
-    </div>
-    <hr>
+    <div id="notification-container"></div>
+    <i id="refresh-btn" class="fas fa-sync-alt" onclick="location.reload();"></i>
 
-    <div class="kanban-section">
-        <h4><i class="fas fa-users"></i> Zespoły</h4>
-        <div class="row">
-            <div class="col-6 mb-3" id="zespol-1-col">
-                <div class="team-column">
-                    <h5>Zespół 1</h5>
-                    <div class="kanban-cards" id="zespol-1"></div>
-                </div>
-            </div>
-            <div class="col-6 mb-3" id="zespol-2-col">
-                <div class="team-column">
-                    <h5>Zespół 2</h5>
-                    <div class="kanban-cards" id="zespol-2"></div>
-                </div>
-            </div>
+    <div class="container">
+        <div class="column" id="unassigned" data-team-id="unassigned">
+            <div class="column-header">Do Przypisania</div>
+        </div>
+        <div class="column" id="zespol-1" data-team-id="zespol-1">
+            <div class="column-header">Zespół 1</div>
+        </div>
+        <div class="column" id="zespol-2" data-team-id="zespol-2">
+            <div class="column-header">Zespół 2</div>
+        </div>
+        <div class="column" id="zrealizowane" data-team-id="zrealizowane">
+            <div class="column-header">Zrealizowane</div>
         </div>
     </div>
-    <hr>
 
-    <div class="kanban-section">
-        <h4><i class="fas fa-check-circle"></i> Ukończone</h4>
-        <div id="zrealizowane-col">
-            <div class="team-column">
-                <div class="kanban-cards" id="zrealizowane"></div>
-            </div>
-        </div>
-    </div>
-</div>
+    <script>
+        const notificationContainer = document.getElementById('notification-container');
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    let longPressTimer;
-    const longPressDuration = 500;
+        // NOWA FUNKCJA DO POWIADOMIEŃ
+        function showNotification(message, type = 'success') {
+            const notif = document.createElement('div');
+            notif.className = `notification ${type}`;
+            notif.textContent = message;
+            notificationContainer.appendChild(notif);
 
-    function handleLongPress(orderId, currentTeam) {
-        if (currentTeam !== 'OBA') {
-            if (confirm(`Czy chcesz przypisać to zlecenie do OBU zespołów?`)) {
-                assignTeam(orderId, 'OBA');
+            setTimeout(() => {
+                notif.remove();
+            }, 4000);
+        }
+
+        function createOrderElement(order) {
+            const item = document.createElement('div');
+            item.className = 'item';
+            item.dataset.orderId = order.id;
+            item.dataset.assignedTeam = order.assigned_team || 'unassigned';
+            item.draggable = true;
+
+            item.innerHTML = `<div class="item-code">${order.order_code}</div><div class="item-client">${order.client_name}</div>`;
+            
+            // Oznaczanie częściowo wykonanych zleceń
+            if (order.assigned_team === 'OBA') {
+                if (order.team1_completed) item.innerHTML += '<small>✅ Zespół 1 skończył</small>';
+                if (order.team2_completed) item.innerHTML += '<small>✅ Zespół 2 skończył</small>';
             }
-        }
-    }
-
-    function assignTeam(orderId, team) {
-        fetch(`/api/order/${orderId}/assign_team`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ team: team })
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log('Success (assignTeam):', data);
-            fetchAndRenderOrders();
-        })
-        .catch((error) => console.error('Error:', error));
-    }
-    
-    function createCard(order, targetColumn) {
-        const card = document.createElement('div');
-        card.className = 'kanban-card';
-        card.dataset.orderId = order.id;
-
-        let splitIcon = '';
-        if (order.assigned_team === 'OBA') {
-            splitIcon = `<i class="fas fa-users kanban-card-split" title="Zlecenie podzielone"></i>`;
+            return item;
         }
 
-        card.innerHTML = `
-            <div class="kanban-card-title">${order.order_code}</div>
-            <div class="kanban-card-client">${order.client_name}</div>
-            ${splitIcon}
-        `;
+        function loadOrders() {
+            fetch('/api/szwalnia/orders')
+                .then(response => response.json())
+                .then(orders => {
+                    document.querySelectorAll('.column').forEach(c => c.innerHTML = `<div class="column-header">${c.querySelector('.column-header').textContent}</div>`);
+                    orders.forEach(order => {
+                        const item = createOrderElement(order);
+                        if (order.assigned_team === 'OBA') {
+                            if (!order.team1_completed) document.getElementById('zespol-1').appendChild(item.cloneNode(true));
+                            if (!order.team2_completed) document.getElementById('zespol-2').appendChild(item);
+                        } else {
+                            const targetColumnId = order.assigned_team || 'unassigned';
+                            document.getElementById(targetColumnId).appendChild(item);
+                        }
+                    });
+                    setupDragAndDrop();
+                })
+                .catch(error => {
+                    console.error('Error loading orders:', error);
+                    showNotification('Błąd ładowania zleceń. Sprawdź połączenie.', 'error');
+                });
+        }
 
-        // Logika długiego przytrzymania
-        card.addEventListener('mousedown', () => longPressTimer = setTimeout(() => handleLongPress(order.id, order.assigned_team), longPressDuration));
-        card.addEventListener('mouseup', () => clearTimeout(longPressTimer));
-        card.addEventListener('mouseleave', () => clearTimeout(longPressTimer));
-        card.addEventListener('touchstart', () => longPressTimer = setTimeout(() => handleLongPress(order.id, order.assigned_team), longPressDuration));
-        card.addEventListener('touchend', () => clearTimeout(longPressTimer));
-        
-        targetColumn.appendChild(card);
-    }
+        function handleDrop(draggedItem, toColumn) {
+            const orderId = draggedItem.dataset.orderId;
+            const originalAssignedTeam = draggedItem.dataset.assignedTeam;
+            const fromColumn = document.getElementById(originalAssignedTeam);
 
-    function fetchAndRenderOrders() {
-        fetch('/api/szwalnia/orders')
-            .then(response => response.json())
-            .then(orders => {
-                document.querySelectorAll('.kanban-cards').forEach(col => col.innerHTML = '');
-                orders.forEach(order => {
-                    if ((order.assigned_team === 'zespol-1' || order.assigned_team === 'OBA') && !order.team1_completed) {
-                        createCard(order, document.getElementById('zespol-1'));
+            const newTeamId = toColumn.dataset.teamId;
+            const isFinishing = newTeamId === 'zrealizowane';
+            const action = isFinishing ? 'complete' : 'assign_team';
+            const url = `/api/order/${orderId}/${action}`;
+            
+            const body = isFinishing 
+                ? { completed_by: fromColumn.dataset.teamId }
+                : { team: newTeamId === 'unassigned' ? null : newTeamId };
+            
+            // Optymistyczne UI: usuwamy od razu
+            if(isFinishing) draggedItem.remove();
+
+            fetch(url, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) {
+                    showNotification('Błąd serwera. Odśwież stronę.', 'error');
+                    loadOrders(); // Odświeżamy dane w razie błędu
+                } else {
+                    showNotification(data.message || (isFinishing ? 'Zlecenie ukończone!' : 'Zlecenie przypisane!'), 'success');
+                    // Jeśli zlecenie jest podzielone i zostało ukończone, nie odświeżamy od razu,
+                    // aby druga część zlecenia pozostała w swojej kolumnie.
+                    if (originalAssignedTeam !== 'OBA' || !isFinishing) {
+                         loadOrders();
                     }
-                    if ((order.assigned_team === 'zespol-2' || order.assigned_team === 'OBA') && !order.team2_completed) {
-                        createCard(order, document.getElementById('zespol-2'));
-                    }
-                    if (!order.assigned_team) {
-                        createCard(order, document.getElementById('unassigned'));
+                }
+            })
+            .catch(err => {
+                showNotification('Błąd połączenia. Spróbuj ponownie.', 'error');
+                loadOrders(); // Odświeżamy dane w razie błędu
+            });
+        }
+
+        function setupDragAndDrop() {
+            const items = document.querySelectorAll('.item');
+            const columns = document.querySelectorAll('.column');
+            let draggedItem = null;
+
+            items.forEach(item => {
+                item.addEventListener('dragstart', () => {
+                    draggedItem = item;
+                    setTimeout(() => item.classList.add('dragging'), 0);
+                });
+                item.addEventListener('dragend', () => {
+                    if(draggedItem) draggedItem.classList.remove('dragging');
+                    draggedItem = null;
+                });
+            });
+
+            columns.forEach(column => {
+                column.addEventListener('dragover', e => e.preventDefault());
+                column.addEventListener('drop', e => {
+                    e.preventDefault();
+                    if (!draggedItem) return;
+                    
+                    const fromColumnId = draggedItem.parentElement.id;
+                    const toColumn = e.currentTarget;
+
+                    if (fromColumnId !== toColumn.id) {
+                        if (toColumn.id === 'zrealizowane') {
+                             handleDrop(draggedItem, toColumn);
+                        } else {
+                            toColumn.appendChild(draggedItem);
+                            handleDrop(draggedItem, toColumn);
+                        }
                     }
                 });
             });
-    }
-
-    // Inicjalizacja Drag-and-Drop
-    ['unassigned', 'zespol-1', 'zespol-2', 'zrealizowane'].forEach(zoneId => {
-        const columnEl = document.getElementById(zoneId);
-        if (!columnEl) return;
-        new Sortable(columnEl, {
-            group: 'szwalnia',
-            animation: 150,
-            onEnd: function (evt) {
-                const orderId = evt.item.dataset.id;
-                const newZoneId = evt.to.id;
-                const sourceZoneId = evt.from.id;
-
-                if (newZoneId === 'zrealizowane') {
-                    if (confirm('Oznaczyć jako zrealizowane?')) {
-                        fetch(`/api/order/${orderId}/complete`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ completed_by: sourceZoneId })
-                        }).then(() => fetchAndRenderOrders());
-                    } else {
-                        // Anuluj przeciągnięcie, jeśli użytkownik kliknie "Anuluj"
-                        evt.from.appendChild(evt.item);
-                    }
-                } else {
-                    const teamToSend = newZoneId === 'unassigned' ? null : newZoneId;
-                    assignTeam(orderId, teamToSend);
-                }
-            }
-        });
-    });
-
-    fetchAndRenderOrders();
-});
-</script>
+        }
+        document.addEventListener('DOMContentLoaded', loadOrders);
+    </script>
 </body>
 </html>

@@ -4,173 +4,223 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Krojownia</title>
-    <link rel="manifest" href="{{ url_for('static', filename='mobile_assets/manifest_krojownia.json') }}">
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-
+    <link rel="manifest" href="{{ url_for('static', filename='mobile_assets/manifest_krojownia.json') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='mobile_assets/icon_krojownia_192.png') }}">
     <style>
-    body { background-color: #f4f6f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-    .kanban-section h4 { font-weight: 600; color: #495057; padding: 0.5rem 0; }
-    
-    /* Styl dla kart/kafelków W STOŁACH */
-    .table-column .kanban-card {
-        background-color: #fff;
-        padding: 12px;
-        border-radius: 8px;
-        margin-bottom: 10px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        cursor: grab;
-        min-height: 80px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-    }
-    .kanban-card:active { cursor: grabbing; }
-    .kanban-card-title { font-weight: 600; margin-bottom: 2px; font-size: 0.9rem; }
-    .kanban-card-client { font-size: 0.8rem; color: #6c757d; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 8px;
+            background-color: #f4f4f8;
+            background-image: url("{{ url_for('static', filename='images/bg_krojownia.png') }}");
+            background-size: cover;
+            overscroll-behavior: contain;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .container {
+            display: flex;
+            gap: 8px;
+            height: calc(100vh - 16px);
+            overflow-x: auto;
+        }
+        .column {
+            background-color: rgba(235, 235, 240, 0.9);
+            border-radius: 10px;
+            padding: 10px;
+            min-width: 280px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .column-header {
+            padding: 10px;
+            font-weight: bold;
+            font-size: 1.2em;
+            color: #333;
+            text-align: center;
+            border-bottom: 2px solid #ddd;
+            margin-bottom: 10px;
+        }
+        .item {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            cursor: grab;
+            touch-action: none;
+        }
+        .item.dragging { opacity: 0.5; }
+        .item-code { font-weight: bold; font-size: 1.1em; }
+        .item-client { color: #555; font-size: 0.9em; }
 
-    /* --- NOWE REGUŁY --- */
-    /* 1. Mniejsze, bardziej kompaktowe karty w sekcji "Nieprzypisane" */
-    #unassigned .kanban-card {
-        background-color: #fff;
-        padding: 8px 15px; /* Mniejszy pionowy padding */
-        border-radius: 8px;
-        margin-bottom: 8px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        cursor: grab;
-        min-height: auto; /* Anulujemy minimalną wysokość */
-        display: flex;
-        flex-direction: row; /* Ustawiamy tekst w jednej linii */
-        justify-content: space-between; /* Rozsuwamy tekst na boki */
-        align-items: center;
-    }
-
-    /* 2. Automatycznie pokazuj wiadomość, gdy sekcja "Nieprzypisane" jest pusta */
-    #unassigned:empty::after {
-        content: "Wszystkie zlecenia zostały przypisane.";
-        display: block;
-        text-align: center;
-        padding: 20px;
-        color: #6c757d;
-        font-style: italic;
-        background-color: #e9ecef;
-        border-radius: 8px;
-    }
-    /* --- KONIEC NOWYCH REGUŁ --- */
-
-    /* Styl dla kolumn ze stołami */
-    .table-column {
-        padding: 10px;
-        border-radius: 8px;
-        height: 100%;
-    }
-    .table-column h5 { color: #fff; font-weight: 600; }
-    .kanban-cards { min-height: 150px; }
-
-    /* Kolory dla stołów */
-    #stol-1-col { background-color: #007bff; }
-    #stol-2-col { background-color: #28a745; }
-    #stol-3-col { background-color: #dc3545; }
-    #skrojone-col { background-color: #ffc107; }
-    #skrojone-col h5 { color: #212529; }
-</style>
+        /* NOWA IKONA ODŚWIEŻANIA */
+        #refresh-btn {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            font-size: 24px;
+            color: #333;
+            cursor: pointer;
+            z-index: 1000;
+        }
+        
+        /* NOWY SYSTEM POWIADOMIEŃ */
+        #notification-container {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            width: 90%;
+            max-width: 500px;
+            padding-top: 10px;
+        }
+        .notification {
+            padding: 12px 15px;
+            border-radius: 8px;
+            color: #fff;
+            margin-bottom: 10px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            opacity: 0;
+            transform: translateY(-20px);
+            animation: fadeInDown 0.5s forwards;
+        }
+        .notification.success { background-color: #4CAF50; }
+        .notification.error { background-color: #F44336; }
+        @keyframes fadeInDown {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
 </head>
 <body>
-
-<div class="container-fluid pt-3">
-    <h3 class="px-2">Krojownia</h3>
-
-    <div class="kanban-section px-2 mt-3">
-        <h4><i class="fas fa-inbox"></i> Nieprzypisane</h4>
-        <div class="kanban-cards" id="unassigned">
-            </div>
-    </div>
     
-    <hr>
+    <div id="notification-container"></div>
+    <i id="refresh-btn" class="fas fa-sync-alt" onclick="location.reload();"></i>
 
-    <div class="kanban-section px-2 mt-3">
-        <h4><i class="fas fa-th-large"></i> Stoły Robocze</h4>
-        <div class="row">
-            <div class="col-6 mb-3">
-                <div class="table-column" id="stol-1-col">
-                    <h5>Stół 1</h5>
-                    <div class="kanban-cards" id="stol-1"></div>
-                </div>
-            </div>
-            <div class="col-6 mb-3">
-                <div class="table-column" id="stol-2-col">
-                    <h5>Stół 2</h5>
-                    <div class="kanban-cards" id="stol-2"></div>
-                </div>
-            </div>
-            <div class="col-6 mb-3">
-                <div class="table-column" id="stol-3-col">
-                    <h5>Stół 3</h5>
-                    <div class="kanban-cards" id="stol-3"></div>
-                </div>
-            </div>
-            <div class="col-6 mb-3">
-                <div class="table-column" id="skrojone-col">
-                    <h5>Skrojone</h5>
-                    <div class="kanban-cards" id="skrojone"></div>
-                </div>
-            </div>
+    <div class="container">
+        <div class="column" id="unassigned" data-table-id="unassigned">
+            <div class="column-header">Nowe</div>
+        </div>
+        <div class="column" id="stol-1" data-table-id="stol-1">
+            <div class="column-header">Stół 1</div>
+        </div>
+        <div class="column" id="stol-2" data-table-id="stol-2">
+            <div class="column-header">Stół 2</div>
+        </div>
+        <div class="column" id="stol-3" data-table-id="stol-3">
+            <div class="column-header">Stół 3</div>
+        </div>
+        <div class="column" id="skrojone" data-table-id="skrojone">
+            <div class="column-header">Skrojone</div>
         </div>
     </div>
-</div>
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Funkcja do renderowania (bez zmian)
-    function fetchAndRenderOrders() {
-        fetch('/api/krojownia/orders')
-            .then(response => response.json())
-            .then(orders => {
-                document.querySelectorAll('.kanban-cards').forEach(col => col.innerHTML = '');
-                orders.forEach(order => {
-                    const card = document.createElement('div');
-                    card.className = 'kanban-card';
-                    card.dataset.orderId = order.id;
-                    card.innerHTML = `
-                        <div class="kanban-card-title">${order.order_code}</div>
-                        <div class="kanban-card-client">${order.client_name}</div>
-                    `;
-                    const targetColumnId = order.cutting_table || 'unassigned';
-                    const targetColumn = document.getElementById(targetColumnId);
-                    if (targetColumn) {
-                        targetColumn.appendChild(card);
+    <script>
+        const notificationContainer = document.getElementById('notification-container');
+
+        // NOWA FUNKCJA DO POWIADOMIEŃ
+        function showNotification(message, type = 'success') {
+            const notif = document.createElement('div');
+            notif.className = `notification ${type}`;
+            notif.textContent = message;
+            notificationContainer.appendChild(notif);
+
+            setTimeout(() => {
+                notif.remove();
+            }, 4000);
+        }
+
+        function loadOrders() {
+            fetch('/api/krojownia/orders')
+                .then(response => response.json())
+                .then(orders => {
+                    document.querySelectorAll('.column').forEach(c => c.innerHTML = `<div class="column-header">${c.querySelector('.column-header').textContent}</div>`);
+                    orders.forEach(order => {
+                        const item = document.createElement('div');
+                        item.className = 'item';
+                        item.dataset.orderId = order.id;
+                        item.draggable = true;
+                        
+                        // Dodajemy nazwę klienta
+                        item.innerHTML = `<div class="item-code">${order.order_code}</div><div class="item-client">${order.client_name}</div>`;
+                        
+                        const targetColumnId = order.cutting_table || 'unassigned';
+                        document.getElementById(targetColumnId).appendChild(item);
+                    });
+                    setupDragAndDrop();
+                })
+                .catch(error => {
+                    console.error('Error loading orders:', error);
+                    showNotification('Błąd ładowania zleceń. Sprawdź połączenie.', 'error');
+                });
+        }
+
+        function setupDragAndDrop() {
+            const items = document.querySelectorAll('.item');
+            const columns = document.querySelectorAll('.column');
+            let draggedItem = null;
+
+            items.forEach(item => {
+                item.addEventListener('dragstart', () => {
+                    draggedItem = item;
+                    setTimeout(() => item.classList.add('dragging'), 0);
+                });
+                item.addEventListener('dragend', () => {
+                    draggedItem.classList.remove('dragging');
+                    draggedItem = null;
+                });
+            });
+
+            columns.forEach(column => {
+                column.addEventListener('dragover', e => {
+                    e.preventDefault();
+                });
+                column.addEventListener('drop', e => {
+                    e.preventDefault();
+                    if (!draggedItem) return;
+                    
+                    const fromColumn = draggedItem.parentElement;
+                    const toColumn = e.currentTarget;
+                    
+                    if (fromColumn !== toColumn) {
+                        const originalHTML = fromColumn.innerHTML;
+                        toColumn.appendChild(draggedItem);
+
+                        const orderId = draggedItem.dataset.orderId;
+                        const newTableId = toColumn.dataset.tableId === 'unassigned' ? null : toColumn.dataset.tableId;
+
+                        fetch(`/api/order/${orderId}/assign_table`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ table: newTableId })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (!data.success) {
+                                fromColumn.innerHTML = originalHTML; // Przywróć stan w razie błędu
+                                showNotification('Błąd aktualizacji zlecenia.', 'error');
+                            } else {
+                                showNotification(data.message || 'Zlecenie zaktualizowane!', 'success');
+                            }
+                        })
+                        .catch(err => {
+                            fromColumn.innerHTML = originalHTML; // Przywróć stan w razie błędu
+                            showNotification('Błąd połączenia. Spróbuj ponownie.', 'error');
+                        });
                     }
                 });
             });
-    }
+        }
 
-    // Inicjalizacja drag-and-drop (bez zmian)
-    const columns = document.querySelectorAll('.kanban-cards');
-    columns.forEach(column => {
-        new Sortable(column, {
-            group: 'krojownia',
-            animation: 150,
-            onEnd: function (evt) {
-                const orderId = evt.item.dataset.orderId;
-                const newColumnId = evt.to.id;
-                const tableToSend = newColumnId === 'unassigned' ? null : newColumnId;
-
-                fetch(`/api/order/${orderId}/assign_table`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ table: tableToSend })
-                })
-                .then(response => response.json())
-                .then(data => console.log('Success:', data))
-                .catch((error) => console.error('Error:', error));
-            }
-        });
-    });
-
-    fetchAndRenderOrders();
-});
-</script>
-
+        document.addEventListener('DOMContentLoaded', loadOrders);
+    </script>
 </body>
 </html>
