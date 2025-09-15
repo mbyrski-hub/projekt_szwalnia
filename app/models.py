@@ -180,3 +180,11 @@ class SubiektProductCache(db.Model):
     symbol = db.Column(db.String(50), unique=True)
     name = db.Column(db.String(200), nullable=False)
     is_mapped = db.Column(db.Boolean, default=False)
+
+class SystemInfo(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(50), unique=True, nullable=False)
+    value = db.Column(db.String(200))
+
+    def __repr__(self):
+        return f'<SystemInfo {self.key}={self.value}>'

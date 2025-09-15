@@ -3,7 +3,7 @@ from app import app, db
 from app.models import (Order, Client, Product, OrderItem, Attachment, 
                         OrderTemplate, Fabric, MaterialUsage, ProductMaterial, 
                         SubiektProductCache, Material, ProductCategory,
-                        OrderFabric, TemplateFabric, ProductFabric)
+                        OrderFabric, TemplateFabric, ProductFabric, SystemInfo)
 from app.forms import (OrderForm, OrderTemplateForm, ProductForm, FabricForm, 
                        MaterialForm, ProductCategoryForm, MaterialEditForm)
 from werkzeug.utils import secure_filename
@@ -901,6 +901,16 @@ def receive_price_update():
                 updated_materials = Material.query.filter_by(subiekt_symbol=symbol).update({'price': price})
                 if updated_fabrics > 0 or updated_materials > 0:
                     updated_count += 1
+        
+        # --- NOWA LOGIKA: Zapis daty aktualizacji ---
+        if updated_count > 0:
+            last_update_info = SystemInfo.query.filter_by(key='last_price_update').first()
+            if not last_update_info:
+                last_update_info = SystemInfo(key='last_price_update')
+                db.session.add(last_update_info)
+            last_update_info.value = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        # --- KONIEC NOWEJ LOGIKI ---
+
         db.session.commit()
         message = f'Pomyślnie zaktualizowano ceny dla {updated_count} symboli.'
         return jsonify({'status': 'success', 'message': message}), 200
@@ -956,8 +966,15 @@ def receive_subiekt_catalog():
 @app.route('/subiekt-mapping')
 def subiekt_mapping():
     unmapped_products = SubiektProductCache.query.filter_by(is_mapped=False).order_by(SubiektProductCache.symbol).all()
-    return render_template('subiekt_mapping.html', products=unmapped_products)
-
+    
+    # --- NOWA LOGIKA: Pobranie daty ostatniej aktualizacji ---
+    last_update_info = SystemInfo.query.filter_by(key='last_price_update').first()
+    last_update_timestamp = last_update_info.value if last_update_info else None
+    # --- KONIEC NOWEJ LOGIKI ---
+    
+    return render_template('subiekt_mapping.html', 
+                           products=unmapped_products,
+                           last_update_timestamp=last_update_timestamp) # <-- Przekazanie do szablonu
 @app.route('/subiekt-mapping/map', methods=['POST'])
 def map_subiekt_product():
     symbol = request.form.get('symbol')
