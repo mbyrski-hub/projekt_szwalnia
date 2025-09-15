@@ -1328,7 +1328,7 @@ def mobile_szwalnia():
 def download_synchronizator():
     return send_from_directory(
         os.path.join(current_app.static_folder, 'synchronizator'),
-        'Synchronizator 3.0.exe',
+        'Synchronizator 3.5.exe',
         as_attachment=True
     )
 
