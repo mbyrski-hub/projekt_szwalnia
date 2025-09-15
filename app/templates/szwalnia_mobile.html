@@ -54,14 +54,13 @@
         .item-code { font-weight: bold; font-size: 1.1em; }
         .item-client { color: #555; font-size: 0.9em; }
         
-        /* --- ZMIANY W UKŁADZIE --- */
         .main-container {
             flex-grow: 1;
             display: flex;
-            flex-wrap: wrap; /* Pozwól na zawijanie kolumn */
+            flex-wrap: wrap;
             gap: 8px;
             padding: 8px;
-            overflow-y: auto; /* Przewijanie pionowe */
+            overflow-y: auto;
         }
         .column {
             border-radius: 10px;
@@ -69,9 +68,8 @@
             display: flex;
             flex-direction: column;
             flex-grow: 1;
-            flex-basis: calc(50% - 12px); /* Szerokość na prawie połowę */
+            flex-basis: calc(50% - 12px);
         }
-        /* --- KONIEC ZMIAN --- */
 
         .column .column-header {
             border-bottom: 2px solid rgba(255,255,255,0.2);
@@ -198,6 +196,29 @@
                 });
         }
 
+        // --- NOWA FUNKCJA DO DZIELENIA ZLECEŃ ---
+        function splitOrder(orderId) {
+             if (confirm('Czy na pewno chcesz podzielić to zlecenie na oba zespoły?')) {
+                fetch(`/api/order/${orderId}/assign_team`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ team: 'OBA' })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('Zlecenie zostało podzielone.', 'success');
+                        loadOrders(); // Odśwież widok
+                    } else {
+                        showNotification('Błąd podczas dzielenia zlecenia.', 'error');
+                    }
+                })
+                .catch(err => {
+                    showNotification('Błąd połączenia.', 'error');
+                });
+            }
+        }
+
         function handleDrop(draggedItem, toZone) {
             const orderId = draggedItem.dataset.orderId;
             const fromZone = draggedItem.parentElement;
@@ -245,12 +266,44 @@
             const items = document.querySelectorAll('.item');
             const dropzones = document.querySelectorAll('.column-items, .unassigned-items');
             let draggedItem = null;
+            let pressTimer = null;
+            let isLongPress = false;
 
             items.forEach(item => {
-                item.addEventListener('dragstart', () => {
+                // --- NOWE EVENTY DO OBSŁUGI DŁUGIEGO PRZYTRZYMANIA ---
+                item.addEventListener('touchstart', (e) => {
+                    // Rozpocznij odliczanie do długiego naciśnięcia
+                    isLongPress = false;
+                    pressTimer = window.setTimeout(() => {
+                        isLongPress = true;
+                        // Sprawdź, czy element jest w kolumnie "Do Przypisania"
+                        if (item.parentElement.id === 'unassigned-items-container') {
+                            splitOrder(item.dataset.orderId);
+                        }
+                    }, 800); // 800ms
+                }, {passive: true});
+
+                item.addEventListener('touchend', () => {
+                    // Anuluj odliczanie, jeśli palec został puszczony za wcześnie
+                    clearTimeout(pressTimer);
+                });
+
+                item.addEventListener('touchmove', () => {
+                    // Anuluj odliczanie, jeśli palec zaczął się przesuwać (drag)
+                    clearTimeout(pressTimer);
+                }, {passive: true});
+                // --- KONIEC NOWYCH EVENTÓW ---
+
+                item.addEventListener('dragstart', (e) => {
+                    // Nie rozpoczynaj przeciągania, jeśli właśnie wykonano długie naciśnięcie
+                    if (isLongPress) {
+                        e.preventDefault();
+                        return;
+                    }
                     draggedItem = item;
                     setTimeout(() => item.classList.add('dragging'), 0);
                 });
+
                 item.addEventListener('dragend', () => {
                     if (draggedItem) draggedItem.classList.remove('dragging');
                     draggedItem = null;
