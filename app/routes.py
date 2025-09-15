@@ -1,10 +1,10 @@
 from flask import render_template, request, redirect, url_for, flash, send_from_directory, current_app, make_response, jsonify, send_file, after_this_request
 from app import app, db
-from app.models import (Order, Client, Product, OrderItem, Attachment, 
-                        OrderTemplate, Fabric, MaterialUsage, ProductMaterial, 
+from app.models import (Order, Client, Product, OrderItem, Attachment,
+                        OrderTemplate, Fabric, MaterialUsage, ProductMaterial,
                         SubiektProductCache, Material, ProductCategory,
                         OrderFabric, TemplateFabric, ProductFabric, SystemInfo)
-from app.forms import (OrderForm, OrderTemplateForm, ProductForm, FabricForm, 
+from app.forms import (OrderForm, OrderTemplateForm, ProductForm, FabricForm,
                        MaterialForm, ProductCategoryForm, MaterialEditForm)
 from werkzeug.utils import secure_filename
 import os
@@ -71,10 +71,8 @@ def new_order():
     form = OrderForm()
     all_fabrics = Fabric.query.order_by('name').all()
     fabric_choices = [(f.id, f.name) for f in all_fabrics]
-    
     for fabric_form in form.fabrics:
         fabric_form.fabric_id.choices = fabric_choices
-
     template_id = request.args.get('template_id', type=int)
     if request.method == 'GET' and template_id:
         order_template = OrderTemplate.query.get(template_id)
@@ -82,11 +80,9 @@ def new_order():
             form.client_name.data = order_template.client_name
             form.description.data = order_template.description
             form.login_info.data = order_template.login_info
-            
-            form.fabrics.entries = [] 
+            form.fabrics.entries = []
             for template_fabric in order_template.fabrics:
                 form.fabrics.append_entry({'fabric_id': template_fabric.fabric_id})
-
     if form.validate_on_submit():
         try:
             client_name = form.client_name.data.strip().upper()
@@ -94,52 +90,32 @@ def new_order():
             if not client:
                 client = Client(name=client_name)
                 db.session.add(client)
-                db.session.flush() 
-
+                db.session.flush()
             order = Order(
-                client_id=client.id,
-                description=form.description.data.strip().upper(),
+                client_id=client.id, description=form.description.data.strip().upper(),
                 login_info=form.login_info.data.strip().upper() if form.login_info.data else None,
-                deadline=form.deadline.data,
-                status='NOWE',
-                zlecajacy=form.zlecajacy.data.upper()
+                deadline=form.deadline.data, status='NOWE', zlecajacy=form.zlecajacy.data.upper()
             )
             db.session.add(order)
-
             for fabric_data in form.fabrics.data:
-                order_fabric_link = OrderFabric(order=order, fabric_id=fabric_data['fabric_id'])
-                db.session.add(order_fabric_link)
-
+                db.session.add(OrderFabric(order=order, fabric_id=fabric_data['fabric_id']))
             for prod_data in form.products.data:
                 product_name = prod_data['product_name'].strip().upper()
                 if not product_name: continue
-
                 product = Product.query.filter_by(name=product_name).first()
                 if not product:
                     product = Product(name=product_name)
                     db.session.add(product)
-                    db.session.flush() 
-                
+                    db.session.flush()
                 for variant in prod_data['variants']:
                     size = variant['size'].strip().upper()
-                    try:
-                        quantity = int(variant['quantity'])
-                    except (ValueError, TypeError):
-                        quantity = 0
-                    
+                    try: quantity = int(variant['quantity'])
+                    except (ValueError, TypeError): quantity = 0
                     if quantity > 0 and size:
-                        order_item = OrderItem(
-                            order_id=order.id,
-                            product_id=product.id,
-                            size=size,
-                            quantity=quantity
-                        )
-                        db.session.add(order_item)
-
+                        db.session.add(OrderItem(order_id=order.id, product_id=product.id, size=size, quantity=quantity))
             db.session.flush()
             today = date.today()
             order.order_code = f"{today.year}/{today.month:02d}/{today.day:02d}-{order.id}"
-
             if 'attachments' in request.files:
                 files = request.files.getlist('attachments')
                 for file in files:
@@ -148,17 +124,13 @@ def new_order():
                         timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
                         filename = f"{timestamp}_{order.id}_{filename}"
                         file.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
-                        attachment = Attachment(order_id=order.id, filename=filename)
-                        db.session.add(attachment)
-
+                        db.session.add(Attachment(order_id=order.id, filename=filename))
             if form.save_template.data and form.template_name.data:
                 template_name = form.template_name.data.strip().upper()
                 if not OrderTemplate.query.filter_by(template_name=template_name).first():
                     new_template = OrderTemplate(
-                        template_name=template_name,
-                        client_name=client.name,
-                        description=order.description,
-                        login_info=order.login_info
+                        template_name=template_name, client_name=client.name,
+                        description=order.description, login_info=order.login_info
                     )
                     for fabric_link in order.fabrics:
                         new_template.fabrics.append(TemplateFabric(fabric_id=fabric_link.fabric_id))
@@ -166,41 +138,31 @@ def new_order():
                     flash('Szablon został zapisany.', 'info')
                 else:
                     flash('Szablon o tej nazwie już istnieje.', 'warning')
-            
             db.session.commit()
             flash('Zlecenie zostało dodane.', 'success')
-
         except Exception as e:
             db.session.rollback()
             flash(f'Wystąpił nieoczekiwany błąd: {e}', 'danger')
             return redirect(url_for('new_order'))
-
         material_summary = calculate_material_summary(order)
         filepath = save_order_as_word(order, material_summary)
-        
         return send_file(
-            filepath,
-            as_attachment=True,
+            filepath, as_attachment=True,
             download_name=os.path.basename(filepath),
             mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
-    
     existing_clients = Client.query.all()
     all_categories = ProductCategory.query.order_by(ProductCategory.name).all()
     all_templates = OrderTemplate.query.order_by(OrderTemplate.template_name).all()
-    
     products_for_js = [
-        {'id': p.id, 'name': p.name, 'category_id': p.category_id}
+        {
+            'id': p.id, 'name': p.name, 'category_id': p.category_id,
+            'fabrics': [pf.fabric_id for pf in p.fabrics_needed]
+        }
         for p in Product.query.order_by(Product.name).all()
     ]
-
-    return render_template('order_form.html',
-                           form=form,
-                           clients=existing_clients,
-                           categories=all_categories,
-                           templates=all_templates,
-                           products_json=json.dumps(products_for_js),
-                           fabric_choices=fabric_choices)
+    return render_template('order_form.html', form=form, clients=existing_clients, categories=all_categories,
+                           templates=all_templates, products_json=json.dumps(products_for_js), fabric_choices=fabric_choices)
 
 @app.route('/order_templates')
 def order_templates():
@@ -213,7 +175,6 @@ def new_template():
     fabric_choices = [(f.id, f.name) for f in Fabric.query.order_by('name').all()]
     for fabric_form in form.fabrics:
         fabric_form.fabric_id.choices = fabric_choices
-    
     clients = Client.query.all()
     if form.validate_on_submit():
         template_name = form.template_name.data.strip().upper()
@@ -221,51 +182,40 @@ def new_template():
             flash('Szablon o tej nazwie już istnieje.', 'danger')
         else:
             template = OrderTemplate(
-                template_name=template_name,
-                client_name=form.client_name.data.strip().upper(),
-                description=form.description.data.strip().upper(),
-                login_info=form.login_info.data.strip().upper()
+                template_name=template_name, client_name=form.client_name.data.strip().upper(),
+                description=form.description.data.strip().upper(), login_info=form.login_info.data.strip().upper()
             )
             for fabric_data in form.fabrics.data:
                 template.fabrics.append(TemplateFabric(fabric_id=fabric_data['fabric_id']))
-
             db.session.add(template)
             db.session.commit()
             flash('Szablon został utworzony.', 'success')
             return redirect(url_for('order_templates'))
-            
     return render_template('order_template_form.html', form=form, clients=clients, fabric_choices=fabric_choices)
-
 
 @app.route('/order_templates/edit/<int:template_id>', methods=['GET', 'POST'])
 def edit_template(template_id):
     template = OrderTemplate.query.get_or_404(template_id)
     form = OrderTemplateForm(obj=template)
-    
     fabric_choices = [(f.id, f.name) for f in Fabric.query.order_by('name').all()]
     for fabric_form in form.fabrics:
         fabric_form.fabric_id.choices = fabric_choices
-
     clients = Client.query.all()
     if form.validate_on_submit():
         template.template_name = form.template_name.data.strip().upper()
         template.client_name = form.client_name.data.strip().upper()
         template.description = form.description.data.strip().upper()
         template.login_info = form.login_info.data.strip().upper()
-        
         TemplateFabric.query.filter_by(template_id=template.id).delete()
         for fabric_data in form.fabrics.data:
             template.fabrics.append(TemplateFabric(fabric_id=fabric_data['fabric_id']))
-
         db.session.commit()
         flash('Szablon został zaktualizowany.', 'success')
         return redirect(url_for('order_templates'))
-
     if request.method == 'GET':
         form.fabrics.entries = []
         for tf in template.fabrics:
             form.fabrics.append_entry({'fabric_id': tf.fabric_id})
-
     return render_template('order_template_form.html', form=form, clients=clients, fabric_choices=fabric_choices)
 
 @app.route('/orders')
@@ -274,38 +224,22 @@ def orders_list():
     status_filter = request.args.get('status', '').strip().upper()
     year_filter = request.args.get('year', '')
     month_filter = request.args.get('month', '')
-    
     orders_query = Order.query.join(Client)
-    
-    if client_filter:
-        orders_query = orders_query.filter(Client.name == client_filter)
-    if status_filter:
-        orders_query = orders_query.filter(Order.status == status_filter)
-    if year_filter:
-        orders_query = orders_query.filter(extract('year', Order.created_at) == int(year_filter))
-    if month_filter:
-        orders_query = orders_query.filter(extract('month', Order.created_at) == int(month_filter))
-    
+    if client_filter: orders_query = orders_query.filter(Client.name == client_filter)
+    if status_filter: orders_query = orders_query.filter(Order.status == status_filter)
+    if year_filter: orders_query = orders_query.filter(extract('year', Order.created_at) == int(year_filter))
+    if month_filter: orders_query = orders_query.filter(extract('month', Order.created_at) == int(month_filter))
     all_orders = orders_query.order_by(Order.created_at.desc()).all()
-
     for order in all_orders:
-        planned_summary = calculate_material_summary(order)
-        order.planned_materials = planned_summary
-
+        order.planned_materials = calculate_material_summary(order)
     in_progress_orders = [o for o in all_orders if o.status == 'W REALIZACJI']
     new_orders = [o for o in all_orders if o.status == 'NOWE']
     completed_orders = [o for o in all_orders if o.status == 'ZREALIZOWANE']
-    
     years_query = db.session.query(extract('year', Order.created_at)).distinct().all()
     years = sorted({int(y[0]) for y in years_query})
     clients = Client.query.order_by(Client.name).all()
-
-    return render_template('orders_list.html', 
-                           in_progress_orders=in_progress_orders,
-                           new_orders=new_orders,
-                           completed_orders=completed_orders,
-                           clients=clients, 
-                           years=years)
+    return render_template('orders_list.html', in_progress_orders=in_progress_orders, new_orders=new_orders,
+                           completed_orders=completed_orders, clients=clients, years=years)
 
 @app.route('/orders/<int:order_id>')
 def order_detail(order_id):
@@ -328,9 +262,7 @@ def update_order_status(order_id):
 def order_pdf(order_id):
     order = Order.query.get_or_404(order_id)
     material_summary = calculate_material_summary(order)
-    
     rendered = render_template('order_pdf.html', order=order, material_summary=material_summary)
-    
     pdf = pdfkit.from_string(rendered, False, configuration=config)
     response = make_response(pdf)
     response.headers['Content-Type'] = 'application/pdf'
@@ -345,19 +277,13 @@ def uploaded_file(filename):
 def products_list():
     categories = ProductCategory.query.order_by(ProductCategory.name).all()
     category_filter_id = request.args.get('category_id', type=int)
-    
     query = Product.query
     if category_filter_id:
         query = query.filter_by(category_id=category_filter_id)
-        
     products = query.order_by(Product.name).all()
     form = ProductCategoryForm()
-
-    return render_template('products_list.html', 
-                           products=products, 
-                           categories=categories,
-                           form=form,
-                           current_category_id=category_filter_id)
+    return render_template('products_list.html', products=products, categories=categories,
+                           form=form, current_category_id=category_filter_id)
 
 @app.route('/products/new', methods=['GET', 'POST'])
 def add_product():
@@ -368,126 +294,79 @@ def add_product():
     fabric_choices = [(f.id, f.name) for f in Fabric.query.order_by('name').all()]
     for f_form in form.fabrics_needed:
         f_form.fabric_id.choices = fabric_choices
-
     if form.validate_on_submit():
         new_product = Product(
-            name=form.name.data.strip().upper(),
-            description=form.description.data.strip(),
+            name=form.name.data.strip().upper(), description=form.description.data.strip(),
             production_price=form.production_price.data,
             category_id=form.category_id.data if form.category_id.data != 0 else None
         )
         db.session.add(new_product)
-        
         for fabric_data in form.fabrics_needed.data:
-            pf_link = ProductFabric(
-                product=new_product,
-                fabric_id=fabric_data['fabric_id'],
-                usage_meters=fabric_data['usage_meters']
-            )
-            db.session.add(pf_link)
-        
+            db.session.add(ProductFabric(product=new_product, fabric_id=fabric_data['fabric_id'], usage_meters=fabric_data['usage_meters']))
         for material_data in form.materials_needed.data:
             material_name = material_data['material_name'].strip().upper()
             quantity = material_data['quantity'].strip()
-
             if material_name and quantity:
                 material = Material.query.filter_by(name=material_name).first()
                 if not material:
                     material = Material(name=material_name)
                     db.session.add(material)
                     db.session.flush()
-
-                product_material_link = ProductMaterial(
-                    product=new_product,
-                    material_id=material.id,
-                    quantity=quantity
-                )
-                db.session.add(product_material_link)
-        
+                db.session.add(ProductMaterial(product=new_product, material_id=material.id, quantity=quantity))
         db.session.commit()
         flash('Produkt został dodany.', 'success')
         return redirect(url_for('products_list'))
-        
-    return render_template('product_form.html', form=form, title="Dodaj Nowy Produkt", 
+    return render_template('product_form.html', form=form, title="Dodaj Nowy Produkt",
                            available_materials=available_materials, fabric_choices=fabric_choices)
 
 @app.route('/products/edit/<int:product_id>', methods=['GET', 'POST'])
 def edit_product(product_id):
     product = Product.query.get_or_404(product_id)
     form = ProductForm(obj=product)
-    
     form.category_id.choices = [(c.id, c.name) for c in ProductCategory.query.order_by('name').all()]
     form.category_id.choices.insert(0, (0, '--- Brak ---'))
     available_materials = Material.query.order_by(Material.name).all()
     fabric_choices = [(f.id, f.name) for f in Fabric.query.order_by('name').all()]
     for f_form in form.fabrics_needed:
         f_form.fabric_id.choices = fabric_choices
-
     if form.validate_on_submit():
         product.name = form.name.data.strip().upper()
         product.description = form.description.data.strip()
         product.production_price = form.production_price.data
         product.category_id = form.category_id.data if form.category_id.data != 0 else None
-        
         ProductFabric.query.filter_by(product_id=product.id).delete()
         ProductMaterial.query.filter_by(product_id=product.id).delete()
-        
         for fabric_data in form.fabrics_needed.data:
-            pf_link = ProductFabric(
-                product_id=product.id,
-                fabric_id=fabric_data['fabric_id'],
-                usage_meters=fabric_data['usage_meters']
-            )
-            db.session.add(pf_link)
-
+            db.session.add(ProductFabric(product_id=product.id, fabric_id=fabric_data['fabric_id'], usage_meters=fabric_data['usage_meters']))
         for material_data in form.materials_needed.data:
             material_name = material_data['material_name'].strip().upper()
             quantity = material_data['quantity'].strip()
-
             if material_name and quantity:
                 material = Material.query.filter_by(name=material_name).first()
                 if not material:
                     material = Material(name=material_name)
                     db.session.add(material)
                     db.session.flush()
-
-                product_material_link = ProductMaterial(
-                    product_id=product.id,
-                    material_id=material.id,
-                    quantity=quantity
-                )
-                db.session.add(product_material_link)
-                
+                db.session.add(ProductMaterial(product_id=product.id, material_id=material.id, quantity=quantity))
         db.session.commit()
         flash('Produkt został zaktualizowany.', 'success')
         return redirect(url_for('products_list'))
-        
     if request.method == 'GET':
         form.fabrics_needed.entries = []
         for pf_link in product.fabrics_needed:
-            form.fabrics_needed.append_entry({
-                'fabric_id': pf_link.fabric_id,
-                'usage_meters': pf_link.usage_meters
-            })
+            form.fabrics_needed.append_entry({'fabric_id': pf_link.fabric_id, 'usage_meters': pf_link.usage_meters})
         form.materials_needed.entries = []
         for pm_link in product.materials_needed:
-            form.materials_needed.append_entry({
-                'material_name': pm_link.material.name,
-                'quantity': pm_link.quantity
-            })
-            
-    return render_template('product_form.html', form=form, title="Edytuj Produkt", 
+            form.materials_needed.append_entry({'material_name': pm_link.material.name, 'quantity': pm_link.quantity})
+    return render_template('product_form.html', form=form, title="Edytuj Produkt",
                            available_materials=available_materials, fabric_choices=fabric_choices)
-
 
 @app.route('/products/delete/<int:product_id>', methods=['POST'])
 def delete_product(product_id):
     product = Product.query.get_or_404(product_id)
-
     if product.order_items:
         flash('Nie można usunąć produktu, ponieważ jest częścią istniejących zleceń.', 'danger')
         return redirect(url_for('products_list'))
-
     db.session.delete(product)
     db.session.commit()
     flash('Produkt został usunięty.', 'success')
@@ -511,22 +390,14 @@ def order_print(order_id):
 def order_labels(order_id):
     order = Order.query.get_or_404(order_id)
     template_choice = request.args.get('template', 'cotton')
-    
     page_height = get_label_page_height(template_choice, target_width_mm=30)
-    
-    rendered_html = render_template('label_template.html', 
-                                    order=order, 
-                                    template_choice=template_choice, 
-                                    page_height=page_height)
-
+    rendered_html = render_template('label_template.html', order=order, template_choice=template_choice, page_height=page_height)
     options = {
         'page-width': '30mm', 'page-height': page_height, 'margin-top': '0mm',
         'margin-bottom': '0mm', 'margin-left': '0mm', 'margin-right': '0mm',
         'disable-smart-shrinking': '', 'enable-local-file-access': ''
     }
-
     pdf = pdfkit.from_string(rendered_html, False, configuration=config, options=options)
-
     response = make_response(pdf)
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = 'inline; filename=labels.pdf'
@@ -536,9 +407,7 @@ def order_labels(order_id):
 def choose_label(order_id):
     order = Order.query.get_or_404(order_id)
     order_template_images = {
-        'cotton': '/static/images/cotton.jpg',
-        'polyester': '/static/images/polyester.jpg',
-        'mixed': '/static/images/mixed.jpg'
+        'cotton': '/static/images/cotton.jpg', 'polyester': '/static/images/polyester.jpg', 'mixed': '/static/images/mixed.jpg'
     }
     return render_template('choose_label.html', order=order, order_template_images=order_template_images)
 
@@ -547,12 +416,8 @@ def download_doc(order_id):
     order = Order.query.get_or_404(order_id)
     material_summary = calculate_material_summary(order)
     filepath = save_order_as_word(order, material_summary, folder_path='app/order_docs')
-    
-    return send_file(
-        filepath, as_attachment=True,
-        download_name=os.path.basename(filepath),
-        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
+    return send_file(filepath, as_attachment=True, download_name=os.path.basename(filepath),
+                     mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 @app.route('/api/fabrics')
 def api_fabrics():
@@ -562,136 +427,86 @@ def api_fabrics():
 @app.route('/orders/<int:order_id>/material_usage', methods=['GET', 'POST'])
 def edit_material_usage(order_id):
     order = Order.query.get_or_404(order_id)
-
     if request.method == 'POST':
         MaterialUsage.query.filter_by(order_id=order_id).delete()
         materials = request.form.getlist('material_name[]')
         quantities = request.form.getlist('quantity[]')
-
         for name, qty in zip(materials, quantities):
             if name.strip() and qty.strip():
                 db.session.add(MaterialUsage(order_id=order_id, material_name=name.strip().upper(), quantity=qty.strip()))
-        
         db.session.commit()
         flash('Zużycie materiałów zostało zaktualizowane.', 'success')
         return redirect(url_for('orders_list'))
-
     materials_to_display = []
     if order.materials_used:
         materials_to_display = order.materials_used
     else:
         planned_summary = calculate_material_summary(order)
         materials_to_display = [{'material_name': item['name'], 'quantity': item['quantity']} for item in planned_summary]
-
     defined_materials = [m[0] for m in db.session.query(Material.name).distinct().all()]
     fabric_names = [f.name for f in Fabric.query.all()]
     usage_materials = [m[0] for m in db.session.query(MaterialUsage.material_name).distinct().all()]
-    
     all_possible_materials = sorted(list(set(defined_materials + fabric_names + usage_materials)))
-
-    return render_template(
-        'edit_material_usage.html', 
-        order=order, 
-        materials=materials_to_display, 
-        existing_materials=all_possible_materials
-    )
+    return render_template('edit_material_usage.html', order=order, materials=materials_to_display, existing_materials=all_possible_materials)
 
 @app.route('/kanban')
 def kanban():
-    orders = Order.query.filter(
-        Order.cutting_table == 'skrojone', 
-        Order.status.in_(['NOWE', 'W REALIZACJI'])
-    ).order_by(Order.created_at.desc()).all()
-
+    orders = Order.query.filter(Order.cutting_table == 'skrojone', Order.status.in_(['NOWE', 'W REALIZACJI'])).order_by(Order.created_at.desc()).all()
     team1_orders = [o for o in orders if o.assigned_team in ['zespol-1', 'OBA']]
     team2_orders = [o for o in orders if o.assigned_team in ['zespol-2', 'OBA']]
     unassigned_orders = [o for o in orders if o.assigned_team is None]
-
-    return render_template('kanban.html',
-                           team1_orders=team1_orders,
-                           team2_orders=team2_orders,
-                           unassigned_orders=unassigned_orders)
+    return render_template('kanban.html', team1_orders=team1_orders, team2_orders=team2_orders, unassigned_orders=unassigned_orders)
 
 @app.route('/kanban_partial')
 def kanban_partial():
-    orders = Order.query.filter(
-        Order.cutting_table == 'skrojone', 
-        Order.status.in_(['NOWE', 'W REALIZACJI'])
-    ).order_by(Order.created_at.desc()).all()
-
+    orders = Order.query.filter(Order.cutting_table == 'skrojone', Order.status.in_(['NOWE', 'W REALIZACJI'])).order_by(Order.created_at.desc()).all()
     team1_orders = [o for o in orders if o.assigned_team in ['zespol-1', 'OBA']]
     team2_orders = [o for o in orders if o.assigned_team in ['zespol-2', 'OBA']]
     unassigned_orders = [o for o in orders if o.assigned_team is None]
+    return render_template('kanban_partial.html', team1_orders=team1_orders, team2_orders=team2_orders, unassigned_orders=unassigned_orders)
 
-    return render_template('kanban_partial.html',
-                           team1_orders=team1_orders,
-                           team2_orders=team2_orders,
-                           unassigned_orders=unassigned_orders)
-
-# ZMIANA: Dodajemy logikę zapisu daty rozpoczęcia szycia
 @app.route('/assign_team', methods=['POST'])
 def assign_team():
     data = request.get_json()
     order_id = data.get('order_id')
     team = data.get('team')
     order = Order.query.get_or_404(order_id)
-
-    # Ustaw datę rozpoczęcia szycia, jeśli jeszcze nie jest ustawiona
     if team and not order.sewing_started_at:
         order.sewing_started_at = datetime.utcnow()
-
     if team in ['zespol-1', 'zespol-2', 'OBA']:
         order.assigned_team = team
     else:
         order.assigned_team = None
-
     db.session.commit()
     return jsonify(success=True, team=order.assigned_team)
 
 @app.route('/krojownia')
 def krojownia():
-    orders = Order.query.filter(
-        Order.status.in_(['NOWE', 'W REALIZACJI']),
-        Order.assigned_team.is_(None)
-    ).order_by(Order.created_at.desc()).all()
-    
+    orders = Order.query.filter(Order.status.in_(['NOWE', 'W REALIZACJI']), Order.assigned_team.is_(None)).order_by(Order.created_at.desc()).all()
     stol_1_orders = [o for o in orders if o.cutting_table == 'stol-1']
     stol_2_orders = [o for o in orders if o.cutting_table == 'stol-2']
     stol_3_orders = [o for o in orders if o.cutting_table == 'stol-3']
     skrojone_orders = [o for o in orders if o.cutting_table == 'skrojone']
     unassigned_orders = [o for o in orders if o.cutting_table is None]
+    return render_template('krojownia.html', stol_1_orders=stol_1_orders, stol_2_orders=stol_2_orders,
+                           stol_3_orders=stol_3_orders, skrojone_orders=skrojone_orders, unassigned_orders=unassigned_orders)
 
-    return render_template('krojownia.html',
-                           stol_1_orders=stol_1_orders,
-                           stol_2_orders=stol_2_orders,
-                           stol_3_orders=stol_3_orders,
-                           skrojone_orders=skrojone_orders,
-                           unassigned_orders=unassigned_orders)
-
-# ZMIANA: Dodajemy logikę zapisu dat krojenia
 @app.route('/assign_cutting_table', methods=['POST'])
 def assign_cutting_table():
     data = request.get_json()
     order_id = data.get('order_id')
     table = data.get('table')
     order = Order.query.get_or_404(order_id)
-
     if order.status == 'NOWE' and table is not None:
         order.status = 'W REALIZACJI'
-    
-    # Ustaw datę rozpoczęcia krojenia, jeśli jeszcze nie jest ustawiona
     if table and not order.cutting_started_at:
         order.cutting_started_at = datetime.utcnow()
-    
-    # Ustaw datę zakończenia krojenia
     if table == 'skrojone':
         order.cutting_finished_at = datetime.utcnow()
-
     if table in ['stol-1', 'stol-2', 'stol-3', 'skrojone']:
         order.cutting_table = table
     else:
         order.cutting_table = None
-
     db.session.commit()
     return jsonify(success=True, table=order.cutting_table)
 
