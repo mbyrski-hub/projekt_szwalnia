@@ -8,67 +8,97 @@
     <link rel="manifest" href="{{ url_for('static', filename='mobile_assets/manifest_krojownia.json') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='mobile_assets/icon_krojownia_192.png') }}">
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        body, html {
             margin: 0;
-            padding: 8px;
-            background-color: #f4f4f8;
-            background-image: url("{{ url_for('static', filename='images/bg_krojownia.png') }}");
-            background-size: cover;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #333;
             overscroll-behavior: contain;
             user-select: none;
             -webkit-user-select: none;
-        }
-        .container {
-            display: flex;
-            gap: 8px;
-            height: calc(100vh - 16px);
-            overflow-x: auto;
-        }
-        .column {
-            background-color: rgba(235, 235, 240, 0.9);
-            border-radius: 10px;
-            padding: 10px;
-            min-width: 280px;
             height: 100%;
             display: flex;
             flex-direction: column;
-            overflow-y: auto;
+        }
+        .unassigned-container {
+            flex-shrink: 0;
+            padding: 8px;
+            background-color: #444;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            z-index: 10;
         }
         .column-header {
-            padding: 10px;
+            padding: 5px;
             font-weight: bold;
-            font-size: 1.2em;
-            color: #333;
+            font-size: 1.1em;
+            color: #fff;
             text-align: center;
-            border-bottom: 2px solid #ddd;
-            margin-bottom: 10px;
+        }
+        .unassigned-items {
+            display: flex;
+            overflow-x: auto;
+            padding-bottom: 10px;
+            gap: 8px;
         }
         .item {
             background-color: #ffffff;
             border-radius: 8px;
             padding: 12px;
-            margin-bottom: 8px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             cursor: grab;
             touch-action: none;
+            flex-shrink: 0;
+            width: 180px;
         }
         .item.dragging { opacity: 0.5; }
         .item-code { font-weight: bold; font-size: 1.1em; }
         .item-client { color: #555; font-size: 0.9em; }
+        
+        /* --- ZMIANY W UKŁADZIE --- */
+        .main-container {
+            flex-grow: 1;
+            display: flex;
+            flex-wrap: wrap; /* Pozwól na zawijanie kolumn */
+            gap: 8px;
+            padding: 8px;
+            overflow-y: auto; /* Przewijanie pionowe w razie potrzeby */
+        }
+        .column {
+            border-radius: 10px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            /* Ustaw szerokość na prawie połowę, uwzględniając odstęp (gap) */
+            flex-basis: calc(50% - 12px); 
+        }
+        /* --- KONIEC ZMIAN --- */
 
-        /* NOWA IKONA ODŚWIEŻANIA */
+        .column .column-header {
+            border-bottom: 2px solid rgba(255,255,255,0.2);
+            margin-bottom: 10px;
+        }
+        .column-items {
+            flex-grow: 1;
+            overflow-y: auto;
+            min-height: 100px; /* Minimalna wysokość, aby strefa upuszczania była zawsze aktywna */
+        }
+
+        #stol-1 { background-color: #3498db; }
+        #stol-2 { background-color: #2ecc71; }
+        #stol-3 { background-color: #f1c40f; }
+        #skrojone { background-color: #e74c3c; }
+
         #refresh-btn {
             position: fixed;
             top: 15px;
             right: 15px;
             font-size: 24px;
-            color: #333;
+            color: #fff;
             cursor: pointer;
             z-index: 1000;
         }
         
-        /* NOWY SYSTEM POWIADOMIEŃ */
         #notification-container {
             position: fixed;
             top: 0;
@@ -93,10 +123,7 @@
         .notification.success { background-color: #4CAF50; }
         .notification.error { background-color: #F44336; }
         @keyframes fadeInDown {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
@@ -105,67 +132,73 @@
     <div id="notification-container"></div>
     <i id="refresh-btn" class="fas fa-sync-alt" onclick="location.reload();"></i>
 
-    <div class="container">
-        <div class="column" id="unassigned" data-table-id="unassigned">
-            <div class="column-header">Nowe</div>
-        </div>
+    <div class="unassigned-container">
+        <div class="column-header">Nowe</div>
+        <div class="unassigned-items" id="unassigned-items-container" data-table-id="unassigned"></div>
+    </div>
+
+    <div class="main-container">
         <div class="column" id="stol-1" data-table-id="stol-1">
             <div class="column-header">Stół 1</div>
+            <div class="column-items"></div>
         </div>
         <div class="column" id="stol-2" data-table-id="stol-2">
             <div class="column-header">Stół 2</div>
+            <div class="column-items"></div>
         </div>
         <div class="column" id="stol-3" data-table-id="stol-3">
             <div class="column-header">Stół 3</div>
+            <div class="column-items"></div>
         </div>
         <div class="column" id="skrojone" data-table-id="skrojone">
             <div class="column-header">Skrojone</div>
+            <div class="column-items"></div>
         </div>
     </div>
 
     <script>
         const notificationContainer = document.getElementById('notification-container');
 
-        // NOWA FUNKCJA DO POWIADOMIEŃ
         function showNotification(message, type = 'success') {
             const notif = document.createElement('div');
             notif.className = `notification ${type}`;
             notif.textContent = message;
             notificationContainer.appendChild(notif);
+            setTimeout(() => notif.remove(), 4000);
+        }
 
-            setTimeout(() => {
-                notif.remove();
-            }, 4000);
+        function createOrderElement(order) {
+            const item = document.createElement('div');
+            item.className = 'item';
+            item.dataset.orderId = order.id;
+            item.draggable = true;
+            item.innerHTML = `<div class="item-code">${order.order_code}</div><div class="item-client">${order.client_name}</div>`;
+            return item;
         }
 
         function loadOrders() {
             fetch('/api/krojownia/orders')
                 .then(response => response.json())
                 .then(orders => {
-                    document.querySelectorAll('.column').forEach(c => c.innerHTML = `<div class="column-header">${c.querySelector('.column-header').textContent}</div>`);
+                    document.querySelectorAll('.column-items, .unassigned-items').forEach(c => c.innerHTML = '');
                     orders.forEach(order => {
-                        const item = document.createElement('div');
-                        item.className = 'item';
-                        item.dataset.orderId = order.id;
-                        item.draggable = true;
-                        
-                        // Dodajemy nazwę klienta
-                        item.innerHTML = `<div class="item-code">${order.order_code}</div><div class="item-client">${order.client_name}</div>`;
-                        
-                        const targetColumnId = order.cutting_table || 'unassigned';
-                        document.getElementById(targetColumnId).appendChild(item);
+                        const item = createOrderElement(order);
+                        if (order.cutting_table) {
+                            document.querySelector(`#${order.cutting_table} .column-items`).appendChild(item);
+                        } else {
+                            document.getElementById('unassigned-items-container').appendChild(item);
+                        }
                     });
                     setupDragAndDrop();
                 })
                 .catch(error => {
-                    console.error('Error loading orders:', error);
-                    showNotification('Błąd ładowania zleceń. Sprawdź połączenie.', 'error');
+                    showNotification('Błąd ładowania zleceń.', 'error');
                 });
         }
 
         function setupDragAndDrop() {
             const items = document.querySelectorAll('.item');
-            const columns = document.querySelectorAll('.column');
+            const dropzones = document.querySelectorAll('.column-items, .unassigned-items');
             let draggedItem = null;
 
             items.forEach(item => {
@@ -174,52 +207,49 @@
                     setTimeout(() => item.classList.add('dragging'), 0);
                 });
                 item.addEventListener('dragend', () => {
-                    draggedItem.classList.remove('dragging');
+                    if (draggedItem) draggedItem.classList.remove('dragging');
                     draggedItem = null;
                 });
             });
 
-            columns.forEach(column => {
-                column.addEventListener('dragover', e => {
-                    e.preventDefault();
-                });
-                column.addEventListener('drop', e => {
+            dropzones.forEach(zone => {
+                zone.addEventListener('dragover', e => e.preventDefault());
+                zone.addEventListener('drop', e => {
                     e.preventDefault();
                     if (!draggedItem) return;
                     
-                    const fromColumn = draggedItem.parentElement;
-                    const toColumn = e.currentTarget;
-                    
-                    if (fromColumn !== toColumn) {
-                        const originalHTML = fromColumn.innerHTML;
-                        toColumn.appendChild(draggedItem);
+                    const fromZone = draggedItem.parentElement;
+                    const toZone = e.currentTarget;
+
+                    if (fromZone !== toZone) {
+                        const originalParent = draggedItem.parentElement;
+                        toZone.appendChild(draggedItem);
 
                         const orderId = draggedItem.dataset.orderId;
-                        const newTableId = toColumn.dataset.tableId === 'unassigned' ? null : toColumn.dataset.tableId;
+                        const newTableId = toZone.parentElement.dataset.tableId || toZone.dataset.tableId;
 
                         fetch(`/api/order/${orderId}/assign_table`, {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({ table: newTableId })
+                            body: JSON.stringify({ table: newTableId === 'unassigned' ? null : newTableId })
                         })
                         .then(response => response.json())
                         .then(data => {
                             if (!data.success) {
-                                fromColumn.innerHTML = originalHTML; // Przywróć stan w razie błędu
-                                showNotification('Błąd aktualizacji zlecenia.', 'error');
+                                originalParent.appendChild(draggedItem);
+                                showNotification('Błąd aktualizacji.', 'error');
                             } else {
-                                showNotification(data.message || 'Zlecenie zaktualizowane!', 'success');
+                                showNotification(data.message || 'Zaktualizowano!', 'success');
                             }
                         })
-                        .catch(err => {
-                            fromColumn.innerHTML = originalHTML; // Przywróć stan w razie błędu
-                            showNotification('Błąd połączenia. Spróbuj ponownie.', 'error');
+                        .catch(() => {
+                            originalParent.appendChild(draggedItem);
+                            showNotification('Błąd połączenia.', 'error');
                         });
                     }
                 });
             });
         }
-
         document.addEventListener('DOMContentLoaded', loadOrders);
     </script>
 </body>

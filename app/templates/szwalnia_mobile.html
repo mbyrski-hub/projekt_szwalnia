@@ -8,68 +8,95 @@
     <link rel="manifest" href="{{ url_for('static', filename='mobile_assets/manifest_szwalnia.json') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='mobile_assets/icon_szwalnia_192.png') }}">
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        body, html {
             margin: 0;
-            padding: 8px;
-            background-color: #f4f4f8;
-            background-image: url("{{ url_for('static', filename='images/bg_szwalnia.png') }}");
-            background-size: cover;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #333;
             overscroll-behavior: contain;
             user-select: none;
             -webkit-user-select: none;
-        }
-        .container {
-            display: flex;
-            gap: 8px;
-            height: calc(100vh - 16px);
-            overflow-x: auto;
-        }
-        .column {
-            background-color: rgba(235, 235, 240, 0.9);
-            border-radius: 10px;
-            padding: 10px;
-            min-width: 280px;
             height: 100%;
             display: flex;
             flex-direction: column;
-            overflow-y: auto;
+        }
+        .unassigned-container {
+            flex-shrink: 0;
+            padding: 8px;
+            background-color: #444;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            z-index: 10;
         }
         .column-header {
-            padding: 10px;
+            padding: 5px;
             font-weight: bold;
-            font-size: 1.2em;
-            color: #333;
+            font-size: 1.1em;
+            color: #fff;
             text-align: center;
-            border-bottom: 2px solid #ddd;
-            margin-bottom: 10px;
+        }
+        .unassigned-items {
+            display: flex;
+            overflow-x: auto;
+            padding-bottom: 10px;
+            gap: 8px;
         }
         .item {
             background-color: #ffffff;
             border-radius: 8px;
             padding: 12px;
-            margin-bottom: 8px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             cursor: grab;
             touch-action: none;
+            flex-shrink: 0;
+            width: 180px;
         }
         .item.dragging { opacity: 0.5; }
-        .item.completed-part { border-left: 5px solid #4CAF50; }
         .item-code { font-weight: bold; font-size: 1.1em; }
         .item-client { color: #555; font-size: 0.9em; }
+        
+        /* --- ZMIANY W UKŁADZIE --- */
+        .main-container {
+            flex-grow: 1;
+            display: flex;
+            flex-wrap: wrap; /* Pozwól na zawijanie kolumn */
+            gap: 8px;
+            padding: 8px;
+            overflow-y: auto; /* Przewijanie pionowe */
+        }
+        .column {
+            border-radius: 10px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            flex-basis: calc(50% - 12px); /* Szerokość na prawie połowę */
+        }
+        /* --- KONIEC ZMIAN --- */
 
-        /* IKONA ODŚWIEŻANIA */
+        .column .column-header {
+            border-bottom: 2px solid rgba(255,255,255,0.2);
+            margin-bottom: 10px;
+        }
+        .column-items {
+            flex-grow: 1;
+            overflow-y: auto;
+            min-height: 100px;
+        }
+
+        #zespol-1 { background-color: #9b59b6; }
+        #zespol-2 { background-color: #e67e22; }
+        #zrealizowane { background-color: #1abc9c; }
+
         #refresh-btn {
             position: fixed;
             top: 15px;
             right: 15px;
             font-size: 24px;
-            color: #333;
+            color: #fff;
             cursor: pointer;
             z-index: 1000;
         }
         
-        /* NOWY SYSTEM POWIADOMIEŃ */
         #notification-container {
             position: fixed;
             top: 0;
@@ -93,48 +120,45 @@
         }
         .notification.success { background-color: #4CAF50; }
         .notification.error { background-color: #F44336; }
-        .notification.info { background-color: #2196F3; }
         @keyframes fadeInDown {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
 <body>
-
+    
     <div id="notification-container"></div>
     <i id="refresh-btn" class="fas fa-sync-alt" onclick="location.reload();"></i>
 
-    <div class="container">
-        <div class="column" id="unassigned" data-team-id="unassigned">
-            <div class="column-header">Do Przypisania</div>
-        </div>
+    <div class="unassigned-container">
+        <div class="column-header">Do Przypisania</div>
+        <div class="unassigned-items" id="unassigned-items-container" data-team-id="unassigned"></div>
+    </div>
+
+    <div class="main-container">
         <div class="column" id="zespol-1" data-team-id="zespol-1">
             <div class="column-header">Zespół 1</div>
+            <div class="column-items"></div>
         </div>
         <div class="column" id="zespol-2" data-team-id="zespol-2">
             <div class="column-header">Zespół 2</div>
+            <div class="column-items"></div>
         </div>
         <div class="column" id="zrealizowane" data-team-id="zrealizowane">
             <div class="column-header">Zrealizowane</div>
+            <div class="column-items"></div>
         </div>
     </div>
 
     <script>
         const notificationContainer = document.getElementById('notification-container');
 
-        // NOWA FUNKCJA DO POWIADOMIEŃ
         function showNotification(message, type = 'success') {
             const notif = document.createElement('div');
             notif.className = `notification ${type}`;
             notif.textContent = message;
             notificationContainer.appendChild(notif);
-
-            setTimeout(() => {
-                notif.remove();
-            }, 4000);
+            setTimeout(() => notif.remove(), 4000);
         }
 
         function createOrderElement(order) {
@@ -143,13 +167,10 @@
             item.dataset.orderId = order.id;
             item.dataset.assignedTeam = order.assigned_team || 'unassigned';
             item.draggable = true;
-
             item.innerHTML = `<div class="item-code">${order.order_code}</div><div class="item-client">${order.client_name}</div>`;
-            
-            // Oznaczanie częściowo wykonanych zleceń
             if (order.assigned_team === 'OBA') {
-                if (order.team1_completed) item.innerHTML += '<small>✅ Zespół 1 skończył</small>';
-                if (order.team2_completed) item.innerHTML += '<small>✅ Zespół 2 skończył</small>';
+                if (order.team1_completed) item.innerHTML += '<small>✅ Z1</small> ';
+                if (order.team2_completed) item.innerHTML += '<small>✅ Z2</small>';
             }
             return item;
         }
@@ -158,42 +179,46 @@
             fetch('/api/szwalnia/orders')
                 .then(response => response.json())
                 .then(orders => {
-                    document.querySelectorAll('.column').forEach(c => c.innerHTML = `<div class="column-header">${c.querySelector('.column-header').textContent}</div>`);
+                    document.querySelectorAll('.column-items, .unassigned-items').forEach(c => c.innerHTML = '');
                     orders.forEach(order => {
                         const item = createOrderElement(order);
                         if (order.assigned_team === 'OBA') {
-                            if (!order.team1_completed) document.getElementById('zespol-1').appendChild(item.cloneNode(true));
-                            if (!order.team2_completed) document.getElementById('zespol-2').appendChild(item);
+                            if (!order.team1_completed) document.querySelector('#zespol-1 .column-items').appendChild(item.cloneNode(true));
+                            if (!order.team2_completed) document.querySelector('#zespol-2 .column-items').appendChild(item);
                         } else {
-                            const targetColumnId = order.assigned_team || 'unassigned';
-                            document.getElementById(targetColumnId).appendChild(item);
+                            const targetId = order.assigned_team ? order.assigned_team : 'unassigned-items-container';
+                            const container = targetId === 'unassigned-items-container' ? document.getElementById(targetId) : document.querySelector(`#${targetId} .column-items`);
+                            if(container) container.appendChild(item);
                         }
                     });
                     setupDragAndDrop();
                 })
                 .catch(error => {
-                    console.error('Error loading orders:', error);
-                    showNotification('Błąd ładowania zleceń. Sprawdź połączenie.', 'error');
+                    showNotification('Błąd ładowania zleceń.', 'error');
                 });
         }
 
-        function handleDrop(draggedItem, toColumn) {
+        function handleDrop(draggedItem, toZone) {
             const orderId = draggedItem.dataset.orderId;
-            const originalAssignedTeam = draggedItem.dataset.assignedTeam;
-            const fromColumn = document.getElementById(originalAssignedTeam);
+            const fromZone = draggedItem.parentElement;
+            const originalParent = fromZone;
 
-            const newTeamId = toColumn.dataset.teamId;
+            const newTeamId = toZone.dataset.teamId || toZone.parentElement.dataset.teamId;
             const isFinishing = newTeamId === 'zrealizowane';
             const action = isFinishing ? 'complete' : 'assign_team';
             const url = `/api/order/${orderId}/${action}`;
             
+            const fromTeamId = fromZone.dataset.teamId || fromZone.parentElement.dataset.teamId;
             const body = isFinishing 
-                ? { completed_by: fromColumn.dataset.teamId }
+                ? { completed_by: fromTeamId }
                 : { team: newTeamId === 'unassigned' ? null : newTeamId };
             
-            // Optymistyczne UI: usuwamy od razu
-            if(isFinishing) draggedItem.remove();
-
+            if (isFinishing) {
+                draggedItem.remove();
+            } else {
+                 toZone.appendChild(draggedItem);
+            }
+            
             fetch(url, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -202,26 +227,23 @@
             .then(res => res.json())
             .then(data => {
                 if (!data.success) {
-                    showNotification('Błąd serwera. Odśwież stronę.', 'error');
-                    loadOrders(); // Odświeżamy dane w razie błędu
+                    originalParent.appendChild(draggedItem);
+                    showNotification('Błąd serwera.', 'error');
                 } else {
-                    showNotification(data.message || (isFinishing ? 'Zlecenie ukończone!' : 'Zlecenie przypisane!'), 'success');
-                    // Jeśli zlecenie jest podzielone i zostało ukończone, nie odświeżamy od razu,
-                    // aby druga część zlecenia pozostała w swojej kolumnie.
-                    if (originalAssignedTeam !== 'OBA' || !isFinishing) {
-                         loadOrders();
-                    }
+                    showNotification(data.message || 'Zaktualizowano!', 'success');
                 }
+                loadOrders();
             })
             .catch(err => {
-                showNotification('Błąd połączenia. Spróbuj ponownie.', 'error');
-                loadOrders(); // Odświeżamy dane w razie błędu
+                originalParent.appendChild(draggedItem);
+                showNotification('Błąd połączenia.', 'error');
+                loadOrders();
             });
         }
 
         function setupDragAndDrop() {
             const items = document.querySelectorAll('.item');
-            const columns = document.querySelectorAll('.column');
+            const dropzones = document.querySelectorAll('.column-items, .unassigned-items');
             let draggedItem = null;
 
             items.forEach(item => {
@@ -230,31 +252,21 @@
                     setTimeout(() => item.classList.add('dragging'), 0);
                 });
                 item.addEventListener('dragend', () => {
-                    if(draggedItem) draggedItem.classList.remove('dragging');
+                    if (draggedItem) draggedItem.classList.remove('dragging');
                     draggedItem = null;
                 });
             });
 
-            columns.forEach(column => {
-                column.addEventListener('dragover', e => e.preventDefault());
-                column.addEventListener('drop', e => {
+            dropzones.forEach(zone => {
+                zone.addEventListener('dragover', e => e.preventDefault());
+                zone.addEventListener('drop', e => {
                     e.preventDefault();
-                    if (!draggedItem) return;
-                    
-                    const fromColumnId = draggedItem.parentElement.id;
-                    const toColumn = e.currentTarget;
-
-                    if (fromColumnId !== toColumn.id) {
-                        if (toColumn.id === 'zrealizowane') {
-                             handleDrop(draggedItem, toColumn);
-                        } else {
-                            toColumn.appendChild(draggedItem);
-                            handleDrop(draggedItem, toColumn);
-                        }
-                    }
+                    if (!draggedItem || draggedItem.parentElement === zone) return;
+                    handleDrop(draggedItem, zone);
                 });
             });
         }
+
         document.addEventListener('DOMContentLoaded', loadOrders);
     </script>
 </body>
