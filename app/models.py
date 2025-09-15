@@ -10,7 +10,6 @@ class Client(db.Model):
     def __repr__(self):
         return f'<Client {self.name}>'
 
-# --- NOWA TABELA POŚREDNICZĄCA ---
 class OrderFabric(db.Model):
     __tablename__ = 'order_fabric'
     order_id = db.Column(db.Integer, db.ForeignKey('order.id'), primary_key=True)
@@ -22,8 +21,6 @@ class Fabric(db.Model):
     name = db.Column(db.String(100), nullable=False, unique=True)
     price = db.Column(db.Float, nullable=True)
     subiekt_symbol = db.Column(db.String(50), nullable=True, unique=True, index=True)
-    
-    # Usunięto backref='fabric' z Order, ponieważ teraz jest relacja wiele-do-wielu
     
     def __repr__(self):
         return f'<Fabric {self.name}>'
@@ -48,16 +45,19 @@ class Order(db.Model):
     zlecajacy = db.Column(db.String(50), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # --- ZMIANA: Usunięcie fabric_id ---
-    # fabric_id = db.Column(db.Integer, db.ForeignKey('fabric.id'), nullable=True)
-    
-    # --- NOWA RELACJA WIELE-DO-WIELU ---
     fabrics = db.relationship('OrderFabric', backref='order', cascade="all, delete-orphan")
 
     assigned_team = db.Column(db.String(50), nullable=True)
     cutting_table = db.Column(db.String(50), nullable=True)
     team1_completed = db.Column(db.Boolean, default=False, nullable=False)
     team2_completed = db.Column(db.Boolean, default=False, nullable=False)
+    
+    # --- NOWE POLA DO ŚLEDZENIA CZASU PRODUKCJI ---
+    cutting_started_at = db.Column(db.DateTime, nullable=True)
+    cutting_finished_at = db.Column(db.DateTime, nullable=True)
+    sewing_started_at = db.Column(db.DateTime, nullable=True)
+    sewing_finished_at = db.Column(db.DateTime, nullable=True)
+    # ---------------------------------------------
     
     order_items = db.relationship('OrderItem', backref='order', lazy=True, cascade="all, delete-orphan")
     attachments = db.relationship('Attachment', backref='order', lazy=True, cascade="all, delete-orphan")
@@ -73,7 +73,6 @@ class ProductCategory(db.Model):
     def __repr__(self):
         return f'<ProductCategory {self.name}>'
 
-# --- NOWA TABELA POŚREDNICZĄCA DLA PRODUKTÓW ---
 class ProductFabric(db.Model):
     __tablename__ = 'product_fabric'
     id = db.Column(db.Integer, primary_key=True)
@@ -88,15 +87,11 @@ class Product(db.Model):
     name = db.Column(db.String(100), nullable=False, unique=True)
     description = db.Column(db.Text, nullable=True) 
     
-    # --- USUNIĘTE POLE ---
-    # fabric_usage_meters = db.Column(db.Float, nullable=False, default=0.0)
-    
     production_price = db.Column(db.Float, nullable=False, default=0.0)
     
     category_id = db.Column(db.Integer, db.ForeignKey('product_category.id'), nullable=True)
     category = db.relationship('ProductCategory', backref='products')
     
-    # --- NOWA RELACJA ---
     fabrics_needed = db.relationship('ProductFabric', backref='product', lazy=True, cascade="all, delete-orphan")
 
     materials_needed = db.relationship('ProductMaterial', backref='product', lazy=True, cascade="all, delete-orphan")
@@ -130,7 +125,6 @@ class Attachment(db.Model):
     def __repr__(self):
         return f'<Attachment {self.filename}>'
 
-# --- NOWA TABELA POŚREDNICZĄCA DLA SZABLONÓW ---
 class TemplateFabric(db.Model):
     __tablename__ = 'template_fabric'
     template_id = db.Column(db.Integer, db.ForeignKey('order_template.id'), primary_key=True)
@@ -146,10 +140,6 @@ class OrderTemplate(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     login_info = db.Column(db.Text, nullable=True)
     
-    # --- USUNIĘTE POLE ---
-    # fabric_id = db.Column(db.Integer, db.ForeignKey('fabric.id'), nullable=True)
-    
-    # --- NOWA RELACJA ---
     fabrics = db.relationship('TemplateFabric', cascade="all, delete-orphan")
 
     def __repr__(self):

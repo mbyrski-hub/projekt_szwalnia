@@ -39,45 +39,31 @@ def index():
 def calculate_material_summary(order):
     summary = defaultdict(float)
     units = {}
-    
     product_fabric_usage = defaultdict(float)
     for item in order.order_items:
         if item.product:
             for pf_link in item.product.fabrics_needed:
                 product_fabric_usage[pf_link.fabric.name.upper()] += pf_link.usage_meters * item.quantity
-
     structured_summary = []
     for name, total_usage in sorted(product_fabric_usage.items()):
         total_val_str = f"{int(total_usage)}" if total_usage == int(total_usage) else f"{total_usage:.2f}"
-        structured_summary.append({
-            'name': name,
-            'quantity': f"{total_val_str} metra"
-        })
-
+        structured_summary.append({'name': name, 'quantity': f"{total_val_str} metra"})
     for item in order.order_items:
         if not item.product or not item.product.materials_needed:
             continue
-        
         for pm_link in item.product.materials_needed:
             material_name = pm_link.material.name
             quantity_str = pm_link.quantity
-            
             match = re.match(r'^\s*(\d+\.?\d*)\s*(.*)', quantity_str)
             if not match: continue
-            
             value_str, unit_str = match.groups()
             key = (material_name.strip().upper(), unit_str.strip())
             if key not in units: units[key] = unit_str.strip()
             summary[key] += float(value_str) * item.quantity
-            
     for (name, unit_key), total_value in sorted(summary.items()):
         total_val_str = f"{int(total_value)}" if total_value == int(total_value) else f"{total_value:.2f}"
         unit = units.get((name, unit_key), unit_key)
-        structured_summary.append({
-            'name': name,
-            'quantity': f"{total_val_str} {unit}"
-        })
-        
+        structured_summary.append({'name': name, 'quantity': f"{total_val_str} {unit}"})
     return structured_summary
 
 @app.route('/orders/new', methods=['GET', 'POST'])
@@ -642,12 +628,17 @@ def kanban_partial():
                            team2_orders=team2_orders,
                            unassigned_orders=unassigned_orders)
 
+# ZMIANA: Dodajemy logikę zapisu daty rozpoczęcia szycia
 @app.route('/assign_team', methods=['POST'])
 def assign_team():
     data = request.get_json()
     order_id = data.get('order_id')
     team = data.get('team')
     order = Order.query.get_or_404(order_id)
+
+    # Ustaw datę rozpoczęcia szycia, jeśli jeszcze nie jest ustawiona
+    if team and not order.sewing_started_at:
+        order.sewing_started_at = datetime.utcnow()
 
     if team in ['zespol-1', 'zespol-2', 'OBA']:
         order.assigned_team = team
@@ -677,6 +668,7 @@ def krojownia():
                            skrojone_orders=skrojone_orders,
                            unassigned_orders=unassigned_orders)
 
+# ZMIANA: Dodajemy logikę zapisu dat krojenia
 @app.route('/assign_cutting_table', methods=['POST'])
 def assign_cutting_table():
     data = request.get_json()
@@ -687,6 +679,14 @@ def assign_cutting_table():
     if order.status == 'NOWE' and table is not None:
         order.status = 'W REALIZACJI'
     
+    # Ustaw datę rozpoczęcia krojenia, jeśli jeszcze nie jest ustawiona
+    if table and not order.cutting_started_at:
+        order.cutting_started_at = datetime.utcnow()
+    
+    # Ustaw datę zakończenia krojenia
+    if table == 'skrojone':
+        order.cutting_finished_at = datetime.utcnow()
+
     if table in ['stol-1', 'stol-2', 'stol-3', 'skrojone']:
         order.cutting_table = table
     else:
@@ -1237,18 +1237,27 @@ def api_assign_cutting_table(order_id):
     data = request.get_json()
     if not data or 'table' not in data:
         return jsonify({'error': 'Brak nazwy stołu w zapytaniu'}), 400
+    
     new_table = data.get('table')
+
     if order.status == 'NOWE' and new_table is not None:
         order.status = 'W REALIZACJI'
+    
+    # Ustaw datę rozpoczęcia krojenia
+    if new_table and not order.cutting_started_at:
+        order.cutting_started_at = datetime.utcnow()
+        
+    # Ustaw datę zakończenia krojenia
+    if new_table == 'skrojone':
+        order.cutting_finished_at = datetime.utcnow()
+
     if new_table in ['stol-1', 'stol-2', 'stol-3', 'skrojone']:
         order.cutting_table = new_table
     else:
         order.cutting_table = None
+
     db.session.commit()
-    return jsonify({
-        'success': True, 
-        'message': f'Zlecenie {order.order_code} przypisano do {order.cutting_table or "Nieprzypisane"}.'
-    })
+    return jsonify({'success': True, 'message': f'Zlecenie {order.order_code} przypisano do {order.cutting_table or "Nieprzypisane"}.'})
 
 @app.route('/api/szwalnia/orders', methods=['GET'])
 def get_szwalnia_orders():
@@ -1270,33 +1279,45 @@ def api_assign_team(order_id):
     data = request.get_json()
     if not data or 'team' not in data:
         return jsonify({'error': 'Brak nazwy zespołu w zapytaniu'}), 400
+
     new_team = data.get('team')
+    
+    # Ustaw datę rozpoczęcia szycia
+    if new_team and not order.sewing_started_at:
+        order.sewing_started_at = datetime.utcnow()
+
     if new_team in ['zespol-1', 'zespol-2', 'OBA']:
         order.assigned_team = new_team
     else:
         order.assigned_team = None
+        
     db.session.commit()
-    return jsonify({
-        'success': True, 
-        'message': f'Zlecenie {order.order_code} przypisano do {order.assigned_team or "Nieprzypisane"}.'
-    })
+    return jsonify({'success': True, 'message': f'Zlecenie {order.order_code} przypisano do {order.assigned_team or "Nieprzypisane"}.'})
 
+# ZMIANA: Dodajemy logikę zapisu daty zakończenia szycia
 @app.route('/api/order/<int:order_id>/complete', methods=['POST'])
 def complete_order_part(order_id):
     order = Order.query.get_or_404(order_id)
     data = request.get_json()
     completed_by_team = data.get('completed_by')
+
     if order.assigned_team != 'OBA':
         order.status = 'ZREALIZOWANE'
+        order.sewing_finished_at = datetime.utcnow() # Ustaw datę zakończenia
         flash(f'Zlecenie {order.order_code} zostało ukończone.', 'success')
     else:
-        if completed_by_team == 'zespol-1': order.team1_completed = True
-        elif completed_by_team == 'zespol-2': order.team2_completed = True
+        if completed_by_team == 'zespol-1':
+            order.team1_completed = True
+        elif completed_by_team == 'zespol-2':
+            order.team2_completed = True
+        
         if order.team1_completed and order.team2_completed:
             order.status = 'ZREALIZOWANE'
+            order.sewing_finished_at = datetime.utcnow() # Ustaw datę zakończenia
             flash(f'Zlecenie {order.order_code} zostało ukończone przez oba zespoły.', 'success')
         else:
             flash(f'Część zlecenia {order.order_code} została ukończona przez {completed_by_team}.', 'info')
+
     db.session.commit()
     return jsonify({'success': True, 'status': order.status})
     
@@ -1339,3 +1360,4 @@ def download_config():
         'config.json',
         as_attachment=True
     )
+
