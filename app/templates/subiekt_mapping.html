@@ -20,9 +20,10 @@
         </a>
     </div>
 </div>
+
 <div class="card mb-4">
     <div class="card-header">
-        <h4><i class="fas fa-file-import"></i> Krok 1: Zaimportuj towary z pliku</h4>
+        <h4><i class="fas fa-file-import"></i> Krok 1: Zaimportuj towary z pliku (alternatywa)</h4>
     </div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('import_subiekt_csv') }}" enctype="multipart/form-data">
@@ -37,7 +38,7 @@
 
 <div class="card">
     <div class="card-header">
-        <h4><i class="fas fa-tasks"></i> Krok 2: Zmapuj niezmapowane towary</h4>
+        <h4><i class="fas fa-tasks"></i> Krok 2: Zmapuj nowe towary</h4>
     </div>
     <div class="card-body">
         {% if products %}
@@ -46,7 +47,7 @@
                     <tr>
                         <th>Symbol</th>
                         <th>Nazwa z Subiekta</th>
-                        <th style="width: 250px;">Akcja</th>
+                        <th style="width: 320px;">Akcja</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -55,7 +56,7 @@
                         <td><strong>{{ product.symbol }}</strong></td>
                         <td>{{ product.name }}</td>
                         <td>
-                            <form method="POST" action="{{ url_for('map_subiekt_product') }}" class="form-inline">
+                            <form method="POST" action="{{ url_for('map_subiekt_product') }}" class="form-inline d-inline-block">
                                 <input type="hidden" name="symbol" value="{{ product.symbol }}">
                                 <input type="hidden" name="name" value="{{ product.name }}">
                                 <select name="map_type" class="form-control form-control-sm mr-2">
@@ -64,6 +65,11 @@
                                 </select>
                                 <button type="submit" class="btn btn-sm btn-success">Mapuj</button>
                             </form>
+                            
+                            <form method="POST" action="{{ url_for('skip_subiekt_product') }}" class="form-inline d-inline-block ml-2">
+                                 <input type="hidden" name="symbol" value="{{ product.symbol }}">
+                                 <button type="submit" class="btn btn-sm btn-secondary">Pomiń</button>
+                            </form>
                         </td>
                     </tr>
                     {% endfor %}
@@ -71,7 +77,7 @@
             </table>
         {% else %}
             <div class="alert alert-success">
-                <i class="fas fa-check-circle"></i> Wszystkie towary zostały zmapowane!
+                <i class="fas fa-check-circle"></i> Wszystkie towary z Subiekta są już zmapowane lub zostały pominięte!
             </div>
         {% endif %}
     </div>

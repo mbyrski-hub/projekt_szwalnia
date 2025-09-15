@@ -3,7 +3,7 @@ from app import app, db
 from app.models import (Order, Client, Product, OrderItem, Attachment, 
                         OrderTemplate, Fabric, MaterialUsage, ProductMaterial, 
                         SubiektProductCache, Material, ProductCategory,
-                        OrderFabric, TemplateFabric, ProductFabric) # Dodano importy nowych modeli
+                        OrderFabric, TemplateFabric, ProductFabric)
 from app.forms import (OrderForm, OrderTemplateForm, ProductForm, FabricForm, 
                        MaterialForm, ProductCategoryForm, MaterialEditForm)
 from werkzeug.utils import secure_filename
@@ -37,22 +37,16 @@ def index():
     return redirect(url_for('orders_list'))
 
 def calculate_material_summary(order):
-    """Oblicza sumaryczne zużycie materiałów i zwraca listę słowników."""
     summary = defaultdict(float)
     units = {}
     
-    # --- NOWA LOGIKA DLA TKANIN ---
-    # 1. Oblicz sumaryczne zużycie dla każdego produktu na podstawie jego "receptury"
     product_fabric_usage = defaultdict(float)
     for item in order.order_items:
         if item.product:
-            # Iterujemy przez tkaniny potrzebne dla danego produktu
             for pf_link in item.product.fabrics_needed:
-                # Sumujemy zużycie (ilość sztuk * zużycie na sztukę)
                 product_fabric_usage[pf_link.fabric.name.upper()] += pf_link.usage_meters * item.quantity
 
     structured_summary = []
-    # Dodajemy zsumowane tkaniny do finalnego podsumowania
     for name, total_usage in sorted(product_fabric_usage.items()):
         total_val_str = f"{int(total_usage)}" if total_usage == int(total_usage) else f"{total_usage:.2f}"
         structured_summary.append({
@@ -60,7 +54,6 @@ def calculate_material_summary(order):
             'quantity': f"{total_val_str} metra"
         })
 
-    # 2. Oblicz zużycie dodatkowych materiałów (logika bez zmian)
     for item in order.order_items:
         if not item.product or not item.product.materials_needed:
             continue
@@ -77,7 +70,6 @@ def calculate_material_summary(order):
             if key not in units: units[key] = unit_str.strip()
             summary[key] += float(value_str) * item.quantity
             
-    # 3. Sformatuj wynik materiałów i dodaj do finalnej listy
     for (name, unit_key), total_value in sorted(summary.items()):
         total_val_str = f"{int(total_value)}" if total_value == int(total_value) else f"{total_value:.2f}"
         unit = units.get((name, unit_key), unit_key)
@@ -94,7 +86,6 @@ def new_order():
     all_fabrics = Fabric.query.order_by('name').all()
     fabric_choices = [(f.id, f.name) for f in all_fabrics]
     
-    # Ustawiamy wybór dla wszystkich pól tkanin w formularzu
     for fabric_form in form.fabrics:
         fabric_form.fabric_id.choices = fabric_choices
 
@@ -106,7 +97,6 @@ def new_order():
             form.description.data = order_template.description
             form.login_info.data = order_template.login_info
             
-            # Wypełnianie wielu tkanin z szablonu
             form.fabrics.entries = [] 
             for template_fabric in order_template.fabrics:
                 form.fabrics.append_entry({'fabric_id': template_fabric.fabric_id})
@@ -130,7 +120,6 @@ def new_order():
             )
             db.session.add(order)
 
-            # Zapisywanie wielu tkanin
             for fabric_data in form.fabrics.data:
                 order_fabric_link = OrderFabric(order=order, fabric_id=fabric_data['fabric_id'])
                 db.session.add(order_fabric_link)
@@ -919,28 +908,47 @@ def receive_price_update():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+# --- ZAKTUALIZOWANA FUNKCJA ---
 @app.route('/api/v1/receive-subiekt-catalog', methods=['POST'])
 def receive_subiekt_catalog():
     auth_key = request.headers.get('X-API-KEY')
     if auth_key != app.config['API_SECRET_KEY']:
         return jsonify({'error': 'Brak autoryzacji'}), 401
+
     subiekt_products = request.get_json()
     if not subiekt_products:
         return jsonify({'error': 'Brak danych'}), 400
+
     try:
-        db.session.query(SubiektProductCache).delete()
+        # Krok 1: Zbierz wszystkie istniejące symbole z bazy danych
+        existing_symbols_in_cache = {s[0] for s in db.session.query(SubiektProductCache.symbol).all()}
+        existing_symbols_in_fabrics = {s[0] for s in db.session.query(Fabric.subiekt_symbol).filter(Fabric.subiekt_symbol.isnot(None)).all()}
+        existing_symbols_in_materials = {s[0] for s in db.session.query(Material.subiekt_symbol).filter(Material.subiekt_symbol.isnot(None)).all()}
+        
+        all_existing_symbols = existing_symbols_in_cache.union(existing_symbols_in_fabrics).union(existing_symbols_in_materials)
+
+        added_count = 0
+        # Krok 2: Iteruj przez otrzymaną listę i dodawaj tylko nowe towary
         for product_data in subiekt_products:
-            cached_product = SubiektProductCache(
-                symbol=product_data.get('symbol'),
-                name=product_data.get('name'),
-                is_mapped=False
-            )
-            db.session.add(cached_product)
+            symbol = product_data.get('symbol')
+            # Jeśli symbol istnieje i nie ma go jeszcze w naszej bazie, dodaj go do cache
+            if symbol and symbol not in all_existing_symbols:
+                cached_product = SubiektProductCache(
+                    symbol=symbol,
+                    name=product_data.get('name'),
+                    is_mapped=False
+                )
+                db.session.add(cached_product)
+                all_existing_symbols.add(symbol) # Dodaj do seta, aby uniknąć duplikatów w tej samej sesji
+                added_count += 1
+        
         db.session.commit()
+        
         return jsonify({
             'status': 'success', 
-            'message': f'Pomyślnie zaimportowano {len(subiekt_products)} towarów z Subiekta.'
+            'message': f'Pomyślnie sprawdzono katalog. Dodano {added_count} nowych towarów do zmapowania.'
         }), 200
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -1148,6 +1156,22 @@ def import_products_xlsx():
         flash(f'Wystąpił nieoczekiwany błąd podczas importu: {e}', 'danger')
     return redirect(url_for('products_list'))
 
+# --- NOWA TRASA DO POMIJANIA ---
+@app.route('/subiekt-mapping/skip', methods=['POST'])
+def skip_subiekt_product():
+    symbol = request.form.get('symbol')
+    product_to_skip = SubiektProductCache.query.filter_by(symbol=symbol).first()
+    
+    if product_to_skip:
+        db.session.delete(product_to_skip)
+        db.session.commit()
+        flash(f'Pominięto towar o symbolu {symbol}.', 'info')
+    else:
+        flash(f'Nie znaleziono towaru o symbolu {symbol} do pominięcia.', 'warning')
+        
+    return redirect(url_for('subiekt_mapping'))
+
+
 @app.route('/calculator')
 def calculator():
     products = Product.query.order_by(Product.name).all()
@@ -1174,7 +1198,7 @@ def calculator():
                            categories=categories, products_json=json.dumps(products_data))
 
 # =================================================
-# === API DLA APLIKACJI MOBILNEJ - KROJOWNIA ======
+# === API DLA APLIKACJI MOBILNEJ ==================
 # =================================================
 @app.route('/api/krojownia/orders', methods=['GET'])
 def get_krojownia_orders():
@@ -1185,11 +1209,8 @@ def get_krojownia_orders():
     orders_list = []
     for order in orders:
         orders_list.append({
-            'id': order.id,
-            'order_code': order.order_code,
-            'client_name': order.client.name,
-            'status': order.status,
-            'cutting_table': order.cutting_table
+            'id': order.id, 'order_code': order.order_code, 'client_name': order.client.name,
+            'status': order.status, 'cutting_table': order.cutting_table
         })
     return jsonify(orders_list)
 
@@ -1212,9 +1233,6 @@ def api_assign_cutting_table(order_id):
         'message': f'Zlecenie {order.order_code} przypisano do {order.cutting_table or "Nieprzypisane"}.'
     })
 
-# =================================================
-# === API DLA APLIKACJI MOBILNEJ - SZWALNIA =======
-# =================================================
 @app.route('/api/szwalnia/orders', methods=['GET'])
 def get_szwalnia_orders():
     orders = Order.query.filter(
@@ -1224,13 +1242,8 @@ def get_szwalnia_orders():
     orders_list = []
     for order in orders:
         orders_list.append({
-            'id': order.id,
-            'order_code': order.order_code,
-            'client_name': order.client.name,
-            'status': order.status,
-            'assigned_team': order.assigned_team,
-            'team1_completed': order.team1_completed,
-            'team2_completed': order.team2_completed
+            'id': order.id, 'order_code': order.order_code, 'client_name': order.client.name, 'status': order.status,
+            'assigned_team': order.assigned_team, 'team1_completed': order.team1_completed, 'team2_completed': order.team2_completed
         })
     return jsonify(orders_list)
 
@@ -1251,6 +1264,35 @@ def api_assign_team(order_id):
         'message': f'Zlecenie {order.order_code} przypisano do {order.assigned_team or "Nieprzypisane"}.'
     })
 
+@app.route('/api/order/<int:order_id>/complete', methods=['POST'])
+def complete_order_part(order_id):
+    order = Order.query.get_or_404(order_id)
+    data = request.get_json()
+    completed_by_team = data.get('completed_by')
+    if order.assigned_team != 'OBA':
+        order.status = 'ZREALIZOWANE'
+        flash(f'Zlecenie {order.order_code} zostało ukończone.', 'success')
+    else:
+        if completed_by_team == 'zespol-1': order.team1_completed = True
+        elif completed_by_team == 'zespol-2': order.team2_completed = True
+        if order.team1_completed and order.team2_completed:
+            order.status = 'ZREALIZOWANE'
+            flash(f'Zlecenie {order.order_code} zostało ukończone przez oba zespoły.', 'success')
+        else:
+            flash(f'Część zlecenia {order.order_code} została ukończona przez {completed_by_team}.', 'info')
+    db.session.commit()
+    return jsonify({'success': True, 'status': order.status})
+    
+@app.route('/api/order/<int:order_id>/details')
+def get_order_details(order_id):
+    order = Order.query.get_or_404(order_id)
+    details = {
+        'id': order.id, 'order_code': order.order_code, 'client_name': order.client.name, 'description': order.description,
+        'deadline': order.deadline.strftime('%Y-%m-%d'), 'fabrics': [of.fabric.name for of in order.fabrics],
+        'products': [ { 'name': item.product.name, 'size': item.size, 'quantity': item.quantity } for item in order.order_items ]
+    }
+    return jsonify(details)
+
 # =================================================
 # === WIDOKI DLA APLIKACJI MOBILNEJ ===============
 # =================================================
@@ -1262,34 +1304,11 @@ def mobile_krojownia():
 def mobile_szwalnia():
     return render_template('szwalnia_mobile.html')
 
-@app.route('/api/order/<int:order_id>/complete', methods=['POST'])
-def complete_order_part(order_id):
-    order = Order.query.get_or_404(order_id)
-    data = request.get_json()
-    completed_by_team = data.get('completed_by')
-    if order.assigned_team != 'OBA':
-        order.status = 'ZREALIZOWANE'
-        flash(f'Zlecenie {order.order_code} zostało ukończone.', 'success')
-    else:
-        if completed_by_team == 'zespol-1':
-            order.team1_completed = True
-        elif completed_by_team == 'zespol-2':
-            order.team2_completed = True
-        if order.team1_completed and order.team2_completed:
-            order.status = 'ZREALIZOWANE'
-            flash(f'Zlecenie {order.order_code} zostało ukończone przez oba zespoły.', 'success')
-        else:
-            flash(f'Część zlecenia {order.order_code} została ukończona przez {completed_by_team}.', 'info')
-    db.session.commit()
-    return jsonify({'success': True, 'status': order.status})
-
 # =================================================
-# === NOWE TRASY DO POBIERANIA SYNCHRONIZATORA ====
+# === PLIKI DO POBRANIA ===========================
 # =================================================
-
 @app.route('/download/synchronizator')
 def download_synchronizator():
-    """Udostępnia do pobrania plik wykonywalny synchronizatora."""
     return send_from_directory(
         os.path.join(current_app.static_folder, 'synchronizator'),
         'Synchronizator 3.0.exe',
@@ -1298,7 +1317,6 @@ def download_synchronizator():
 
 @app.route('/download/config')
 def download_config():
-    """Udostępnia do pobrania plik konfiguracyjny JSON."""
     return send_from_directory(
         os.path.join(current_app.static_folder, 'synchronizator'),
         'config.json',
