@@ -40,6 +40,13 @@
         .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
         #modal-details ul { list-style-type: none; padding: 0; }
         #modal-details li { background: #eee; padding: 5px; margin-bottom: 3px; border-radius: 3px; }
+        
+        #confirm-modal .modal-content { text-align: center; }
+        #confirm-modal-text { font-size: 1.1em; margin-bottom: 20px; }
+        .confirm-buttons { display: flex; justify-content: space-around; }
+        .confirm-btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; color: white; min-width: 100px; }
+        #confirm-yes-btn { background-color: #28a745; }
+        #confirm-no-btn { background-color: #6c757d; }
     </style>
 </head>
 <body>
@@ -71,6 +78,16 @@
         </div>
     </div>
 
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <p id="confirm-modal-text"></p>
+            <div class="confirm-buttons">
+                <button id="confirm-yes-btn" class="confirm-btn">Tak</button>
+                <button id="confirm-no-btn" class="confirm-btn">Anuluj</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const lists = {
@@ -87,15 +104,25 @@
             };
             let draggedItem = null;
 
-            const modal = document.getElementById('details-modal');
+            const detailsModal = document.getElementById('details-modal');
             const modalDetails = document.getElementById('modal-details');
-            const closeModal = document.querySelector('.close-btn');
-            closeModal.onclick = () => { modal.style.display = 'none'; };
-            window.onclick = (event) => { if (event.target == modal) { modal.style.display = 'none'; } };
+            const closeModalBtn = detailsModal.querySelector('.close-btn');
+            
+            const confirmModal = document.getElementById('confirm-modal');
+            const confirmModalText = document.getElementById('confirm-modal-text');
+            const confirmYesBtn = document.getElementById('confirm-yes-btn');
+            const confirmNoBtn = document.getElementById('confirm-no-btn');
+
+            closeModalBtn.onclick = () => { detailsModal.style.display = 'none'; };
+            confirmNoBtn.onclick = () => { confirmModal.style.display = 'none'; };
+            window.onclick = (event) => { 
+                if (event.target == detailsModal) { detailsModal.style.display = 'none'; }
+                if (event.target == confirmModal) { confirmModal.style.display = 'none'; }
+            };
             
             async function showOrderDetails(orderId) {
                 modalDetails.innerHTML = '<div class="loader">Ładowanie...</div>';
-                modal.style.display = 'block';
+                detailsModal.style.display = 'block';
                 const response = await fetch(`/api/order/${orderId}/details`);
                 const data = await response.json();
                 let productsHtml = '<h4>Produkty:</h4><ul>';
@@ -112,9 +139,15 @@
 
             async function fetchOrders() {
                 lists['unassigned-list'].innerHTML = '<div class="loader">Ładowanie zleceń...</div>';
-                const response = await fetch('/api/szwalnia/orders');
-                const orders = await response.json();
-                renderOrders(orders);
+                try {
+                    const response = await fetch('/api/szwalnia/orders');
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    const orders = await response.json();
+                    renderOrders(orders);
+                } catch (error) {
+                    console.error('Fetch error:', error);
+                    lists['unassigned-list'].innerHTML = '<div class="loader" style="color: red;">Błąd ładowania</div>';
+                }
             }
 
             function renderOrders(orders) {
@@ -123,9 +156,7 @@
                 orders.forEach(order => {
                     const assignedTeam = order.assigned_team;
                     
-                    // --- ZMIANA W LOGICE WYŚWIETLANIA ---
                     if (assignedTeam === 'OBA') {
-                        // Jeśli zlecenie jest podzielone, wyświetl kartę tylko dla zespołów, które jeszcze go nie ukończyły
                         if (!order.team1_completed) {
                             const card1 = createCard(order, 'zespol-1', true);
                             lists['zespol-1-list'].appendChild(card1);
@@ -135,15 +166,12 @@
                             lists['zespol-2-list'].appendChild(card2);
                         }
                     } else if (assignedTeam) {
-                        // Standardowe przypisanie do jednego zespołu
                         const card = createCard(order, assignedTeam, true);
                         lists[`${assignedTeam}-list`].appendChild(card);
                     } else {
-                        // Zlecenia nieprzypisane
                         const card = createCard(order, null, true, true);
                         lists['unassigned-list'].appendChild(card);
                     }
-                    // --- KONIEC ZMIANY ---
                 });
                 addEventListeners();
             }
@@ -185,13 +213,19 @@
                 });
 
                 document.querySelectorAll('.split-icon').forEach(icon => {
-                    icon.addEventListener('click', async (e) => {
+                    icon.addEventListener('click', (e) => {
                         e.stopPropagation();
                         const card = e.target.closest('.order-card');
                         const orderId = card.dataset.orderId;
-                        if (confirm(`Czy na pewno chcesz przypisać zlecenie do OBU zespołów?`)) {
+                        const orderCode = card.querySelector('.order-card-header').innerText;
+                        
+                        confirmModalText.innerHTML = `Czy na pewno chcesz przypisać zlecenie <br><strong>${orderCode}</strong> do OBU zespołów?`;
+                        confirmModal.style.display = 'block';
+
+                        confirmYesBtn.onclick = async () => {
                             await assignTeam(orderId, 'OBA');
-                        }
+                            confirmModal.style.display = 'none';
+                        };
                     });
                 });
             }
