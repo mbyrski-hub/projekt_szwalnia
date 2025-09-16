@@ -3,7 +3,8 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from .config import Config
 import os
-
+import re # <-- Dodaj ten import
+from jinja2 import evalcontextfilter, Markup, escape
 app = Flask(__name__)
 app.config.from_object(Config)
 

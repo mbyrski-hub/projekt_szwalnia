@@ -145,7 +145,9 @@ def new_order():
             flash(f'Wystąpił nieoczekiwany błąd: {e}', 'danger')
             return redirect(url_for('new_order'))
         material_summary = calculate_material_summary(order)
-        filepath = save_order_as_word(order, material_summary)
+        docs_folder = os.path.join(current_app.root_path, 'order_docs')
+        os.makedirs(docs_folder, exist_ok=True)
+        filepath = save_order_as_word(order, material_summary, folder_path=docs_folder)
         return send_file(
             filepath, as_attachment=True,
             download_name=os.path.basename(filepath),
