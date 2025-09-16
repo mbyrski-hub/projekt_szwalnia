@@ -34,15 +34,69 @@
     /* Jaśniejszy i delikatniejszy kolor dla nagłówka tabeli */
     .table thead.thead-dark th {
         background-color: #f1f3f5; /* Bardzo jasny, neutralny szary */
-        color: #495057;           /* Ciemniejszy tekst dla dobrego kontrastu */
-        border-color: #ffffff;     /* Dopasowany, jasny kolor ramki */
+        color: #495057;          /* Ciemniejszy tekst dla dobrego kontrastu */
+        border-color: #ffffff;    /* Dopasowany, jasny kolor ramki */
     }
+
+/* Style dla animowanego przycisku "+" */
+    .btn-plus-animated {
+        /* Wymiary i kształt */
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+
+        /* Wygląd i animacja */
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+        transition: all 0.3s ease-in-out;
+        animation: pulse 2s infinite;
+
+        /* Idealne centrowanie dla ikony */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    /* ### POCZĄTEK ZMIANY (rozmiar ikony) ### */
+    .btn-plus-animated .fas {
+        font-size: 1.8rem; /* Dopasowany rozmiar ikony */
+        color: white;
+    }
+    /* ### KONIEC ZMIANY ### */
+
+    /* Efekt po najechaniu myszką */
+    .btn-plus-animated:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.6);
+        animation-play-state: paused;
+    }
+
+    /* Definicja animacji pulsowania */
+    @keyframes pulse {
+        0% {
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+        }
+        50% {
+            box-shadow: 0 4px 25px rgba(40, 167, 69, 0.7);
+        }
+        100% {
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+        }
+    }
+
+
 </style>
 {% endblock %}
 {% block title %}Lista Zleceń{% endblock %}
 
 {% block content %}
-<h2><i class="fas fa-list"></i> Lista Zleceń</h2>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="fas fa-list"></i> Lista Zleceń</h2>
+    <a href="{{ url_for('new_order') }}" class="btn btn-success btn-lg btn-plus-animated">
+        <i class="fas fa-plus"></i>
+    </a>
+    </div>
+<form method="GET" class="form-inline mb-3">
+    </form>
 
 <form method="GET" class="form-inline mb-3">
     <select name="client" class="form-control mr-2">
@@ -74,6 +128,7 @@
                 <th>Nr zlecenia</th>
                 <th>Klient</th>
                 <th>Data utworzenia</th>
+                <th>Data Szycia</th>
                 <th>Status</th>
                 <th>Zmiana stanu</th>
                 <th>Akcje</th>
@@ -85,6 +140,13 @@
                 <td data-label="Nr zlecenia:">{{ order.order_code }}</td>
                 <td data-label="Klient:">{{ order.client.name }}</td>
                 <td data-label="Data:">{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td data-label="Data Szycia:">
+                    {% if order.status == "W REALIZACJI" and order.sewing_started_at %}
+                        <strong>Start:</strong> {{ order.sewing_started_at.strftime('%Y-%m-%d %H:%M') }}
+                    {% elif order.status == "ZREALIZOWANE" and order.sewing_finished_at %}
+                        <strong>Koniec:</strong> {{ order.sewing_finished_at.strftime('%Y-%m-%d %H:%M') }}
+                    {% endif %}
+                </td>
                 <td data-label="Status:" class="status-cell">{{ order.status }}</td>
                 <td data-label="Zmiana stanu:" class="change-status-cell">
                     {% if order.status == "NOWE" %}
@@ -111,7 +173,7 @@
                 </td>
             </tr>
             <tr class="order-details" id="details-{{ order.id }}" style="display: none;">
-                <td colspan="6">
+                <td colspan="7">
                     <strong>Opis:</strong> {{ order.description }}<br>
                     <strong>Zlecający:</strong> {{ order.zlecajacy }}<br>
                     <strong>Logowanie:</strong> {{ order.login_info or 'Brak' }}<br>
@@ -131,28 +193,28 @@
                     {% endfor %}
                     </ul>
 
-                    <br>
-                    <strong>Planowane zużycie materiałów:</strong>
-                    {% if order.planned_materials %}
-                    <ul>
-                        {% for item in order.planned_materials %}
-                            <li>{{ item.name }}: {{ item.quantity }}</li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                        <p style="margin-left: 20px;">Brak zdefiniowanych materiałów dla produktów w tym zleceniu.</p>
-                    {% endif %}
-
                     {% if order.materials_used %}
-                    <br>
-                    <strong>Rzeczywiste zużycie (zapisane):</strong>
-                    <ul>
-                        {% for material in order.materials_used %}
-                        <li>{{ material.material_name }} – {{ material.quantity }}</li>
-                        {% endfor %}
-                    </ul>
+                        <br>
+                        <strong>Rzeczywiste zużycie materiałów:</strong>
+                        <ul>
+                            {% for material in order.materials_used %}
+                            <li>{{ material.material_name }} – {{ material.quantity }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <br>
+                        <strong>Planowane zużycie materiałów:</strong>
+                        {% if order.planned_materials %}
+                        <ul>
+                            {% for item in order.planned_materials %}
+                                <li>{{ item.name }}: {{ item.quantity }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                            <p style="margin-left: 20px;">Brak zdefiniowanych materiałów dla produktów w tym zleceniu.</p>
+                        {% endif %}
                     {% endif %}
-                </td>
+                    </td>
             </tr>
             {% endfor %}
         </tbody>

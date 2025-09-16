@@ -243,6 +243,36 @@ def orders_list():
     return render_template('orders_list.html', in_progress_orders=in_progress_orders, new_orders=new_orders,
                            completed_orders=completed_orders, clients=clients, years=years)
 
+@app.route('/orders/history')
+def orders_history():
+    client_filter = request.args.get('client', '').strip().upper()
+    year_filter = request.args.get('year', '')
+    month_filter = request.args.get('month', '')
+
+    # ### POCZĄTEK ZMIANY ###
+    # Filtrujemy tylko zlecenia o statusie 'ZREALIZOWANE'
+    orders_query = Order.query.join(Client).filter(Order.status == 'ZREALIZOWANE')
+    # ### KONIEC ZMIANY ###
+
+    if client_filter:
+        orders_query = orders_query.filter(Client.name == client_filter)
+    if year_filter:
+        orders_query = orders_query.filter(extract('year', Order.created_at) == int(year_filter))
+    if month_filter:
+        orders_query = orders_query.filter(extract('month', Order.created_at) == int(month_filter))
+
+    all_orders = orders_query.order_by(Order.created_at.desc()).all()
+
+    years_query = db.session.query(extract('year', Order.created_at)).distinct().all()
+    years = sorted({int(y[0]) for y in years_query})
+    clients = Client.query.order_by(Client.name).all()
+
+    return render_template('orders_history.html', 
+                           orders=all_orders, 
+                           clients=clients, 
+                           years=years)
+
+
 @app.route('/orders/<int:order_id>')
 def order_detail(order_id):
     order = Order.query.get_or_404(order_id)
