@@ -276,7 +276,11 @@ def orders_history():
 @app.route('/orders/<int:order_id>')
 def order_detail(order_id):
     order = Order.query.get_or_404(order_id)
-    return render_template('order_detail.html', order=order)
+    # ### POCZĄTEK ZMIANY ###
+    # Dodajemy obliczanie i przekazywanie podsumowania materiałów
+    material_summary = calculate_material_summary(order)
+    return render_template('order_detail.html', order=order, material_summary=material_summary)
+    # ### KONIEC ZMIANY ###
 
 @app.route('/orders/<int:order_id>/status', methods=['POST'])
 def update_order_status(order_id):

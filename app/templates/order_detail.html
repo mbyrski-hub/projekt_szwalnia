@@ -36,7 +36,32 @@
                 </ul>
             </div>
         </div>
-    </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h4><i class="fas fa-ruler"></i> Zużycie Materiałów</h4>
+            </div>
+            <div class="card-body">
+                {% if order.materials_used %}
+                    <h5>Rzeczywiste zużycie:</h5>
+                    <ul>
+                        {% for usage in order.materials_used %}
+                            <li>{{ usage.material_name }} - {{ usage.quantity }}</li>
+                        {% endfor %}
+                    </ul>
+                {% elif material_summary %}
+                    <h5>Planowane zużycie:</h5>
+                    <ul>
+                        {% for item in material_summary %}
+                            <li>{{ item.name }}: {{ item.quantity }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>Brak zdefiniowanych materiałów dla tego zlecenia.</p>
+                {% endif %}
+            </div>
+        </div>
+        </div>
     <div class="col-md-5">
         <div class="card mb-4">
             <div class="card-header">
