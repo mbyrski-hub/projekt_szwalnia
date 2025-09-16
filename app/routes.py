@@ -21,6 +21,7 @@ import csv
 import io
 import pandas as pd
 import json
+import math
 
 if platform.system() == 'Windows':
     config = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
@@ -756,29 +757,51 @@ def receive_price_update():
     price_data = request.get_json()
     if not price_data:
         return jsonify({'error': 'Brak danych'}), 400
-    updated_count = 0
+    
+    # ### POCZĄTEK ZMIANY ###
+    
+    changed_prices_count = 0
     try:
-        for item in price_data:
-            symbol = item.get('symbol')
-            price = item.get('price')
-            if symbol and price is not None:
-                updated_fabrics = Fabric.query.filter_by(subiekt_symbol=symbol).update({'price': price})
-                updated_materials = Material.query.filter_by(subiekt_symbol=symbol).update({'price': price})
-                if updated_fabrics > 0 or updated_materials > 0:
-                    updated_count += 1
-        
-        # --- NOWA LOGIKA: Zapis daty aktualizacji ---
-        if updated_count > 0:
+        for item_data in price_data:
+            symbol = item_data.get('symbol')
+            new_price = item_data.get('price')
+
+            if not (symbol and new_price is not None):
+                continue  # Pomiń, jeśli brakuje danych
+
+            # Sprawdź, czy to tkanina
+            item = Fabric.query.filter_by(subiekt_symbol=symbol).first()
+            # Jeśli nie, sprawdź, czy to materiał
+            if not item:
+                item = Material.query.filter_by(subiekt_symbol=symbol).first()
+
+            # Jeśli znaleziono produkt i cena jest inna, zaktualizuj ją
+            if item:
+                # Używamy math.isclose do bezpiecznego porównania liczb zmiennoprzecinkowych
+                if item.price is None or not math.isclose(item.price, new_price):
+                    item.price = new_price
+                    changed_prices_count += 1
+
+        if changed_prices_count > 0:
+            # Zapis daty aktualizacji
             last_update_info = SystemInfo.query.filter_by(key='last_price_update').first()
             if not last_update_info:
                 last_update_info = SystemInfo(key='last_price_update')
                 db.session.add(last_update_info)
             last_update_info.value = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-        # --- KONIEC NOWEJ LOGIKI ---
+
+            # Zapis liczby ZMIENIONYCH cen
+            update_count_info = SystemInfo.query.filter_by(key='last_price_update_count').first()
+            if not update_count_info:
+                update_count_info = SystemInfo(key='last_price_update_count')
+                db.session.add(update_count_info)
+            update_count_info.value = str(changed_prices_count)
 
         db.session.commit()
-        message = f'Pomyślnie zaktualizowano ceny dla {updated_count} symboli.'
+        message = f'Sprawdzono ceny. Zaktualizowano {changed_prices_count} pozycji, których cena uległa zmianie.'
         return jsonify({'status': 'success', 'message': message}), 200
+        
+    # ### KONIEC ZMIANY ###
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -832,14 +855,21 @@ def receive_subiekt_catalog():
 def subiekt_mapping():
     unmapped_products = SubiektProductCache.query.filter_by(is_mapped=False).order_by(SubiektProductCache.symbol).all()
     
-    # --- NOWA LOGIKA: Pobranie daty ostatniej aktualizacji ---
+    # --- POCZĄTEK ZMIANY ---
+    # Pobranie daty ostatniej aktualizacji
     last_update_info = SystemInfo.query.filter_by(key='last_price_update').first()
     last_update_timestamp = last_update_info.value if last_update_info else None
-    # --- KONIEC NOWEJ LOGIKI ---
+    
+    # Pobranie liczby zaktualizowanych cen
+    update_count_info = SystemInfo.query.filter_by(key='last_price_update_count').first()
+    last_update_count = update_count_info.value if update_count_info else None
+    # --- KONIEC ZMIANY ---
     
     return render_template('subiekt_mapping.html', 
                            products=unmapped_products,
-                           last_update_timestamp=last_update_timestamp) # <-- Przekazanie do szablonu
+                           last_update_timestamp=last_update_timestamp,
+                           last_update_count=last_update_count) # <-- Przekazanie do szablonu
+
 @app.route('/subiekt-mapping/map', methods=['POST'])
 def map_subiekt_product():
     symbol = request.form.get('symbol')
