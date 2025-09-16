@@ -181,7 +181,6 @@
 
 {% block scripts %}
 <script>
-    // --- ZAKTUALIZOWANY, ROZBUDOWANY SKRYPT ---
     document.addEventListener('DOMContentLoaded', function() {
         const allProductsData = JSON.parse('{{ products_json|safe }}');
         
@@ -212,8 +211,9 @@
 
         function addFabricRow(fabricId = null) {
             const newRow = fabricTemplate.content.cloneNode(true);
+            const select = newRow.querySelector('select');
             if (fabricId) {
-                newRow.querySelector('select').value = fabricId;
+                select.value = fabricId;
             }
             fabricsList.appendChild(newRow);
             reindexAll();
@@ -221,30 +221,38 @@
 
         function updateOrderFabrics() {
             const requiredFabrics = new Set();
-            // Zbierz wszystkie tkaniny ze wszystkich wybranych produktów
             document.querySelectorAll('.product-name-input').forEach(input => {
                 const productName = input.value.trim().toUpperCase();
                 const productData = allProductsData.find(p => p.name.toUpperCase() === productName);
+
                 if (productData && productData.fabrics) {
                     productData.fabrics.forEach(fabricId => requiredFabrics.add(fabricId));
                 }
             });
 
-            // Zbierz tkaniny już dodane do formularza
             const currentFabrics = new Set();
             document.querySelectorAll('#fabrics-list select').forEach(select => {
                 currentFabrics.add(parseInt(select.value, 10));
             });
 
-            // Dodaj brakujące tkaniny
-            requiredFabrics.forEach(fabricId => {
-                if (!currentFabrics.has(fabricId)) {
-                    addFabricRow(fabricId);
+            // Usuń wszystkie obecne tkaniny, jeśli jakieś produkty zostały wybrane
+            if (requiredFabrics.size > 0) {
+                while (fabricsList.firstChild) {
+                    fabricsList.removeChild(fabricsList.firstChild);
                 }
+            }
+
+            // Dodaj wymagane tkaniny
+            requiredFabrics.forEach(fabricId => {
+                addFabricRow(fabricId);
             });
+            
+            // Jeśli po wszystkim lista tkanin jest pusta, dodaj jedną domyślną
+            if (fabricsList.children.length === 0) {
+                addFabricRow();
+            }
         }
 
-        // Delegacja zdarzeń dla dynamicznie dodawanych pól
         productsListContainer.addEventListener('input', e => {
             if (e.target && e.target.classList.contains('product-name-input')) {
                 updateOrderFabrics();
@@ -279,7 +287,7 @@
                 if(document.querySelectorAll('.product-card').length > 1) {
                     removeProductBtn.closest('.product-card').remove();
                     reindexAll();
-                    updateOrderFabrics(); // Zaktualizuj tkaniny po usunięciu produktu
+                    updateOrderFabrics();
                 } else {
                     alert("Nie można usunąć ostatniego produktu.");
                 }
@@ -307,7 +315,6 @@
             reindexAll();
         });
 
-        // Logika filtrowania i szablonów (bez zmian)
         const categoryFilter = document.getElementById('productCategoryFilter');
         const productDatalist = document.getElementById('products-datalist');
         function updateProductDatalist(selectedCategoryId) {

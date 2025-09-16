@@ -323,21 +323,33 @@ def add_product():
 def edit_product(product_id):
     product = Product.query.get_or_404(product_id)
     form = ProductForm(obj=product)
+    
+    # Ustawienie opcji dla list wyboru
     form.category_id.choices = [(c.id, c.name) for c in ProductCategory.query.order_by('name').all()]
     form.category_id.choices.insert(0, (0, '--- Brak ---'))
     available_materials = Material.query.order_by(Material.name).all()
     fabric_choices = [(f.id, f.name) for f in Fabric.query.order_by('name').all()]
+
+    # Ustawienie opcji wyboru dla już istniejących w formularzu pól tkanin
     for f_form in form.fabrics_needed:
         f_form.fabric_id.choices = fabric_choices
+
     if form.validate_on_submit():
         product.name = form.name.data.strip().upper()
         product.description = form.description.data.strip()
         product.production_price = form.production_price.data
         product.category_id = form.category_id.data if form.category_id.data != 0 else None
+
+        # Usunięcie starych powiązań i zapisanie tej zmiany
         ProductFabric.query.filter_by(product_id=product.id).delete()
         ProductMaterial.query.filter_by(product_id=product.id).delete()
+        db.session.commit() # Kluczowy krok: zatwierdzenie usunięcia
+
+        # Dodanie nowych powiązań na podstawie danych z formularza
         for fabric_data in form.fabrics_needed.data:
-            db.session.add(ProductFabric(product_id=product.id, fabric_id=fabric_data['fabric_id'], usage_meters=fabric_data['usage_meters']))
+            if fabric_data.get('fabric_id') and fabric_data.get('usage_meters') is not None:
+                db.session.add(ProductFabric(product_id=product.id, fabric_id=fabric_data['fabric_id'], usage_meters=fabric_data['usage_meters']))
+        
         for material_data in form.materials_needed.data:
             material_name = material_data['material_name'].strip().upper()
             quantity = material_data['quantity'].strip()
@@ -348,16 +360,18 @@ def edit_product(product_id):
                     db.session.add(material)
                     db.session.flush()
                 db.session.add(ProductMaterial(product_id=product.id, material_id=material.id, quantity=quantity))
+        
         db.session.commit()
         flash('Produkt został zaktualizowany.', 'success')
         return redirect(url_for('products_list'))
+
+    # `obj=product` nie radzi sobie z zagnieżdżonymi polami tekstowymi (material.name)
+    # dlatego dla materiałów musimy ręcznie wypełnić listę przy pierwszym ładowaniu strony
     if request.method == 'GET':
-        form.fabrics_needed.entries = []
-        for pf_link in product.fabrics_needed:
-            form.fabrics_needed.append_entry({'fabric_id': pf_link.fabric_id, 'usage_meters': pf_link.usage_meters})
         form.materials_needed.entries = []
         for pm_link in product.materials_needed:
             form.materials_needed.append_entry({'material_name': pm_link.material.name, 'quantity': pm_link.quantity})
+
     return render_template('product_form.html', form=form, title="Edytuj Produkt",
                            available_materials=available_materials, fabric_choices=fabric_choices)
 
