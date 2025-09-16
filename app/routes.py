@@ -66,6 +66,8 @@ def calculate_material_summary(order):
         structured_summary.append({'name': name, 'quantity': f"{total_val_str} {unit}"})
     return structured_summary
 
+# app/routes.py
+
 @app.route('/orders/new', methods=['GET', 'POST'])
 def new_order():
     form = OrderForm()
@@ -140,19 +142,17 @@ def new_order():
                     flash('Szablon o tej nazwie już istnieje.', 'warning')
             db.session.commit()
             flash('Zlecenie zostało dodane.', 'success')
+            
+            # --- POPRAWKA TUTAJ ---
+            # Usunięto generowanie i wysyłanie pliku, zastąpiono je przekierowaniem.
+            return redirect(url_for('orders_list'))
+            # --- KONIEC POPRAWKI ---
+
         except Exception as e:
             db.session.rollback()
             flash(f'Wystąpił nieoczekiwany błąd: {e}', 'danger')
             return redirect(url_for('new_order'))
-        material_summary = calculate_material_summary(order)
-        docs_folder = os.path.join(current_app.root_path, 'order_docs')
-        os.makedirs(docs_folder, exist_ok=True)
-        filepath = save_order_as_word(order, material_summary, folder_path=docs_folder)
-        return send_file(
-            filepath, as_attachment=True,
-            download_name=os.path.basename(filepath),
-            mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
+            
     existing_clients = Client.query.all()
     all_categories = ProductCategory.query.order_by(ProductCategory.name).all()
     all_templates = OrderTemplate.query.order_by(OrderTemplate.template_name).all()
