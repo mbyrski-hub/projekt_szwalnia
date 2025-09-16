@@ -38,21 +38,6 @@
                     </div>
                     
                     <div class="form-group">
-                        <label>Tkaniny</label>
-                        <div id="fabrics-list">
-                            {% for fabric_form in form.fabrics %}
-                            <div class="input-group mb-2 fabric-row">
-                                {{ fabric_form.fabric_id(class="form-control") }}
-                                <div class="input-group-append">
-                                    <button class="btn btn-danger remove-fabric" type="button"><i class="fas fa-trash"></i></button>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        <button type="button" class="btn btn-secondary btn-sm" id="add-fabric"><i class="fas fa-plus"></i> Dodaj kolejną tkaninę</button>
-                    </div>
-
-                    <div class="form-group">
                         {{ form.login_info.label(class="form-label") }}
                         {{ form.login_info(class="form-control", rows=2, placeholder="Opcjonalnie...") }}
                     </div>
@@ -138,8 +123,6 @@
                     <input type="file" name="attachments" id="attachments" multiple class="form-control-file">
                 </div>
             </div>
-        </div>
-        <div class="col-md-6">
             <div class="card mb-3">
                 <div class="card-header">
                     <h4><i class="fas fa-bookmark"></i> Opcje Szablonu</h4>
@@ -156,8 +139,30 @@
                 </div>
             </div>
         </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h4><i class="fas fa-scroll"></i> Tkaniny</h4>
+                </div>
+                <div class="card-body">
+                    <div id="fabrics-list">
+                        {% for fabric_form in form.fabrics %}
+                        <div class="input-group mb-2 fabric-row">
+                            {{ fabric_form.fabric_id(class="form-control") }}
+                            <div class="input-group-append">
+                                <button class="btn btn-danger remove-fabric" type="button"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="add-fabric"><i class="fas fa-plus"></i> Dodaj kolejną tkaninę</button>
+                    <small class="form-text text-muted mt-2">
+                        Tkaniny zdefiniowane w produktach zostaną dodane automatycznie. Możesz tu dodać dodatkowe tkaniny, jeśli są potrzebne.
+                    </small>
+                </div>
+            </div>
+        </div>
     </div>
-    
     <div class="text-center mt-4">
         {{ form.submit(class="btn btn-primary btn-lg") }}
     </div>
