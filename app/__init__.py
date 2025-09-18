@@ -39,6 +39,16 @@ def to_local_time(utc_dt):
     """Konwertuje datę z UTC na czas lokalny (dla Polski)."""
     if not utc_dt:
         return ""
+    
+    # NOWA LOGIKA: Sprawdź, czy dane wejściowe to tekst
+    if isinstance(utc_dt, str):
+        try:
+            # Spróbuj przekonwertować tekst na obiekt daty
+            utc_dt = datetime.strptime(utc_dt, '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            # Jeśli format jest inny lub niepoprawny, zwróć oryginalny tekst
+            return utc_dt
+
     local_tz = pytz.timezone('Europe/Warsaw')
     local_dt = utc_dt.replace(tzinfo=pytz.utc).astimezone(local_tz)
     return local_dt.strftime('%Y-%m-%d %H:%M')

@@ -103,6 +103,9 @@
                 'unassigned': document.getElementById('unassigned-list')
             };
             let draggedItem = null;
+            // ### POCZĄTEK ZMIANY: Zmienna do przechowywania oryginalnego kontenera ###
+            let originalContainer = null;
+            // ### KONIEC ZMIANY ###
 
             const detailsModal = document.getElementById('details-modal');
             const modalDetails = document.getElementById('modal-details');
@@ -166,7 +169,9 @@
                             lists['zespol-2-list'].appendChild(card2);
                         }
                     } else if (assignedTeam) {
-                        const card = createCard(order, assignedTeam, true);
+                        // ### POCZĄTEK ZMIANY: Dodaj ikonę podziału także tutaj ###
+                        const card = createCard(order, assignedTeam, true, true); 
+                        // ### KONIEC ZMIANY ###
                         lists[`${assignedTeam}-list`].appendChild(card);
                     } else {
                         const card = createCard(order, null, true, true);
@@ -203,11 +208,15 @@
                         item.addEventListener('dragstart', (e) => {
                             if (e.target.classList.contains('split-icon')) { e.preventDefault(); return; }
                             draggedItem = item;
+                            // ### POCZĄTEK ZMIANY: Zapisz oryginalny kontener ###
+                            originalContainer = item.parentElement;
+                            // ### KONIEC ZMIANY ###
                             setTimeout(() => item.classList.add('dragging'), 0);
                         });
                         item.addEventListener('dragend', () => {
                             if (draggedItem) draggedItem.classList.remove('dragging');
                             draggedItem = null;
+                            originalContainer = null;
                         });
                     }
                 });
@@ -240,11 +249,36 @@
 
                     const orderId = draggedItem.dataset.orderId;
                     const list = zone.querySelector('.order-list');
-
+                    
+                    // ### POCZĄTEK ZMIANY: Logika potwierdzenia dla "Zrealizowane" ###
                     if (zoneId === 'zrealizowane') {
                         const teamContext = draggedItem.dataset.teamContext;
-                        await completeOrder(orderId, teamContext);
+                        const orderCode = draggedItem.querySelector('.order-card-header').innerText;
+                        
+                        confirmModalText.innerHTML = `Czy chcesz zakończyć pracę nad zleceniem <br><strong>${orderCode}</strong>?`;
+                        confirmModal.style.display = 'block';
+
+                        confirmYesBtn.onclick = async () => {
+                            confirmModal.style.display = 'none';
+                            await completeOrder(orderId, teamContext);
+                        };
+
+                        // Jeśli użytkownik zamknie modal bez potwierdzenia, cofnij element
+                        const handleCancel = () => {
+                           if (originalContainer && draggedItem) {
+                                originalContainer.appendChild(draggedItem);
+                           }
+                           confirmNoBtn.removeEventListener('click', handleCancel); // Wyczyść listener
+                        };
+                        confirmNoBtn.addEventListener('click', handleCancel);
+                        confirmModal.addEventListener('click', (evt) => {
+                            if (evt.target === confirmModal) { // Kliknięcie poza zawartością modala
+                                handleCancel();
+                            }
+                        }, { once: true });
+
                     } else {
+                    // ### KONIEC ZMIANY ###
                         const team = zoneId === 'unassigned' ? null : zoneId;
                         list.appendChild(draggedItem);
                         await assignTeam(orderId, team);

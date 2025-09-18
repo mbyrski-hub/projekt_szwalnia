@@ -8,7 +8,7 @@
 
 {% if last_update_timestamp %}
     <div class="alert alert-info">
-        <i class="fas fa-info-circle"></i> Ostatnia aktualizacja cen: <strong>{{ last_update_timestamp }}</strong>. 
+        <i class="fas fa-info-circle"></i> Ostatnia aktualizacja cen: <strong>{{ last_update_timestamp | to_local_time }}</strong>. 
         {% if last_update_count %}
             Zaktualizowano <strong>{{ last_update_count }}</strong> pozycji.
         {% endif %}

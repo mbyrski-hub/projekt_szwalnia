@@ -180,12 +180,56 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="completeOrderModal" tabindex="-1" role="dialog" aria-labelledby="completeModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="completeModalLabel">Potwierdzenie</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        Czy na pewno chcesz oznaczyć to zlecenie (lub jego część) jako zrealizowane?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Anuluj</button>
+        <button type="button" class="btn btn-success" id="confirmCompleteBtn">Tak, oznacz jako zrealizowane</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
 <script>
+    // ### POCZĄTEK ZMIANY W SKRYPCIE ###
+    let onConfirmCompletion = null; // Przechowuje funkcję do wywołania po potwierdzeniu
+    let onCancelCompletion = null; // Przechowuje funkcję do wywołania po anulowaniu
+
+    // Nasłuchiwanie kliknięcia przycisku "Tak" w modalu
+    document.getElementById('confirmCompleteBtn').addEventListener('click', function() {
+        if (typeof onConfirmCompletion === 'function') {
+            onConfirmCompletion();
+        }
+        $('#completeOrderModal').modal('hide'); // Ukryj modal
+    });
+
+    // Upewnij się, że funkcja anulowania jest wywoływana, gdy modal jest zamykany inaczej niż przez przycisk "Tak"
+    $('#completeOrderModal').on('hidden.bs.modal', function () {
+        if (typeof onCancelCompletion === 'function') {
+            onCancelCompletion();
+        }
+        // Resetuj funkcje zwrotne
+        onConfirmCompletion = null;
+        onCancelCompletion = null;
+    });
+    // ### KONIEC ZMIANY W SKRYPCIE ###
+
+
     ['zespol-1', 'zespol-2', 'nieprzypisane', 'zespol-oba', 'zrealizowane'].forEach(zoneId => {
         const zoneElement = document.getElementById(zoneId);
         if (!zoneElement) return;
@@ -196,11 +240,11 @@
             onEnd: evt => {
                 const orderId = evt.item.dataset.id;
                 const newZoneId = evt.to.closest('.kanban-zone').id;
-                const sourceZoneId = evt.from.closest('.kanban-zone').id; // Skąd przeciągnięto
+                const sourceZoneId = evt.from.closest('.kanban-zone').id;
 
-                // Jeśli upuszczono na "Zrealizowane"
                 if (newZoneId === 'zrealizowane') {
-                    if (confirm('Czy na pewno chcesz oznaczyć to zlecenie (lub jego część) jako zrealizowane?')) {
+                    // ### POCZĄTEK ZMIANY W onEnd ###
+                    onConfirmCompletion = function() {
                         fetch(`/api/order/${orderId}/complete`, {
                             method: 'POST',
                             headers: {'Content-Type':'application/json'},
@@ -214,20 +258,24 @@
                         .catch(err => {
                             console.error('Błąd ukończenia:', err);
                             alert('Wystąpił błąd podczas oznaczania zlecenia jako ukończone.');
-                            location.reload(); // Spróbuj odświeżyć nawet po błędzie
+                            location.reload();
                         });
-                    } else {
-                        // Anuluj przeciągnięcie, jeśli użytkownik kliknie "Anuluj"
+                    };
+
+                    onCancelCompletion = function() {
+                        // Anuluj przeciągnięcie, jeśli użytkownik kliknie "Anuluj" lub zamknie modal
                         evt.from.appendChild(evt.item);
-                    }
-                } 
-                // W każdym innym przypadku - przypisz do zespołu (lub cofnij przypisanie)
-                else {
+                    };
+
+                    $('#completeOrderModal').modal('show'); // Pokaż modal
+                    // ### KONIEC ZMIANY W onEnd ###
+
+                } else {
                     let teamToSend;
                     if (newZoneId === 'zespol-oba') {
                         teamToSend = 'OBA';
                     } else if (newZoneId === 'nieprzypisane') {
-                        teamToSend = null; // Ustaw na null, aby cofnąć przypisanie
+                        teamToSend = null;
                     } else {
                         teamToSend = newZoneId;
                     }
@@ -245,17 +293,15 @@
                     .catch(err => {
                         console.error('Błąd przypisania:', err);
                         alert('Wystąpił błąd podczas przypisywania zlecenia.');
-                        location.reload(); // Spróbuj odświeżyć nawet po błędzie
+                        location.reload();
                     });
                 }
             }
         });
     });
 
-    // Skrypt do wyświetlania modala z podsumowaniem (bez zmian, ale dostosowany do nowej struktury)
     $(document).ready(function(){
-        $(document).on('click', '.kanban-card', function(e){ // Używamy delegacji, aby obsługiwać dynamicznie dodane karty
-            // Zapobiegaj uruchomieniu modala podczas przeciągania
+        $(document).on('click', '.kanban-card', function(e){
             if ($(this).is('.sortable-ghost')) {
                 return;
             }
