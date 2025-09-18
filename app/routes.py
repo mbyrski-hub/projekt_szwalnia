@@ -368,6 +368,18 @@ def products_list():
     return render_template('products_list.html', products=products, categories=categories,
                            form=form, current_category_id=category_filter_id)
 
+def save_product_picture(form_picture):
+    random_hex = os.urandom(8).hex()
+    _, f_ext = os.path.splitext(form_picture.filename)
+    picture_fn = random_hex + f_ext
+    picture_path = os.path.join(current_app.root_path, 'static/product_pics', picture_fn)
+    
+    # Upewnij się, że folder istnieje
+    os.makedirs(os.path.dirname(picture_path), exist_ok=True)
+    
+    form_picture.save(picture_path)
+    return picture_fn
+
 @app.route('/products/new', methods=['GET', 'POST'])
 def add_product():
     form = ProductForm()
@@ -378,10 +390,16 @@ def add_product():
     for f_form in form.fabrics_needed:
         f_form.fabric_id.choices = fabric_choices
     if form.validate_on_submit():
+        # ### POCZĄTEK ZMIANY ###
+        image_file = None
+        if form.image.data:
+            image_file = save_product_picture(form.image.data)
+        # ### KONIEC ZMIANY ###
         new_product = Product(
             name=form.name.data.strip().upper(), description=form.description.data.strip(),
             production_price=form.production_price.data,
-            category_id=form.category_id.data if form.category_id.data != 0 else None
+            category_id=form.category_id.data if form.category_id.data != 0 else None,
+            image_file=image_file  # <-- Dodane
         )
         db.session.add(new_product)
         for fabric_data in form.fabrics_needed.data:
@@ -413,22 +431,29 @@ def edit_product(product_id):
     available_materials = Material.query.order_by(Material.name).all()
     fabric_choices = [(f.id, f.name) for f in Fabric.query.order_by('name').all()]
 
-    # Ustawienie opcji wyboru dla już istniejących w formularzu pól tkanin
     for f_form in form.fabrics_needed:
         f_form.fabric_id.choices = fabric_choices
 
     if form.validate_on_submit():
+        # Zapisz nowe zdjęcie, jeśli zostało przesłane
+        if form.image.data:
+            # Usuń stare zdjęcie, jeśli istnieje
+            if product.image_file:
+                old_image_path = os.path.join(current_app.root_path, 'static/product_pics', product.image_file)
+                if os.path.exists(old_image_path):
+                    os.remove(old_image_path)
+            product.image_file = save_product_picture(form.image.data)
+
         product.name = form.name.data.strip().upper()
         product.description = form.description.data.strip()
         product.production_price = form.production_price.data
         product.category_id = form.category_id.data if form.category_id.data != 0 else None
 
-        # Usunięcie starych powiązań i zapisanie tej zmiany
+        # Aktualizacja tkanin i materiałów (Twój kod jest tutaj poprawny)
         ProductFabric.query.filter_by(product_id=product.id).delete()
         ProductMaterial.query.filter_by(product_id=product.id).delete()
-        db.session.commit() # Kluczowy krok: zatwierdzenie usunięcia
+        db.session.commit()
 
-        # Dodanie nowych powiązań na podstawie danych z formularza
         for fabric_data in form.fabrics_needed.data:
             if fabric_data.get('fabric_id') and fabric_data.get('usage_meters') is not None:
                 db.session.add(ProductFabric(product_id=product.id, fabric_id=fabric_data['fabric_id'], usage_meters=fabric_data['usage_meters']))
@@ -448,14 +473,13 @@ def edit_product(product_id):
         flash('Produkt został zaktualizowany.', 'success')
         return redirect(url_for('products_list'))
 
-    # `obj=product` nie radzi sobie z zagnieżdżonymi polami tekstowymi (material.name)
-    # dlatego dla materiałów musimy ręcznie wypełnić listę przy pierwszym ładowaniu strony
     if request.method == 'GET':
         form.materials_needed.entries = []
         for pm_link in product.materials_needed:
             form.materials_needed.append_entry({'material_name': pm_link.material.name, 'quantity': pm_link.quantity})
 
     return render_template('product_form.html', form=form, title="Edytuj Produkt",
+                           product=product, # <-- Ta linia była kluczowa do dodania
                            available_materials=available_materials, fabric_choices=fabric_choices)
 
 @app.route('/products/delete/<int:product_id>', methods=['POST'])
