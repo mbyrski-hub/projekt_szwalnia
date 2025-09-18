@@ -221,6 +221,50 @@ def edit_template(template_id):
             form.fabrics.append_entry({'fabric_id': tf.fabric_id})
     return render_template('order_template_form.html', form=form, clients=clients, fabric_choices=fabric_choices)
 
+# ### POCZĄTEK NOWEJ FUNKCJI ###
+def calculate_order_total_cost(order):
+    """Oblicza całkowity koszt zlecenia na podstawie produktów."""
+    total_fabric_cost = 0.0
+    total_material_cost = 0.0
+    total_production_cost = 0.0
+
+    for item in order.order_items:
+        product = item.product
+        if not product:
+            continue
+
+        # Koszt produkcji dla danej pozycji
+        total_production_cost += (product.production_price or 0.0) * item.quantity
+
+        # Koszt tkanin dla danej pozycji
+        for pf in product.fabrics_needed:
+            fabric_price = pf.fabric.price or 0.0
+            total_fabric_cost += (pf.usage_meters * fabric_price) * item.quantity
+
+        # Koszt materiałów dodatkowych dla danej pozycji
+        for pm in product.materials_needed:
+            material_price = pm.material.price or 0.0
+            try:
+                # Wyciągamy liczbę z tekstu typu "5 szt.", "0.5 m"
+                quantity_val = float(re.match(r'^\s*(\d+\.?\d*)', pm.quantity).group(1))
+                total_material_cost += (quantity_val * material_price) * item.quantity
+            except (ValueError, AttributeError):
+                continue # Pomiń, jeśli format ilości jest niepoprawny
+
+    total_cost = total_fabric_cost + total_material_cost + total_production_cost
+    
+    return {
+        'fabric_cost': round(total_fabric_cost, 2),
+        'material_cost': round(total_material_cost, 2),
+        'production_cost': round(total_production_cost, 2),
+        'total_cost': round(total_cost, 2)
+    }
+# ### KONIEC NOWEJ FUNKCJI ###
+
+
+
+
+
 @app.route('/orders')
 def orders_list():
     client_filter = request.args.get('client', '').strip().upper()
@@ -235,6 +279,7 @@ def orders_list():
     all_orders = orders_query.order_by(Order.created_at.desc()).all()
     for order in all_orders:
         order.planned_materials = calculate_material_summary(order)
+        order.cost_details = calculate_order_total_cost(order)
     in_progress_orders = [o for o in all_orders if o.status == 'W REALIZACJI']
     new_orders = [o for o in all_orders if o.status == 'NOWE']
     completed_orders = [o for o in all_orders if o.status == 'ZREALIZOWANE']
@@ -254,7 +299,7 @@ def orders_history():
     # Filtrujemy tylko zlecenia o statusie 'ZREALIZOWANE'
     orders_query = Order.query.join(Client).filter(Order.status == 'ZREALIZOWANE')
     # ### KONIEC ZMIANY ###
-
+    
     if client_filter:
         orders_query = orders_query.filter(Client.name == client_filter)
     if year_filter:
@@ -280,7 +325,8 @@ def order_detail(order_id):
     # ### POCZĄTEK ZMIANY ###
     # Dodajemy obliczanie i przekazywanie podsumowania materiałów
     material_summary = calculate_material_summary(order)
-    return render_template('order_detail.html', order=order, material_summary=material_summary)
+    cost_details = calculate_order_total_cost(order)
+    return render_template('order_detail.html', order=order, material_summary=material_summary, cost_details=cost_details)
     # ### KONIEC ZMIANY ###
 
 @app.route('/orders/<int:order_id>/status', methods=['POST'])

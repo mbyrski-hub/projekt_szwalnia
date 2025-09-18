@@ -214,7 +214,17 @@
                             <p style="margin-left: 20px;">Brak zdefiniowanych materiałów dla produktów w tym zleceniu.</p>
                         {% endif %}
                     {% endif %}
+                    
+                    <strong>Szacowany koszt zlecenia:</strong>
+                    <ul style="padding-left: 20px; list-style-type: circle;">
+                        <li>Koszt tkanin: {{ "%.2f"|format(order.cost_details.fabric_cost) }} zł</li>
+                        <li>Koszt materiałów: {{ "%.2f"|format(order.cost_details.material_cost) }} zł</li>
+                        <li>Koszt produkcji: {{ "%.2f"|format(order.cost_details.production_cost) }} zł</li>
+                        <li style="margin-top: 5px;"><strong>RAZEM: {{ "%.2f"|format(order.cost_details.total_cost) }} zł</strong></li>
+                    </ul>
                     </td>
+            
+
             </tr>
             {% endfor %}
         </tbody>
