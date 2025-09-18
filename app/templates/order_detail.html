@@ -70,16 +70,16 @@
             <div class="card-body">
                 <dl class="row">
                     <dt class="col-sm-6">Rozpoczęcie krojenia:</dt>
-                    <dd class="col-sm-6">{{ order.cutting_started_at.strftime('%Y-%m-%d %H:%M') if order.cutting_started_at else '---' }}</dd>
+                    <dd class="col-sm-6">{{ order.cutting_started_at | to_local_time if order.cutting_started_at else '---' }}</dd>
                     
                     <dt class="col-sm-6">Zakończenie krojenia:</dt>
-                    <dd class="col-sm-6">{{ order.cutting_finished_at.strftime('%Y-%m-%d %H:%M') if order.cutting_finished_at else '---' }}</dd>
+                    <dd class="col-sm-6">{{ order.cutting_finished_at | to_local_time if order.cutting_finished_at else '---' }}</dd>
                     
                     <dt class="col-sm-6">Rozpoczęcie szycia:</dt>
-                    <dd class="col-sm-6">{{ order.sewing_started_at.strftime('%Y-%m-%d %H:%M') if order.sewing_started_at else '---' }}</dd>
+                    <dd class="col-sm-6">{{ order.sewing_started_at | to_local_time if order.sewing_started_at else '---' }}</dd>
                     
                     <dt class="col-sm-6">Zakończenie szycia:</dt>
-                    <dd class="col-sm-6">{{ order.sewing_finished_at.strftime('%Y-%m-%d %H:%M') if order.sewing_finished_at else '---' }}</dd>
+                    <dd class="col-sm-6">{{ order.sewing_finished_at | to_local_time if order.sewing_finished_at else '---' }}</dd>
                 </dl>
             </div>
         </div>

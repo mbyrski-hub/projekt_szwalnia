@@ -5,6 +5,8 @@ from .config import Config
 import os
 import re
 from markupsafe import Markup, escape
+from datetime import datetime
+import pytz
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -31,5 +33,15 @@ def nl2br(value):
     # Zamiana znaków nowej linii na <br> i opakowanie w <p>
     result = u'\n\n'.join(u'<p>%s</p>' % p.replace('\n', Markup('<br>\n')) for p in _paragraph_re.split(escaped_value))
     return Markup(result)
+
+@app.template_filter()
+def to_local_time(utc_dt):
+    """Konwertuje datę z UTC na czas lokalny (dla Polski)."""
+    if not utc_dt:
+        return ""
+    local_tz = pytz.timezone('Europe/Warsaw')
+    local_dt = utc_dt.replace(tzinfo=pytz.utc).astimezone(local_tz)
+    return local_dt.strftime('%Y-%m-%d %H:%M')
+
 
 from app import routes, models

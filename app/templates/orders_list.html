@@ -139,13 +139,14 @@
             <tr class="order-row status-{{ order.status|lower|replace(' ', '-') }}" data-order-id="{{ order.id }}" style="cursor: pointer;">
                 <td data-label="Nr zlecenia:">{{ order.order_code }}</td>
                 <td data-label="Klient:">{{ order.client.name }}</td>
-                <td data-label="Data:">{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                <td data-label="Data Szycia:">
-                    {% if order.status == "W REALIZACJI" and order.sewing_started_at %}
-                        <strong>Start:</strong> {{ order.sewing_started_at.strftime('%Y-%m-%d %H:%M') }}
-                    {% elif order.status == "ZREALIZOWANE" and order.sewing_finished_at %}
-                        <strong>Koniec:</strong> {{ order.sewing_finished_at.strftime('%Y-%m-%d %H:%M') }}
-                    {% endif %}
+                <td data-label="Data:">{{ order.created_at | to_local_time }}</td>
+<td data-label="Data Szycia:">
+    {% if order.status == "W REALIZACJI" and order.sewing_started_at %}
+        <strong>Start:</strong> {{ order.sewing_started_at | to_local_time }}
+    {% elif order.status == "ZREALIZOWANE" and order.sewing_finished_at %}
+        <strong>Koniec:</strong> {{ order.sewing_finished_at | to_local_time }}
+    {% endif %}
+</td>
                 </td>
                 <td data-label="Status:" class="status-cell">{{ order.status }}</td>
                 <td data-label="Zmiana stanu:" class="change-status-cell">
