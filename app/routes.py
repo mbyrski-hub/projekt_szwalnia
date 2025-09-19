@@ -22,6 +22,7 @@ import io
 import pandas as pd
 import json
 import math
+from .drive_service import upload_image_to_drive
 
 if platform.system() == 'Windows':
     config = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
@@ -221,45 +222,51 @@ def edit_template(template_id):
             form.fabrics.append_entry({'fabric_id': tf.fabric_id})
     return render_template('order_template_form.html', form=form, clients=clients, fabric_choices=fabric_choices)
 
-# ### POCZĄTEK NOWEJ FUNKCJI ###
+# ### POCZĄTEK OSTATECZNEJ POPRAWKI w app/routes.py ###
+
 def calculate_order_total_cost(order):
     """Oblicza całkowity koszt zlecenia na podstawie produktów."""
     total_fabric_cost = 0.0
     total_material_cost = 0.0
-    total_production_cost = 0.0
+    # Zmieniamy nazwę, aby było jasne, że to suma przeliczonych kosztów
+    adjusted_production_cost = 0.0 
 
     for item in order.order_items:
         product = item.product
         if not product:
             continue
 
-        # Koszt produkcji dla danej pozycji
-        total_production_cost += (product.production_price or 0.0) * item.quantity
+        # KROK 1: Obliczamy przeliczony koszt dla JEDNEJ SZTUKI produktu
+        # (koszt produkcji * 2.5) + 2
+        single_item_adjusted_production_cost = (product.production_price or 0.0) * 2.5 + 2
+        
+        # KROK 2: Mnożymy koszt jednostkowy przez ilość sztuk i dodajemy do sumy
+        adjusted_production_cost += single_item_adjusted_production_cost * item.quantity
 
-        # Koszt tkanin dla danej pozycji
+        # Obliczenia dla tkanin i materiałów pozostają bez zmian
         for pf in product.fabrics_needed:
             fabric_price = pf.fabric.price or 0.0
             total_fabric_cost += (pf.usage_meters * fabric_price) * item.quantity
-
-        # Koszt materiałów dodatkowych dla danej pozycji
         for pm in product.materials_needed:
             material_price = pm.material.price or 0.0
             try:
-                # Wyciągamy liczbę z tekstu typu "5 szt.", "0.5 m"
                 quantity_val = float(re.match(r'^\s*(\d+\.?\d*)', pm.quantity).group(1))
                 total_material_cost += (quantity_val * material_price) * item.quantity
             except (ValueError, AttributeError):
-                continue # Pomiń, jeśli format ilości jest niepoprawny
-
-    total_cost = total_fabric_cost + total_material_cost + total_production_cost
+                continue
+    
+    # Używamy nowej, poprawnie obliczonej sumy kosztów produkcji
+    base_subtotal = adjusted_production_cost + total_fabric_cost + total_material_cost
+    final_total_cost = base_subtotal * 1.15
     
     return {
         'fabric_cost': round(total_fabric_cost, 2),
         'material_cost': round(total_material_cost, 2),
-        'production_cost': round(total_production_cost, 2),
-        'total_cost': round(total_cost, 2)
+        'production_cost': round(adjusted_production_cost, 2),
+        'total_cost': round(final_total_cost, 2)
     }
-# ### KONIEC NOWEJ FUNKCJI ###
+
+# ### KONIEC OSTATECZNEJ POPRAWKI ###
 
 
 
@@ -390,16 +397,17 @@ def add_product():
     for f_form in form.fabrics_needed:
         f_form.fabric_id.choices = fabric_choices
     if form.validate_on_submit():
-        # ### POCZĄTEK ZMIANY ###
-        image_file = None
+        # ### POCZĄTEK MODYFIKACJI DLA GOOGLE DRIVE ###
+        drive_image_id = None  # Używamy nowej zmiennej
         if form.image.data:
-            image_file = save_product_picture(form.image.data)
-        # ### KONIEC ZMIANY ###
+            # Zamiast zapisywać lokalnie, wysyłamy na Dysk Google
+            drive_image_id = upload_image_to_drive(form.image.data)
+        # ### KONIEC MODYFIKACJI ###
         new_product = Product(
             name=form.name.data.strip().upper(), description=form.description.data.strip(),
             production_price=form.production_price.data,
             category_id=form.category_id.data if form.category_id.data != 0 else None,
-            image_file=image_file  # <-- Dodane
+            image_id=drive_image_id  # <-- Dodane
         )
         db.session.add(new_product)
         for fabric_data in form.fabrics_needed.data:
@@ -435,14 +443,12 @@ def edit_product(product_id):
         f_form.fabric_id.choices = fabric_choices
 
     if form.validate_on_submit():
-        # Zapisz nowe zdjęcie, jeśli zostało przesłane
+        # ### POCZĄTEK MODYFIKACJI DLA GOOGLE DRIVE ###
         if form.image.data:
-            # Usuń stare zdjęcie, jeśli istnieje
-            if product.image_file:
-                old_image_path = os.path.join(current_app.root_path, 'static/product_pics', product.image_file)
-                if os.path.exists(old_image_path):
-                    os.remove(old_image_path)
-            product.image_file = save_product_picture(form.image.data)
+            # Jeśli użytkownik wgrał nowy obrazek, wyślij go na Dysk
+            drive_image_id = upload_image_to_drive(form.image.data)
+            product.image_id = drive_image_id # Zaktualizuj pole image_id
+        # ### KONIEC MODYFIKACJI ###
 
         product.name = form.name.data.strip().upper()
         product.description = form.description.data.strip()

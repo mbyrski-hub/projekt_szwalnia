@@ -14,6 +14,11 @@
         white-space: nowrap;
         width: 1%; /* Zapobiega rozciąganiu się kolumny */
     }
+
+    #productImage {
+        max-height: 70vh; /* Ogranicza wysokość obrazka do 70% wysokości okna przeglądarki */
+        max-width: 100%;  /* Zapewnia, że obrazek nie będzie szerszy niż modal */
+    }
 </style>
 {% endblock %}
 
@@ -81,14 +86,24 @@
                         {% endif %}
                     </td>
                     <td class="actions-cell text-right">
-                        {% if product.image_file %}
-                        <button class="btn btn-info btn-sm view-image-btn" 
-                                data-image-url="{{ url_for('static', filename='product_pics/' + product.image_file) }}" 
-                                data-product-name="{{ product.name }}"
-                                title="Pokaż zdjęcie">
-                            <i class="fas fa-image"></i>
-                        </button>
+                        
+                        {% if product.image_id %}
+                            {# Aktywna ikonka, gdy obrazek istnieje #}
+                            <button class="btn btn-info btn-sm view-image-btn"
+                                    data-toggle="modal" 
+                                    data-target="#imageModal"
+                                    data-image-url="https://drive.google.com/thumbnail?id={{ product.image_id }}&sz=w1000"
+                                    data-product-name="{{ product.name }}"
+                                    title="Pokaż zdjęcie">
+                                <i class="fas fa-image"></i>
+                            </button>
+                            {% else %}
+                            {# Nieaktywna ikonka, gdy obrazka nie ma #}
+                            <button class="btn btn-secondary btn-sm" disabled style="opacity: 0.5;" title="Brak zdjęcia">
+                                <i class="fas fa-image"></i>
+                            </button>
                         {% endif %}
+
                         <a href="{{ url_for('edit_product', product_id=product.id) }}" class="btn btn-warning btn-sm" title="Edytuj"><i class="fas fa-edit"></i></a>
                         <form method="POST" action="{{ url_for('delete_product', product_id=product.id) }}" style="display:inline;" onsubmit="return confirm('Czy na pewno chcesz usunąć ten produkt?');">
                             <button type="submit" class="btn btn-danger btn-sm" title="Usuń"><i class="fas fa-trash"></i></button>
@@ -184,27 +199,29 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Znajdź wszystkie przyciski do podglądu obrazka
-    const imageButtons = document.querySelectorAll('.view-image-btn');
-    const modalImage = document.getElementById('productImage');
-    const modalTitle = document.getElementById('imageModalLabel');
+$(document).ready(function() {
+    // Kiedy modal o ID 'imageModal' przygotowuje się do pokazania...
+    $('#imageModal').on('show.bs.modal', function (event) {
+        // ...pobierz przycisk, który wywołał to zdarzenie
+        var button = $(event.relatedTarget); 
+        
+        // Wyciągnij dane z atrybutów 'data-*' tego przycisku
+        var imageUrl = button.data('image-url');
+        var productName = button.data('product-name');
+        
+        // Znajdź elementy wewnątrz tego modala
+        var modal = $(this);
+        var modalTitle = modal.find('.modal-title');
+        var modalImage = modal.find('.modal-body img');
+        
+        // Ustaw tytuł i źródło obrazka
+        modalTitle.text('Zdjęcie: ' + productName);
+        modalImage.attr('src', imageUrl);
+    });
 
-    // Dla każdego przycisku...
-    imageButtons.forEach(button => {
-        // ...dodaj nasłuchiwanie na kliknięcie
-        button.addEventListener('click', function() {
-            // Pobierz dane z atrybutów 'data-' klikniętego przycisku
-            const imageUrl = this.dataset.imageUrl;
-            const productName = this.dataset.productName;
-            
-            // Ustaw te dane w oknie modalnym
-            modalImage.src = imageUrl;
-            modalTitle.textContent = 'Zdjęcie: ' + productName;
-            
-            // Pokaż okno modalne
-            $('#imageModal').modal('show');
-        });
+    // Wyczyść źródło obrazka po zamknięciu modala, aby nie "migał" stary obrazek przy następnym otwarciu
+    $('#imageModal').on('hidden.bs.modal', function () {
+        $(this).find('.modal-body img').attr('src', '');
     });
 });
 </script>

@@ -88,7 +88,7 @@ class Product(db.Model):
     description = db.Column(db.Text, nullable=True) 
     
     production_price = db.Column(db.Float, nullable=False, default=0.0)
-    image_file = db.Column(db.String(100), nullable=True)
+    image_id = db.Column(db.String(100), nullable=True) # dla google drive
     category_id = db.Column(db.Integer, db.ForeignKey('product_category.id'), nullable=True)
     category = db.relationship('ProductCategory', backref='products')
     

@@ -35,7 +35,7 @@
     .table thead.thead-dark th {
         background-color: #f1f3f5; /* Bardzo jasny, neutralny szary */
         color: #495057;          /* Ciemniejszy tekst dla dobrego kontrastu */
-        border-color: #ffffff;    /* Dopasowany, jasny kolor ramki */
+        border-color: #ffffff;      /* Dopasowany, jasny kolor ramki */
     }
 
 /* Style dla animowanego przycisku "+" */
@@ -148,7 +148,26 @@
     {% endif %}
 </td>
                 </td>
-                <td data-label="Status:" class="status-cell">{{ order.status }}</td>
+                
+                <td data-label="Status:">
+                    {% if order.status == 'W REALIZACJI' %}
+                        <span class="badge badge-pill badge-warning">{{ order.status }}</span>
+                        <br>
+                        <small class="text-muted">
+                        {% if order.sewing_started_at and not order.sewing_finished_at %}
+                            (na szwalni)
+                        {% elif order.cutting_started_at and not order.cutting_finished_at %}
+                            (na krojowni)
+                        {% elif order.cutting_finished_at and not order.sewing_started_at %}
+                            (oczekuje na szwalni)
+                        {% else %}
+                            (oczekuje na krojowni)
+                        {% endif %}
+                        </small>
+                    {% else %}
+                        {{ order.status }}
+                    {% endif %}
+                </td>
                 <td data-label="Zmiana stanu:" class="change-status-cell">
                     {% if order.status == "NOWE" %}
                     <form method="POST" action="{{ url_for('update_order_status', order_id=order.id) }}" class="update-status-form d-inline">
@@ -220,7 +239,7 @@
                     <ul style="padding-left: 20px; list-style-type: circle;">
                         <li>Koszt tkanin: {{ "%.2f"|format(order.cost_details.fabric_cost) }} zł</li>
                         <li>Koszt materiałów: {{ "%.2f"|format(order.cost_details.material_cost) }} zł</li>
-                        <li>Koszt produkcji: {{ "%.2f"|format(order.cost_details.production_cost) }} zł</li>
+                        <li>Koszt produkcji (przeliczony): {{ "%.2f"|format(order.cost_details.production_cost) }} zł</li>
                         <li style="margin-top: 5px;"><strong>RAZEM: {{ "%.2f"|format(order.cost_details.total_cost) }} zł</strong></li>
                     </ul>
                     </td>

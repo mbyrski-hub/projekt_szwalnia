@@ -1,15 +1,12 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1"> <!-- ważne dla responsywności -->
-  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-  <title>{% block title %}Panel Administracyjny Szwalni{% endblock %}</title>
-  <!-- Bootstrap CSS -->
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
-  <!-- Font Awesome Icons -->
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-  <style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1"> <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <title>{% block title %}Panel Administracyjny Szwalni{% endblock %}</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
     /* Krok 1: Definicja palety kolorów za pomocą zmiennych CSS */
     :root {
         --bg-color: #ffffff;
@@ -103,165 +100,155 @@
         background-size: 300px, 300px; /* Możesz dostosować ten rozmiar */
     }
 }
-
 </style>
-  {% block head %}{% endblock %}
+    {% block head %}{% endblock %}
 </head>
 <body>
-  
+    
 <nav class="navbar navbar-expand-lg navbar-dark fixed-top" style="background-color: #0056b3;">
-  <a class="navbar-brand" href="{{ url_for('orders_list') }}">
-    <i class="fas fa-tshirt"></i> Szwalnia
-  </a>
-  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" 
-          aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-    <span class="navbar-toggler-icon"></span>
-  </button>
+    <a class="navbar-brand" href="{{ url_for('orders_list') }}">
+        <i class="fas fa-tshirt"></i> Szwalnia
+    </a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" 
+            aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+    </button>
 
-  <div class="collapse navbar-collapse" id="navbarNav">
-    <ul class="navbar-nav mr-auto">
-      <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('orders_list') }}">
-          <i class="fas fa-list"></i> Zlecenia
-        </a>
-      </li>
-      <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('orders_history') }}"><i class="fas fa-history"></i> Historia zleceń</a>
-                </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('order_templates') }}">
-          <i class="fas fa-bookmark"></i> Szablony
-        </a>
-      </li>
-      
-      <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('reports') }}">
-            <i class="fas fa-chart-pie"></i> Zestawienia
-        </a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('calculator') }}">
-          <i class="fas fa-calculator"></i> Kalkulator
-        </a>
-      </li>
-       <!-- Separator -->
-  <li class="nav-item">
-    <span class="navbar-text mx-3" style="font-size: 1.2rem;">|</span>
-  </li>
-      <li class="nav-item">
-        <!-- Separator -->
-  <li class="nav-item">
-    <span class="navbar-text mx-3" style="font-size: 1.2rem;">|</span>
-  </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('kanban') }}">
-          <i class="fas fa-table-columns"></i> Kto co szyje
-        </a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('krojownia') }}">
-          <i class="fas fa-scissors"></i> Krojownia
-        </a>
-      </li>
-     <!-- Separator -->
-  <li class="nav-item">
-    <span class="navbar-text mx-3" style="font-size: 1.2rem;">|</span>
-  </li>
-   <!-- Separator -->
-  <li class="nav-item">
-    <span class="navbar-text mx-3" style="font-size: 1.2rem;">|</span>
-  </li>
-      
-      <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('products_list') }}">
-            <i class="fas fa-box-open"></i> Produkty
-        </a>
-      </li>
-     
-      <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('materials_management') }}">
-            <i class="fas fa-scroll"></i> Tkaniny&Dodatki
-        </a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('subiekt_mapping') }}">
-            <i class="fas fa-link"></i> Mapowanie Subiekt
-        </a>
-      </li>
-    </ul>
-    </ul>
     <div class="collapse navbar-collapse" id="navbarNav">
-    <ul class="navbar-nav mr-auto">
+        <ul class="navbar-nav mr-auto">
+            <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('orders_list') }}">
+                    <i class="fas fa-list"></i> Zlecenia
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('orders_history') }}"><i class="fas fa-history"></i> Historia zleceń</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('order_templates') }}">
+                    <i class="fas fa-bookmark"></i> Szablony
+                </a>
+            </li>
+            
+            <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('reports') }}">
+                    <i class="fas fa-chart-pie"></i> Zestawienia
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('calculator') }}">
+                    <i class="fas fa-calculator"></i> Kalkulator
+                </a>
+            </li>
+                <li class="nav-item">
+                <span class="navbar-text mx-3" style="font-size: 1.2rem;">|</span>
+            </li>
+            <li class="nav-item">
+                <li class="nav-item">
+                <span class="navbar-text mx-3" style="font-size: 1.2rem;">|</span>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('kanban') }}">
+                    <i class="fas fa-table-columns"></i> Kto co szyje
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('krojownia') }}">
+                    <i class="fas fa-scissors"></i> Krojownia
+                </a>
+            </li>
+            <li class="nav-item">
+                <span class="navbar-text mx-3" style="font-size: 1.2rem;">|</span>
+            </li>
+            <li class="nav-item">
+                <span class="navbar-text mx-3" style="font-size: 1.2rem;">|</span>
+            </li>
+            
+            <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('products_list') }}">
+                    <i class="fas fa-box-open"></i> Produkty
+                </a>
+            </li>
+            
+            <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('materials_management') }}">
+                    <i class="fas fa-scroll"></i> Tkaniny&Dodatki
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('subiekt_mapping') }}">
+                    <i class="fas fa-link"></i> Mapowanie Subiekt
+                </a>
+            </li>
         </ul>
-
-    
-
-    
-</div>
-     <!-- Logo po prawej stronie -->
-     <span class="navbar-text">
-      <img src="{{ url_for('static', filename='uploads/hoxa.png') }}" alt="Logo" style="height: 30px;">
-    </span>
-  </div>
+        <ul class="navbar-nav">
+             <li class="nav-item">
+                <span class="nav-link" id="darkModeToggle" title="Przełącz tryb ciemny/jasny">
+                    <i class="fas fa-moon"></i>
+                </span>
+            </li>
+            <li class="nav-item">
+                <span class="navbar-text">
+                    <img src="{{ url_for('static', filename='uploads/hoxa.png') }}" alt="Logo" style="height: 30px;">
+                </span>
+            </li>
+        </ul>
+    </div>
 </nav>
 
 <div class="container" style="margin-top:75px;">
-  {% if in_progress_orders %}
+    {% if in_progress_orders %}
         {% include '_in_progress_strip.html' %}
     {% endif %}
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for category, message in messages %}
-        <div class="alert alert-{{ category }}" role="alert">
-          <i class="fas fa-info-circle"></i> {{ message }}
-        </div>
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
-  {% block content %}{% endblock %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}" role="alert">
+                    <i class="fas fa-info-circle"></i> {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
 </div>
 
-<!-- Bootstrap JS oraz zależności -->
 <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 
 <script>
     (function() {
         const toggleButton = document.getElementById('darkModeToggle');
-        const sunIcon = '<i class="fas fa-sun"></i>';
-        const moonIcon = '<i class="fas fa-moon"></i>';
+        if (toggleButton) { // Sprawdzamy czy przycisk istnieje
+            const sunIcon = '<i class="fas fa-sun"></i>';
+            const moonIcon = '<i class="fas fa-moon"></i>';
 
-        // Funkcja do ustawiania motywu
-        function setMode(mode) {
-            if (mode === 'dark') {
-                document.body.classList.add('dark-mode');
-                toggleButton.innerHTML = sunIcon;
-                localStorage.setItem('theme', 'dark');
-            } else {
-                document.body.classList.remove('dark-mode');
-                toggleButton.innerHTML = moonIcon;
-                localStorage.setItem('theme', 'light');
+            function setMode(mode) {
+                if (mode === 'dark') {
+                    document.body.classList.add('dark-mode');
+                    toggleButton.innerHTML = sunIcon;
+                    localStorage.setItem('theme', 'dark');
+                } else {
+                    document.body.classList.remove('dark-mode');
+                    toggleButton.innerHTML = moonIcon;
+                    localStorage.setItem('theme', 'light');
+                }
             }
+
+            toggleButton.addEventListener('click', () => {
+                if (document.body.classList.contains('dark-mode')) {
+                    setMode('light');
+                } else {
+                    setMode('dark');
+                }
+            });
+            
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            setMode(savedTheme);
         }
-
-        // Logika kliknięcia w przełącznik
-        toggleButton.addEventListener('click', () => {
-            if (document.body.classList.contains('dark-mode')) {
-                setMode('light');
-            } else {
-                setMode('dark');
-            }
-        });
-
-        // Sprawdź zapisany motyw przy ładowaniu strony
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        setMode(savedTheme);
     })();
 </script>
 
-{% endblock %}
-
+{% block scripts %}{% endblock %}
 </body>
 </html>

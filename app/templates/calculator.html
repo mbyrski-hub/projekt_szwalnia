@@ -80,11 +80,11 @@
 
     <div class="col-lg-4">
         <div class="card">
-            <div class="card-header">Krok 3: Marża i Wynik</div>
+            <div class="card-header">Krok 3: Wynik</div>
             <div class="card-body">
-                <div class="form-group">
+                <div class="form-group" style="display: none;">
                     <label for="marginInput">Marża [%]</label>
-                    <input type="number" id="marginInput" class="form-control calc-input" value="0" step="1">
+                    <input type="number" id="marginInput" class="form-control calc-input" value="15" step="1">
                 </div>
                 <div class="result-box mt-3">
                     <h3>Sugerowana Cena Sprzedaży Netto</h3>
@@ -93,8 +93,8 @@
                     <small class="text-muted">
                         Koszt tkanin: <span id="fabricCost">0.00 zł</span><br>
                         Koszt materiałów: <span id="materialsCost">0.00 zł</span><br>
-                        Koszt produkcji: <span id="prodCost">0.00 zł</span><br>
-                        <strong>Koszt całkowity: <span id="totalCost">0.00 zł</span></strong>
+                        Koszt produkcji (przeliczony): <span id="prodCost">0.00 zł</span><br>
+                        <strong>Koszt całkowity (przed marżą): <span id="totalCost">0.00 zł</span></strong>
                     </small>
                 </div>
             </div>
@@ -188,16 +188,22 @@ document.addEventListener('DOMContentLoaded', function() {
             materialsCost += price * amount;
         });
 
-        const prodPrice = parseFloat(productionPrice.value) || 0;
-        const totalCost = fabricCost + materialsCost + prodPrice;
-        const margin = parseFloat(marginInput.value) || 0;
-        const finalPrice = totalCost * (1 + margin / 100);
+        // ### POCZĄTEK ZMIANY ###
+        const rawProdPrice = parseFloat(productionPrice.value) || 0;
+        
+        // Doliczamy "+2" tylko, gdy koszt produkcji jest większy od zera
+        const adjustedProdPrice = rawProdPrice > 0 ? (rawProdPrice * 2.5) + 2 : 0;
+        
+        const baseSubtotal = adjustedProdPrice + fabricCost + materialsCost;
+        const finalPrice = baseSubtotal * 1.15;
 
+        // Aktualizacja wyświetlanych wartości
         fabricCostEl.textContent = `${fabricCost.toFixed(2)} zł`;
         materialsCostEl.textContent = `${materialsCost.toFixed(2)} zł`;
-        prodCostEl.textContent = `${prodPrice.toFixed(2)} zł`;
-        totalCostEl.textContent = `${totalCost.toFixed(2)} zł`;
+        prodCostEl.textContent = `${adjustedProdPrice.toFixed(2)} zł`;
+        totalCostEl.textContent = `${baseSubtotal.toFixed(2)} zł`; 
         finalPriceEl.textContent = `${finalPrice.toFixed(2)} zł`;
+        // ### KONIEC ZMIANY ###
     }
 
     function addFabricRow(fabricId = null, usage = '0.0') {
@@ -239,16 +245,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (productId === 'custom') {
             productionPrice.value = "0.0";
-            addFabricRow(); // Dodaj jeden pusty wiersz
+            addFabricRow();
         } else {
             const data = productsData[productId];
             productionPrice.value = data.production_price || 0.0;
             
-            // --- ZMIANA: Dodawanie wielu tkanin z produktu ---
             if (data.fabrics_needed && data.fabrics_needed.length > 0) {
                 data.fabrics_needed.forEach(fabric => addFabricRow(fabric.id, fabric.usage));
             } else {
-                addFabricRow(); // Dodaj pusty, jeśli produkt nie ma zdefiniowanych
+                addFabricRow(); 
             }
 
             data.materials_needed.forEach(material => addMaterialRow(material.id, material.quantity));
@@ -261,7 +266,6 @@ document.addEventListener('DOMContentLoaded', function() {
     addFabricBtn.addEventListener('click', () => addFabricRow());
     addMaterialBtn.addEventListener('click', () => addMaterialRow());
     
-    // Delegacja do usuwania wierszy
     document.body.addEventListener('click', e => {
         if (e.target.closest('.remove-btn')) {
             e.target.closest('.form-row').remove();
