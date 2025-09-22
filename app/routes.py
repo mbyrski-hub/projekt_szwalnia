@@ -1332,3 +1332,6 @@ def download_config():
         as_attachment=True
     )
 
+@app.route('/print_test')
+def print_test():
+    return render_template('print_test.html', title='Test Drukowania')

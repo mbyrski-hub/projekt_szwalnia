@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Test Drukowania{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2><i class="fas fa-print"></i> Test Drukowania Etykiety</h2>
+    <p>Ta strona pozwala przetestować komunikację z lokalnym serwerem drukowania.</p>
+    
+    <div class="card mt-4">
+        <div class="card-body">
+            <div class="form-group">
+                <label for="printServerIp"><strong>Krok 1:</strong> Wpisz adres IP serwera drukowania</label>
+                <input type="text" class="form-control" id="printServerIp" placeholder="np. http://192.168.1.100:5001">
+                <small class="form-text text-muted">Adres, który widzisz w okienku serwera na swoim komputerze. Zostanie zapamiętany w przeglądarce.</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="imageFile"><strong>Krok 2:</strong> Wybierz obrazek do wydruku</label>
+                <input type="file" class="form-control-file" id="imageFile" accept="image/jpeg, image/png">
+            </div>
+            
+            <button id="printButton" class="btn btn-primary btn-lg mt-3"><i class="fas fa-print"></i> Drukuj Etykietę</button>
+            
+            <div id="status" class="mt-3"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const printServerIpInput = document.getElementById('printServerIp');
+    const printButton = document.getElementById('printButton');
+    const fileInput = document.getElementById('imageFile');
+    const statusDiv = document.getElementById('status');
+    
+    // Załaduj zapisany adres IP przy starcie strony
+    const savedIp = localStorage.getItem('printServerIp');
+    if (savedIp) {
+        printServerIpInput.value = savedIp;
+    }
+
+    printButton.addEventListener('click', function() {
+        const currentIp = printServerIpInput.value.trim();
+        
+        // Sprawdź, czy adres IP został wpisany
+        if (!currentIp) {
+            statusDiv.innerHTML = '<div class="alert alert-danger">Proszę wpisać adres IP serwera drukowania.</div>';
+            return;
+        }
+
+        // Zapisz wpisany adres IP do pamięci przeglądarki
+        localStorage.setItem('printServerIp', currentIp);
+
+        if (fileInput.files.length === 0) {
+            statusDiv.innerHTML = '<div class="alert alert-danger">Proszę wybrać plik.</div>';
+            return;
+        }
+        
+        const file = fileInput.files[0];
+        const formData = new FormData();
+        formData.append('image', file);
+        
+        const printServerUrl = `${currentIp}/print_label`;
+        
+        statusDiv.innerHTML = '<div class="alert alert-info">Wysyłanie do drukarki...</div>';
+        
+        fetch(printServerUrl, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                // Spróbuj odczytać błąd z odpowiedzi serwera, jeśli jest dostępny
+                return response.json().then(errData => {
+                    throw new Error(errData.error || `Błąd serwera: ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.status) {
+                statusDiv.innerHTML = `<div class="alert alert-success"><strong>Sukces!</strong> ${data.status}</div>`;
+            } else {
+                statusDiv.innerHTML = `<div class="alert alert-danger"><strong>Błąd:</strong> ${data.error}</div>`;
+            }
+        })
+        .catch(error => {
+            console.error('Błąd:', error);
+            statusDiv.innerHTML = `<div class="alert alert-danger"><strong>Błąd komunikacji z serwerem drukowania.</strong><br>Sprawdź, czy serwer jest uruchomiony, czy adres IP jest poprawny i czy nie blokuje go antywirus/firewall.</div>`;
+        });
+    });
+});
+</script>
+{% endblock %}
