@@ -4,21 +4,21 @@ import socket
 import threading
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from PIL import Image, ImageWin, ImageDraw
+from PIL import Image, ImageDraw
 import io
 import win32print
-import win32ui
-import win32con
 import sys
 import datetime
 import logging
 import os
 import pystray
 import win32com.client
+from zebrafy import ZebrafyImage
 
 # --- Konfiguracja ---
 HOST = '0.0.0.0'
 PORT = 5001
+PRINTER_DPI = 203 # Nie zmieniamy, to stała wartość dla drukarki
 APP_NAME = "SerwerDrukuSzwalnia"
 
 # --- Zmienne globalne ---
@@ -45,7 +45,7 @@ def get_available_printers():
     except Exception as e:
         messagebox.showerror("Błąd Drukarek", f"Nie można było pobrać listy drukarek: {e}")
         return []
-        
+
 # ... (funkcje autostartu bez zmian) ...
 def get_startup_folder():
     return os.path.join(os.path.expanduser('~'), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
@@ -71,9 +71,9 @@ def remove_shortcut_from_startup(shortcut_name):
         return True
     return False
 
-
 # --- Logika Aplikacji ---
 class LogHandler:
+    # ... (bez zmian) ...
     def __init__(self, text_widget):
         self.text_widget = text_widget
     def write(self, message):
@@ -102,58 +102,48 @@ def print_label():
     if 'image' not in request.files:
         return jsonify({'error': 'Brak pliku obrazu'}), 400
 
+    # ### POCZĄTEK POPRAWKI ###
+    # Odczytujemy wymiary z przesłanego formularza
     try:
         width_mm = float(request.form.get('width_mm'))
         height_mm = float(request.form.get('height_mm'))
     except (TypeError, ValueError):
         return jsonify({'error': 'Brak lub niepoprawne wymiary etykiety w żądaniu.'}), 400
+    # ### KONIEC POPRAWKI ###
     
     try:
         img_bytes = request.files['image'].read()
         log_handler.write(f"Odebrano plik ({len(img_bytes)} bajtów) z wymiarami: {width_mm}x{height_mm}mm")
         
-        # ### POCZĄTEK NOWEJ LOGIKI DRUKOWANIA PRZEZ STEROWNIK ###
-        log_handler.write("Rozpoczynanie drukowania przez sterownik Windows (GDI)...")
+        # Obliczamy wymiary w "kropkach"
+        print_width_dots = int((width_mm / 25.4) * PRINTER_DPI)
+        label_height_dots = int((height_mm / 25.4) * PRINTER_DPI)
+
+        log_handler.write(f"Wymiary w kropkach: {print_width_dots}x{label_height_dots} przy {PRINTER_DPI} DPI")
         
+        # Tworzymy nagłówek ZPL z komendami konfiguracyjnymi
+        zpl_header = f"""
+        ^XA
+        ^PW{print_width_dots}
+        ^LL{label_height_dots}
+        """
+
+        z_image = ZebrafyImage(img_bytes)
+        image_zpl = z_image.to_zpl().replace("^XA", "").replace("^XZ", "")
+        zpl_code = zpl_header + image_zpl + "^XZ"
+        # ### POCZĄTEK ZMIANY - TUTAJ WKLEJ LINIĘ ###
+        log_handler.write(f"--- KOD ZPL DO WERYFIKACJI ---\n{zpl_code}\n---------------------------------")
+        # ### KONIEC ZMIANY ###
+        log_handler.write(f"Wysyłanie do drukarki: {selected_printer}...")
         h_printer = win32print.OpenPrinter(selected_printer)
         try:
-            # Tworzymy "kontekst urządzenia" (DC), czyli obszar roboczy dla drukarki
-            printer_dc = win32ui.CreateDC()
-            printer_dc.CreatePrinterDC(selected_printer)
-            
-            # Pobieramy DPI drukarki ze sterownika
-            printer_dpi_x = printer_dc.GetDeviceCaps(win32con.LOGPIXELSX)
-            printer_dpi_y = printer_dc.GetDeviceCaps(win32con.LOGPIXELSY)
-            log_handler.write(f"DPI sterownika: {printer_dpi_x}x{printer_dpi_y}")
-            
-            # Przeliczamy wymiary z mm na piksele drukarki
-            width_px = int(width_mm * printer_dpi_x / 25.4)
-            height_px = int(height_mm * printer_dpi_y / 25.4)
-            log_handler.write(f"Wymiary wydruku w pikselach: {width_px}x{height_px}")
-
-            # Otwieramy obrazek za pomocą biblioteki Pillow
-            image = Image.open(io.BytesIO(img_bytes))
-            
-            # Konwertujemy obrazek do formatu bitmapy, który Windows potrafi narysować
-            dib = ImageWin.Dib(image)
-
-            # Rozpoczynamy "dokument" do drukowania
-            printer_dc.StartDoc("Etykieta ze Szwalni")
-            printer_dc.StartPage()
-            
-            # Rysujemy obrazek na "kartce" (etykiecie), rozciągając go do zadanych wymiarów
-            dib.draw(printer_dc.GetHandleOutput(), (0, 0, width_px, height_px))
-            
-            # Kończymy stronę i dokument
-            printer_dc.EndPage()
-            printer_dc.EndDoc()
-            
-            log_handler.write("Wydruk wysłany pomyślnie przez sterownik!")
-            
+            win32print.StartDocPrinter(h_printer, 1, ("Label ZPL", None, "RAW"))
+            win32print.WritePrinter(h_printer, zpl_code.encode())
+            win32print.EndDocPrinter(h_printer)
         finally:
             win32print.ClosePrinter(h_printer)
-        # ### KONIEC NOWEJ LOGIKI DRUKOWANIA ###
         
+        log_handler.write("Wydruk wysłany pomyślnie!")
         return jsonify({'status': 'Wydrukowano pomyślnie'})
         
     except Exception as e:
