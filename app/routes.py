@@ -1353,3 +1353,7 @@ def delete_product_image(image_id):
     db.session.commit()
     flash('Zdjęcie zostało usunięte.', 'success')
     return redirect(url_for('edit_product', product_id=product_id))
+
+@app.route('/download_print_server')
+def download_print_server():
+    return send_from_directory('static/synchronizator', 'SerwerDrukuSzwalnia.exe', as_attachment=True)

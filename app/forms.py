@@ -1,8 +1,24 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, DateField, SelectField, FieldList, FormField, SubmitField, BooleanField, IntegerField, FloatField
-from wtforms.validators import DataRequired, NumberRange, Optional
+from wtforms import StringField, TextAreaField, DateField, SelectField, FieldList, FormField, SubmitField, BooleanField, IntegerField, FloatField, DecimalField
+from wtforms.validators import DataRequired, NumberRange, Optional, Length
 from wtforms import Form
 from flask_wtf.file import FileField, FileAllowed, MultipleFileField
+
+# --- POCZĄTEK NOWEGO KODU ---
+# Klasa CustomDecimalField, która obsługuje przecinki jako separatory
+class CustomDecimalField(DecimalField):
+    """
+    Niestandardowe pole DecimalField, które automatycznie konwertuje
+    przecinki na kropki, umożliwiając walidację obu formatów.
+    """
+    def process_formdata(self, valuelist):
+        if valuelist:
+            # Zamień przecinek na kropkę w wartości przesłanej z formularza
+            valuelist[0] = str(valuelist[0]).replace(',', '.')
+        return super(CustomDecimalField, self).process_formdata(valuelist)
+
+# --- KONIEC NOWEGO KODU ---
+
 
 # --- NOWY, MAŁY FORMULARZ DO WYBORU TKANINY ---
 class FabricSelectionForm(Form):
@@ -68,7 +84,7 @@ class ProductForm(FlaskForm):
     name = StringField('Nazwa produktu', validators=[DataRequired()])
     description = TextAreaField('Opis produktu (opcjonalnie)')
     category_id = SelectField('Kategoria', coerce=int, validators=[Optional()])
-    production_price = FloatField('Cena Produkcji (np. robocizna)', validators=[DataRequired(), NumberRange(min=0)])
+    production_price = CustomDecimalField('Cena Produkcji (np. robocizna)', places=2, validators=[DataRequired(), NumberRange(min=0)])
     images = MultipleFileField('Dodaj zdjęcia (można wybrać kilka)', validators=[
         FileAllowed(['jpg', 'png', 'jpeg'], 'Dozwolone są tylko pliki graficzne!')
     ])
@@ -81,18 +97,18 @@ class ProductForm(FlaskForm):
 
 class FabricForm(FlaskForm):
     name = StringField('Nazwa tkaniny', validators=[DataRequired()])
-    price = FloatField('Cena netto (opcjonalnie)', validators=[Optional()])
+    price = CustomDecimalField('Cena netto (opcjonalnie)', places=2, validators=[Optional()])
     submit = SubmitField('Zapisz')
 
 class MaterialForm(FlaskForm):
     name = StringField('Nazwa materiału', validators=[DataRequired()])
-    price = FloatField('Cena netto (opcjonalnie)', validators=[Optional()])
+    price = CustomDecimalField('Cena netto (opcjonalnie)', places=2, validators=[Optional()])
     submit = SubmitField('Zapisz')
 
 class MaterialEditForm(FlaskForm):
     name = StringField('Nazwa', validators=[DataRequired()])
     subiekt_symbol = StringField('Symbol Subiekt (opcjonalnie)')
-    price = FloatField('Cena netto (opcjonalnie)', validators=[Optional()])
+    price = CustomDecimalField('Cena netto (opcjonalnie)', places=2, validators=[Optional()])
     material_type = SelectField('Typ', choices=[
         ('fabric', 'Tkanina'),
         ('material', 'Materiał Dodatkowy')
