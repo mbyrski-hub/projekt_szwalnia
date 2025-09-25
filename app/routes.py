@@ -3,7 +3,7 @@ from app import app, db
 from app.models import (Order, Client, Product, OrderItem, Attachment,
                         OrderTemplate, Fabric, MaterialUsage, ProductMaterial,
                         SubiektProductCache, Material, ProductCategory,
-                        OrderFabric, TemplateFabric, ProductFabric, SystemInfo)
+                        OrderFabric, TemplateFabric, ProductFabric, SystemInfo, ProductImage)
 from app.forms import (OrderForm, OrderTemplateForm, ProductForm, FabricForm,
                        MaterialForm, ProductCategoryForm, MaterialEditForm)
 from werkzeug.utils import secure_filename
@@ -22,7 +22,7 @@ import io
 import pandas as pd
 import json
 import math
-from .drive_service import upload_image_to_drive
+from .drive_service import upload_image_to_drive, delete_image_from_drive
 
 if platform.system() == 'Windows':
     config = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
@@ -397,19 +397,24 @@ def add_product():
     for f_form in form.fabrics_needed:
         f_form.fabric_id.choices = fabric_choices
     if form.validate_on_submit():
-        # ### POCZĄTEK MODYFIKACJI DLA GOOGLE DRIVE ###
-        drive_image_id = None  # Używamy nowej zmiennej
-        if form.image.data:
-            # Zamiast zapisywać lokalnie, wysyłamy na Dysk Google
-            drive_image_id = upload_image_to_drive(form.image.data)
-        # ### KONIEC MODYFIKACJI ###
         new_product = Product(
-            name=form.name.data.strip().upper(), description=form.description.data.strip(),
+            name=form.name.data.strip().upper(),
+            description=form.description.data.strip(),
             production_price=form.production_price.data,
-            category_id=form.category_id.data if form.category_id.data != 0 else None,
-            image_id=drive_image_id  # <-- Dodane
+            category_id=form.category_id.data if form.category_id.data != 0 else None
         )
         db.session.add(new_product)
+
+        # --- NOWA LOGIKA DLA WIELU ZDJĘĆ ---
+        if form.images.data:
+            for image_file in form.images.data:
+                if image_file.filename: # Sprawdzenie, czy plik nie jest pusty
+                    drive_image_id = upload_image_to_drive(image_file)
+                    if drive_image_id:
+                        new_image = ProductImage(image_id=drive_image_id, product=new_product)
+                        db.session.add(new_image)
+        # --- KONIEC NOWEJ LOGIKI ---
+
         for fabric_data in form.fabrics_needed.data:
             db.session.add(ProductFabric(product=new_product, fabric_id=fabric_data['fabric_id'], usage_meters=fabric_data['usage_meters']))
         for material_data in form.materials_needed.data:
@@ -443,12 +448,15 @@ def edit_product(product_id):
         f_form.fabric_id.choices = fabric_choices
 
     if form.validate_on_submit():
-        # ### POCZĄTEK MODYFIKACJI DLA GOOGLE DRIVE ###
-        if form.image.data:
-            # Jeśli użytkownik wgrał nowy obrazek, wyślij go na Dysk
-            drive_image_id = upload_image_to_drive(form.image.data)
-            product.image_id = drive_image_id # Zaktualizuj pole image_id
-        # ### KONIEC MODYFIKACJI ###
+        # --- NOWA LOGIKA DLA WIELU ZDJĘĆ ---
+        if form.images.data:
+            for image_file in form.images.data:
+                if image_file.filename:
+                    drive_image_id = upload_image_to_drive(image_file)
+                    if drive_image_id:
+                        new_image = ProductImage(image_id=drive_image_id, product_id=product.id)
+                        db.session.add(new_image)
+        # --- KONIEC NOWEJ LOGIKI ---
 
         product.name = form.name.data.strip().upper()
         product.description = form.description.data.strip()
@@ -1335,3 +1343,13 @@ def download_config():
 @app.route('/print_test')
 def print_test():
     return render_template('print_test.html', title='Test Drukowania')
+
+@app.route('/products/delete_image/<int:image_id>', methods=['POST'])
+def delete_product_image(image_id):
+    image_to_delete = ProductImage.query.get_or_404(image_id)
+    product_id = image_to_delete.product_id
+    delete_image_from_drive(image_to_delete.image_id)
+    db.session.delete(image_to_delete)
+    db.session.commit()
+    flash('Zdjęcie zostało usunięte.', 'success')
+    return redirect(url_for('edit_product', product_id=product_id))

@@ -67,3 +67,18 @@ def upload_image_to_drive(file_storage):
     })
     
     return drive_file['id']
+
+def delete_image_from_drive(image_id):
+    """
+    Usuwa plik o podanym ID z Google Drive.
+    """
+    try:
+        drive = get_drive_service()
+        drive_file = drive.CreateFile({'id': image_id})
+        drive_file.Delete() # To jest polecenie usunięcia pliku
+        return True
+    except Exception as e:
+        # W konsoli serwera pojawi się informacja o błędzie,
+        # ale aplikacja będzie działać dalej.
+        print(f"Błąd podczas usuwania pliku {image_id} z Google Drive: {e}")
+        return False

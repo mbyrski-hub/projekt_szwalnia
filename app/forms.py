@@ -2,7 +2,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField, DateField, SelectField, FieldList, FormField, SubmitField, BooleanField, IntegerField, FloatField
 from wtforms.validators import DataRequired, NumberRange, Optional
 from wtforms import Form
-from flask_wtf.file import FileField, FileAllowed
+from flask_wtf.file import FileField, FileAllowed, MultipleFileField
 
 # --- NOWY, MAŁY FORMULARZ DO WYBORU TKANINY ---
 class FabricSelectionForm(Form):
@@ -69,7 +69,9 @@ class ProductForm(FlaskForm):
     description = TextAreaField('Opis produktu (opcjonalnie)')
     category_id = SelectField('Kategoria', coerce=int, validators=[Optional()])
     production_price = FloatField('Cena Produkcji (np. robocizna)', validators=[DataRequired(), NumberRange(min=0)])
-    image = FileField('Zdjęcie produktu', validators=[FileAllowed(['jpg', 'png', 'jpeg'], 'Tylko obrazki!')])
+    images = MultipleFileField('Dodaj zdjęcia (można wybrać kilka)', validators=[
+        FileAllowed(['jpg', 'png', 'jpeg'], 'Dozwolone są tylko pliki graficzne!')
+    ])
     # --- ZMIANA: usunięcie starego pola, dodanie nowego ---
     # fabric_usage_meters = FloatField('Zużycie tkaniny (w metrach)', validators=[DataRequired(), NumberRange(min=0)])
     fabrics_needed = FieldList(FormField(ProductFabricForm), min_entries=0)

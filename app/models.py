@@ -86,14 +86,18 @@ class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
     description = db.Column(db.Text, nullable=True) 
-    
+
     production_price = db.Column(db.Float, nullable=False, default=0.0)
-    image_id = db.Column(db.String(100), nullable=True) # dla google drive
+    # USUŃ TĘ LINIĘ:
+    # image_id = db.Column(db.String(100), nullable=True) 
+
     category_id = db.Column(db.Integer, db.ForeignKey('product_category.id'), nullable=True)
     category = db.relationship('ProductCategory', backref='products')
-    
-    fabrics_needed = db.relationship('ProductFabric', backref='product', lazy=True, cascade="all, delete-orphan")
 
+    # DODAJ TĘ LINIĘ:
+    images = db.relationship('ProductImage', backref='product', lazy=True, cascade="all, delete-orphan")
+
+    fabrics_needed = db.relationship('ProductFabric', backref='product', lazy=True, cascade="all, delete-orphan")
     materials_needed = db.relationship('ProductMaterial', backref='product', lazy=True, cascade="all, delete-orphan")
     order_items = db.relationship('OrderItem', backref='product')
 
@@ -105,6 +109,14 @@ class Product(db.Model):
 
     def __repr__(self):
         return f'<Product {self.name}>'
+    
+class ProductImage(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    image_id = db.Column(db.String(100), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+
+    def __repr__(self):
+        return f'<ProductImage {self.image_id}>'
 
 class OrderItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)

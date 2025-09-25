@@ -1,22 +1,69 @@
 {% extends "base.html" %}
-{% block title %}Test Drukowania{% endblock %}
+{% block title %}Test Drukowania z Podglądem{% endblock %}
+
+{% block head %}
+<style>
+    #preview-box {
+        border: 2px dashed #ccc;
+        padding: 10px;
+        margin-top: 20px;
+        min-height: 100px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: #f8f9fa;
+    }
+    #preview-image {
+        max-width: 100%;
+        max-height: 300px;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="container">
-    <h2><i class="fas fa-print"></i> Test Drukowania Etykiety</h2>
-    <p>Ta strona pozwala przetestować komunikację z lokalnym serwerem drukowania.</p>
+    <h2><i class="fas fa-print"></i> Test Drukowania Etykiety z Podglądem</h2>
+    <p>Wybierz obraz, ustaw wymiary oraz liczbę kopii i zobacz podgląd przed wysłaniem do drukarki.</p>
     
     <div class="card mt-4">
         <div class="card-body">
             <div class="form-group">
-                <label for="printServerIp"><strong>Krok 1:</strong> Wpisz adres IP serwera drukowania</label>
+                <label for="printServerIp"><strong>Krok 1:</strong> Adres IP serwera drukowania</label>
                 <input type="text" class="form-control" id="printServerIp" placeholder="np. http://192.168.1.100:5001">
-                <small class="form-text text-muted">Adres, który widzisz w okienku serwera na swoim komputerze. Zostanie zapamiętany w przeglądarce.</small>
+                <small class="form-text text-muted">Adres zostanie zapamiętany w przeglądarce.</small>
             </div>
             
+            <hr>
+
             <div class="form-group">
-                <label for="imageFile"><strong>Krok 2:</strong> Wybierz obrazek do wydruku</label>
+                <label for="imageFile"><strong>Krok 2:</strong> Wybierz obrazek</label>
                 <input type="file" class="form-control-file" id="imageFile" accept="image/jpeg, image/png">
+            </div>
+
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="labelWidth">Szerokość [mm]</label>
+                        <input type="number" class="form-control" id="labelWidth" value="50">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="labelHeight">Wysokość [mm]</label>
+                        <input type="number" class="form-control" id="labelHeight" value="30">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="labelQuantity">Ilość kopii</label>
+                        <input type="number" class="form-control" id="labelQuantity" value="1" min="1">
+                    </div>
+                </div>
+                </div>
+
+            <div id="preview-box">
+                <img id="preview-image" src="#" alt="Podgląd etykiety" style="display: none;">
+                <span id="preview-text">Wybierz plik, aby zobaczyć podgląd</span>
             </div>
             
             <button id="printButton" class="btn btn-primary btn-lg mt-3"><i class="fas fa-print"></i> Drukuj Etykietę</button>
@@ -34,23 +81,44 @@ document.addEventListener('DOMContentLoaded', function() {
     const printButton = document.getElementById('printButton');
     const fileInput = document.getElementById('imageFile');
     const statusDiv = document.getElementById('status');
+    const widthInput = document.getElementById('labelWidth');
+    const heightInput = document.getElementById('labelHeight');
+    const quantityInput = document.getElementById('labelQuantity'); // <-- Nowy element
+    const previewImage = document.getElementById('preview-image');
+    const previewText = document.getElementById('preview-text');
+
+    function updatePreview() {
+        if (fileInput.files.length > 0) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewImage.src = e.target.result;
+                previewImage.style.display = 'block';
+                previewText.style.display = 'none';
+            };
+            reader.readAsDataURL(fileInput.files[0]);
+        } else {
+            previewImage.style.display = 'none';
+            previewText.style.display = 'block';
+        }
+    }
+
+    fileInput.addEventListener('change', updatePreview);
     
-    // Załaduj zapisany adres IP przy starcie strony
     const savedIp = localStorage.getItem('printServerIp');
     if (savedIp) {
         printServerIpInput.value = savedIp;
     }
 
     printButton.addEventListener('click', function() {
-        const currentIp = printServerIpInput.value.trim();
-        
-        // Sprawdź, czy adres IP został wpisany
+        let currentIp = printServerIpInput.value.trim();
         if (!currentIp) {
             statusDiv.innerHTML = '<div class="alert alert-danger">Proszę wpisać adres IP serwera drukowania.</div>';
             return;
         }
-
-        // Zapisz wpisany adres IP do pamięci przeglądarki
+        if (!currentIp.startsWith('http://')) {
+            currentIp = 'http://' + currentIp.replace(/^https?:\/\//, '');
+            printServerIpInput.value = currentIp;
+        }
         localStorage.setItem('printServerIp', currentIp);
 
         if (fileInput.files.length === 0) {
@@ -61,8 +129,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const file = fileInput.files[0];
         const formData = new FormData();
         formData.append('image', file);
+        formData.append('width_mm', widthInput.value);
+        formData.append('height_mm', heightInput.value);
+        formData.append('quantity', quantityInput.value); // <-- Dodajemy ilość do formularza
         
-        const printServerUrl = `${currentIp}/print_label`;
+        const printServerUrl = `${currentIp.replace(/\/$/, '')}/print_label`;
         
         statusDiv.innerHTML = '<div class="alert alert-info">Wysyłanie do drukarki...</div>';
         
@@ -72,10 +143,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => {
             if (!response.ok) {
-                // Spróbuj odczytać błąd z odpowiedzi serwera, jeśli jest dostępny
-                return response.json().then(errData => {
-                    throw new Error(errData.error || `Błąd serwera: ${response.status}`);
-                });
+                return response.json().then(errData => { throw new Error(errData.error || `Błąd serwera: ${response.status}`); });
             }
             return response.json();
         })
@@ -88,7 +156,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(error => {
             console.error('Błąd:', error);
-            statusDiv.innerHTML = `<div class="alert alert-danger"><strong>Błąd komunikacji z serwerem drukowania.</strong><br>Sprawdź, czy serwer jest uruchomiony, czy adres IP jest poprawny i czy nie blokuje go antywirus/firewall.</div>`;
+            statusDiv.innerHTML = `<div class="alert alert-danger"><strong>Błąd komunikacji z serwerem drukowania.</strong><br>1. Sprawdź, czy serwer jest uruchomiony.<br>2. Sprawdź, czy adres IP jest poprawny.<br>3. Upewnij się, że zezwoliłeś na "niebezpieczną treść" w ustawieniach przeglądarki dla tej strony.</div>`;
         });
     });
 });

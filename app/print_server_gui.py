@@ -46,7 +46,6 @@ def get_available_printers():
         messagebox.showerror("Błąd Drukarek", f"Nie można było pobrać listy drukarek: {e}")
         return []
         
-# ... (funkcje autostartu bez zmian) ...
 def get_startup_folder():
     return os.path.join(os.path.expanduser('~'), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
 
@@ -105,56 +104,52 @@ def print_label():
     try:
         width_mm = float(request.form.get('width_mm'))
         height_mm = float(request.form.get('height_mm'))
+        # ### POCZĄTEK NOWEJ ZMIANY ###
+        # Odczytujemy liczbę kopii z formularza, z wartością domyślną 1
+        quantity = int(request.form.get('quantity', 1))
+        # ### KONIEC NOWEJ ZMIANY ###
     except (TypeError, ValueError):
-        return jsonify({'error': 'Brak lub niepoprawne wymiary etykiety w żądaniu.'}), 400
+        return jsonify({'error': 'Brak lub niepoprawne wymiary/ilość w żądaniu.'}), 400
     
     try:
         img_bytes = request.files['image'].read()
-        log_handler.write(f"Odebrano plik ({len(img_bytes)} bajtów) z wymiarami: {width_mm}x{height_mm}mm")
+        log_handler.write(f"Odebrano plik ({len(img_bytes)} bajtów) | Wymiary: {width_mm}x{height_mm}mm | Ilość: {quantity}")
         
-        # ### POCZĄTEK NOWEJ LOGIKI DRUKOWANIA PRZEZ STEROWNIK ###
         log_handler.write("Rozpoczynanie drukowania przez sterownik Windows (GDI)...")
         
         h_printer = win32print.OpenPrinter(selected_printer)
         try:
-            # Tworzymy "kontekst urządzenia" (DC), czyli obszar roboczy dla drukarki
             printer_dc = win32ui.CreateDC()
             printer_dc.CreatePrinterDC(selected_printer)
             
-            # Pobieramy DPI drukarki ze sterownika
             printer_dpi_x = printer_dc.GetDeviceCaps(win32con.LOGPIXELSX)
             printer_dpi_y = printer_dc.GetDeviceCaps(win32con.LOGPIXELSY)
             log_handler.write(f"DPI sterownika: {printer_dpi_x}x{printer_dpi_y}")
             
-            # Przeliczamy wymiary z mm na piksele drukarki
             width_px = int(width_mm * printer_dpi_x / 25.4)
             height_px = int(height_mm * printer_dpi_y / 25.4)
             log_handler.write(f"Wymiary wydruku w pikselach: {width_px}x{height_px}")
 
-            # Otwieramy obrazek za pomocą biblioteki Pillow
             image = Image.open(io.BytesIO(img_bytes))
-            
-            # Konwertujemy obrazek do formatu bitmapy, który Windows potrafi narysować
             dib = ImageWin.Dib(image)
 
-            # Rozpoczynamy "dokument" do drukowania
-            printer_dc.StartDoc("Etykieta ze Szwalni")
-            printer_dc.StartPage()
+            # ### POCZĄTEK NOWEJ ZMIANY ###
+            # Używamy pętli, aby wysłać zadanie drukowania wymaganą liczbę razy
+            for i in range(quantity):
+                log_handler.write(f"Drukowanie kopii {i + 1} z {quantity}...")
+                printer_dc.StartDoc(f"Etykieta {i+1}/{quantity}")
+                printer_dc.StartPage()
+                dib.draw(printer_dc.GetHandleOutput(), (0, 0, width_px, height_px))
+                printer_dc.EndPage()
+                printer_dc.EndDoc()
+            # ### KONIEC NOWEJ ZMIANY ###
             
-            # Rysujemy obrazek na "kartce" (etykiecie), rozciągając go do zadanych wymiarów
-            dib.draw(printer_dc.GetHandleOutput(), (0, 0, width_px, height_px))
-            
-            # Kończymy stronę i dokument
-            printer_dc.EndPage()
-            printer_dc.EndDoc()
-            
-            log_handler.write("Wydruk wysłany pomyślnie przez sterownik!")
+            log_handler.write("Wszystkie kopie wysłane pomyślnie przez sterownik!")
             
         finally:
             win32print.ClosePrinter(h_printer)
-        # ### KONIEC NOWEJ LOGIKI DRUKOWANIA ###
         
-        return jsonify({'status': 'Wydrukowano pomyślnie'})
+        return jsonify({'status': f'Wydrukowano pomyślnie {quantity} kopii.'})
         
     except Exception as e:
         log_handler.write(f"KRYTYCZNY BŁĄD PODCZAS DRUKOWANIA: {e}")
@@ -162,7 +157,6 @@ def print_label():
 
 # --- Interfejs Graficzny (GUI Tkinter) ---
 class PrintServerApp:
-    # ... (cała reszta klasy GUI pozostaje bez zmian) ...
     def __init__(self, root):
         self.root = root
         self.root.title("Lokalny Serwer Drukowania Etykiet")
