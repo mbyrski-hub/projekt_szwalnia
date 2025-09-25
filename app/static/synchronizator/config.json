@@ -1,8 +1,0 @@
-{
-    "server": "HOXA-SERWER\\INSERTNEXO",
-    "database": "Nexo_HOXA",
-    "sql_user": "sa",
-    "sql_password": "",
-    "web_app_url": "http://szwalnia.pythonanywhere.com",
-    "api_key": "jYHGYSjdsaj86H28299as1237f"
-}
