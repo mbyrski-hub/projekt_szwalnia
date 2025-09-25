@@ -17,18 +17,14 @@
             margin-bottom: 20px;
             background-color: #f9f9f9;
         }
-        /* Styl do łamania strony */
-        .page-break {
-            page-break-before: always;
-        }
         .image-container {
-            text-align: center;
+            margin-top: 15px;
+            text-align: center; /* Wycentrowanie obrazków */
         }
         .image-container img {
-            max-width: 90%; 
-            max-height: 40vh;
-            margin: 10px auto; 
-            display: block;
+            max-width: 200px; /* Zmniejszenie obrazków dla lepszego układu */
+            margin: 10px;
+            vertical-align: top;
         }
     </style>
 </head>
@@ -97,21 +93,20 @@
     </table>
     {% endif %}
 
-    {# --- NOWA SEKCJA NA ZDJĘCIA --- #}
+    {# --- SEKCJA ZE ZDJĘCIAMI (BEZ NOWYCH STRON) --- #}
     {% if with_images %}
-        {# Grupuj produkty, aby uniknąć powtórzeń #}
-        {% for group in order.order_items | groupby('product.name') %}
+        <h2>Zdjęcia Produktów</h2>
+        {# Grupujemy po nazwie produktu, aby uniknąć duplikatów #}
+        {% for group in order.order_items|groupby('product.name') %}
             {% set product = group.list[0].product %}
             {% if product and product.images %}
-                {# Dodaj przełamanie strony dla każdego nowego produktu #}
-                <div class="page-break">
-                    <h2>Zdjęcia: {{ product.name }}</h2>
-                    <div class="image-container">
-                    {% for image in product.images %}
-                        <img src="https://drive.google.com/thumbnail?id={{ image.image_id }}&sz=w800">
-                    {% endfor %}
-                    </div>
+                <h3>{{ product.name }}</h3>
+                <div class="image-container">
+                {% for image in product.images %}
+                    <img src="https://drive.google.com/thumbnail?id={{ image.image_id }}&sz=w400">
+                {% endfor %}
                 </div>
+                <hr>
             {% endif %}
         {% endfor %}
     {% endif %}
