@@ -15,9 +15,15 @@
         width: 1%; /* Zapobiega rozciąganiu się kolumny */
     }
 
-    #productImage {
-        max-height: 70vh; /* Ogranicza wysokość obrazka do 70% wysokości okna przeglądarki */
-        max-width: 100%;  /* Zapewnia, że obrazek nie będzie szerszy niż modal */
+    #imageCarousel .carousel-item img {
+        max-height: 70vh; /* Ogranicza wysokość obrazka */
+        object-fit: contain; /* Zachowuje proporcje, dopasowując obraz do ramki */
+    }
+
+    .carousel-control-prev-icon,
+    .carousel-control-next-icon {
+        background-color: rgba(0, 0, 0, 0.5);
+        border-radius: 50%;
     }
 </style>
 {% endblock %}
@@ -86,28 +92,28 @@
                         {% endif %}
                     </td>
                    <td class="actions-cell text-right">
-    {% if product.images %}
-        {# Aktywna ikonka, gdy obrazek istnieje #}
-        <button class="btn btn-info btn-sm view-image-btn"
-                data-toggle="modal"
-                data-target="#imageModal"
-                data-image-url="https://drive.google.com/thumbnail?id={{ product.images[0].image_id }}&sz=w1000"
-                data-product-name="{{ product.name }}"
-                title="Pokaż zdjęcie">
-            <i class="fas fa-image"></i>
-        </button>
-    {% else %}
-        {# Nieaktywna ikonka, gdy obrazka nie ma #}
-        <button class="btn btn-secondary btn-sm" disabled style="opacity: 0.5;" title="Brak zdjęcia">
-            <i class="fas fa-image"></i>
-        </button>
-    {% endif %}
-    
-    <a href="{{ url_for('edit_product', product_id=product.id) }}" class="btn btn-warning btn-sm" title="Edytuj"><i class="fas fa-edit"></i></a>
-    <form method="POST" action="{{ url_for('delete_product', product_id=product.id) }}" style="display:inline;" onsubmit="return confirm('Czy na pewno chcesz usunąć ten produkt?');">
-        <button type="submit" class="btn btn-danger btn-sm" title="Usuń"><i class="fas fa-trash"></i></button>
-    </form>
-</td>
+                        {% if product.images %}
+                            {# --- ZMIANA: Przekazanie wszystkich ID obrazów --- #}
+                            {% set image_ids = product.images|map(attribute='image_id')|join(',') %}
+                            <button class="btn btn-info btn-sm view-image-btn"
+                                    data-toggle="modal"
+                                    data-target="#imageModal"
+                                    data-image-urls="{{ image_ids }}"
+                                    data-product-name="{{ product.name }}"
+                                    title="Pokaż zdjęcia">
+                                <i class="fas fa-images"></i>
+                            </button>
+                        {% else %}
+                            <button class="btn btn-secondary btn-sm" disabled style="opacity: 0.5;" title="Brak zdjęcia">
+                                <i class="fas fa-image"></i>
+                            </button>
+                        {% endif %}
+                        
+                        <a href="{{ url_for('edit_product', product_id=product.id) }}" class="btn btn-warning btn-sm" title="Edytuj"><i class="fas fa-edit"></i></a>
+                        <form method="POST" action="{{ url_for('delete_product', product_id=product.id) }}" style="display:inline;" onsubmit="return confirm('Czy na pewno chcesz usunąć ten produkt?');">
+                            <button type="submit" class="btn btn-danger btn-sm" title="Usuń"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </td>
                 </tr>
                 {% else %}
                 <tr>
@@ -119,6 +125,7 @@
     </div>
 </div>
 
+{# --- Modal do importu (bez zmian) --- #}
 <div class="modal fade" id="importModal" tabindex="-1" role="dialog" aria-labelledby="importModalLabel" aria-hidden="true">
   <div class="modal-dialog" role="document">
     <div class="modal-content">
@@ -153,22 +160,35 @@
   </div>
 </div>
 
+{# --- ZMIANA: Modal z karuzelą na zdjęcia --- #}
 <div class="modal fade" id="imageModal" tabindex="-1" role="dialog" aria-labelledby="imageModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="imageModalLabel">Zdjęcie produktu</h5>
+        <h5 class="modal-title" id="imageModalLabel">Zdjęcia produktu</h5>
         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
           <span aria-hidden="true">&times;</span>
         </button>
       </div>
       <div class="modal-body text-center">
-        <img src="" id="productImage" class="img-fluid" alt="Zdjęcie produktu">
+        <div id="imageCarousel" class="carousel slide" data-ride="carousel" data-interval="false">
+          <div class="carousel-inner">
+            </div>
+          <a class="carousel-control-prev" href="#imageCarousel" role="button" data-slide="prev">
+            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+            <span class="sr-only">Poprzedni</span>
+          </a>
+          <a class="carousel-control-next" href="#imageCarousel" role="button" data-slide="next">
+            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+            <span class="sr-only">Następny</span>
+          </a>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
+{# --- Modal do dodawania kategorii (bez zmian) --- #}
 <div class="modal fade" id="addCategoryModal" tabindex="-1" role="dialog" aria-labelledby="addCategoryModalLabel" aria-hidden="true">
   <div class="modal-dialog" role="document">
     <div class="modal-content">
@@ -199,28 +219,41 @@
 {% block scripts %}
 <script>
 $(document).ready(function() {
-    // Kiedy modal o ID 'imageModal' przygotowuje się do pokazania...
+    // --- ZMIANA: Ulepszony skrypt do obsługi karuzeli ---
     $('#imageModal').on('show.bs.modal', function (event) {
-        // ...pobierz przycisk, który wywołał to zdarzenie
-        var button = $(event.relatedTarget); 
-        
-        // Wyciągnij dane z atrybutów 'data-*' tego przycisku
-        var imageUrl = button.data('image-url');
+        var button = $(event.relatedTarget);
+        var imageUrls = button.data('image-urls').split(',');
         var productName = button.data('product-name');
-        
-        // Znajdź elementy wewnątrz tego modala
         var modal = $(this);
-        var modalTitle = modal.find('.modal-title');
-        var modalImage = modal.find('.modal-body img');
+        var carouselInner = modal.find('.carousel-inner');
         
-        // Ustaw tytuł i źródło obrazka
-        modalTitle.text('Zdjęcie: ' + productName);
-        modalImage.attr('src', imageUrl);
+        carouselInner.empty(); // Wyczyść poprzednie zdjęcia
+
+        imageUrls.forEach(function(imageId, index) {
+            var itemClass = (index === 0) ? "carousel-item active" : "carousel-item";
+            var fullImageUrl = `https://drive.google.com/thumbnail?id=${imageId.trim()}&sz=w1000`;
+            
+            carouselInner.append(`
+                <div class="${itemClass}">
+                    <img src="${fullImageUrl}" class="d-block w-100" alt="Zdjęcie produktu ${index + 1}">
+                </div>
+            `);
+        });
+        
+        modal.find('.modal-title').text('Zdjęcia: ' + productName);
+        
+        // Ukryj strzałki nawigacyjne, jeśli jest tylko jedno zdjęcie
+        if (imageUrls.length <= 1) {
+            modal.find('.carousel-control-prev, .carousel-control-next').hide();
+        } else {
+            modal.find('.carousel-control-prev, .carousel-control-next').show();
+        }
+
+        $('#imageCarousel').carousel('to', 0); // Zawsze zaczynaj od pierwszego slajdu
     });
 
-    // Wyczyść źródło obrazka po zamknięciu modala, aby nie "migał" stary obrazek przy następnym otwarciu
     $('#imageModal').on('hidden.bs.modal', function () {
-        $(this).find('.modal-body img').attr('src', '');
+        $(this).find('.carousel-inner').empty();
     });
 });
 </script>

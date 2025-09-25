@@ -56,12 +56,10 @@
         align-items: center;
     }
     
-    /* ### POCZĄTEK ZMIANY (rozmiar ikony) ### */
     .btn-plus-animated .fas {
         font-size: 1.8rem; /* Dopasowany rozmiar ikony */
         color: white;
     }
-    /* ### KONIEC ZMIANY ### */
 
     /* Efekt po najechaniu myszką */
     .btn-plus-animated:hover {
@@ -82,8 +80,6 @@
             box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
         }
     }
-
-
 </style>
 {% endblock %}
 {% block title %}Lista Zleceń{% endblock %}
@@ -94,9 +90,9 @@
     <a href="{{ url_for('new_order') }}" class="btn btn-success btn-lg btn-plus-animated">
         <i class="fas fa-plus"></i>
     </a>
-    </div>
+</div>
 <form method="GET" class="form-inline mb-3">
-    </form>
+</form>
 
 <form method="GET" class="form-inline mb-3">
     <select name="client" class="form-control mr-2">
@@ -140,13 +136,12 @@
                 <td data-label="Nr zlecenia:">{{ order.order_code }}</td>
                 <td data-label="Klient:">{{ order.client.name }}</td>
                 <td data-label="Data:">{{ order.created_at | to_local_time }}</td>
-<td data-label="Data Szycia:">
-    {% if order.status == "W REALIZACJI" and order.sewing_started_at %}
-        <strong>Start:</strong> {{ order.sewing_started_at | to_local_time }}
-    {% elif order.status == "ZREALIZOWANE" and order.sewing_finished_at %}
-        <strong>Koniec:</strong> {{ order.sewing_finished_at | to_local_time }}
-    {% endif %}
-</td>
+                <td data-label="Data Szycia:">
+                    {% if order.status == "W REALIZACJI" and order.sewing_started_at %}
+                        <strong>Start:</strong> {{ order.sewing_started_at | to_local_time }}
+                    {% elif order.status == "ZREALIZOWANE" and order.sewing_finished_at %}
+                        <strong>Koniec:</strong> {{ order.sewing_finished_at | to_local_time }}
+                    {% endif %}
                 </td>
                 
                 <td data-label="Status:">
@@ -185,7 +180,12 @@
                     {% endif %}
                 </td>
                 <td data-label="Akcje:">
-                    <a href="{{ url_for('order_pdf', order_id=order.id) }}" class="btn btn-sm btn-secondary"><i class="fas fa-file-pdf"></i></a>
+                    <button class="btn btn-sm btn-secondary btn-generate-pdf"
+                            data-order-id="{{ order.id }}"
+                            data-has-images="{{ 'true' if order.has_images else 'false' }}"
+                            title="Generuj PDF">
+                        <i class="fas fa-file-pdf"></i>
+                    </button>
                     <a href="{{ url_for('order_print', order_id=order.id) }}" class="btn btn-sm btn-info"><i class="fas fa-print"></i></a>
                     <form method="POST" action="{{ url_for('delete_order', order_id=order.id) }}" class="d-inline" onsubmit="return confirm('Czy na pewno usunąć?');">
                         <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
@@ -299,59 +299,99 @@
     </div>
 </div>
 
+<div class="modal fade" id="pdfImageModal" tabindex="-1" role="dialog" aria-labelledby="pdfImageModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="pdfImageModalLabel">Dołączyć zdjęcia do PDF?</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Produkty w tym zleceniu posiadają zdjęcia. Czy chcesz dołączyć je do dokumentu PDF?</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="pdf-with-images">Tak, dołącz zdjęcia</button>
+        <button type="button" class="btn btn-secondary" data-dismiss="modal" id="pdf-no-images">Nie (sam tekst)</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
+{{ super() }}
 <script>
+document.addEventListener('DOMContentLoaded', function() {
     // 1. Rozwijanie/zwijanie szczegółów zamówienia po kliknięciu w wiersz
     document.querySelectorAll('.order-row').forEach(function(row) {
         row.addEventListener('click', function(e) {
-            // Ignoruj kliknięcia w przyciski i linki wewnątrz wiersza
-            if(e.target.closest('form') || e.target.closest('a') || e.target.closest('button')) return;
-            
+            if (e.target.closest('form, a, button')) {
+                return;
+            }
             var orderId = this.getAttribute('data-order-id');
             var detailsRow = document.getElementById('details-' + orderId);
             detailsRow.style.display = (detailsRow.style.display === 'none' || detailsRow.style.display === '') ? 'table-row' : 'none';
         });
     });
 
-    // 2. Uproszczona funkcja do obsługi AJAX zmiany statusu
+    // 2. Funkcja do obsługi AJAX zmiany statusu
     function setupAjaxStatusChange(form) {
         form.addEventListener('submit', function(e) {
-            e.preventDefault(); // Zatrzymaj domyślną akcję formularza
+            e.preventDefault();
             var url = form.action;
             var formData = new FormData(form);
 
             fetch(url, {
                 method: 'POST',
                 body: formData,
-                headers: {
-                    'X-Requested-with': 'XMLHttpRequest'
-                }
+                headers: { 'X-Requested-with': 'XMLHttpRequest' }
             })
-            .then(function(response) {
-                if (!response.ok) {
-                    throw new Error('Odpowiedź serwera nie jest poprawna.');
-                }
+            .then(response => {
+                if (!response.ok) throw new Error('Błąd serwera.');
                 return response.json();
             })
-            .then(function(data) {
-                if(data.success) {
-                    // Najprostsze i najpewniejsze rozwiązanie: przeładuj stronę.
-                    // To gwarantuje, że zlecenie przeniesie się do właściwej sekcji akordeonu.
-                    location.reload();
+            .then(data => {
+                if (data.success) {
+                    location.reload(); // Proste i niezawodne przeładowanie strony
                 } else {
                     alert("Wystąpił błąd podczas zmiany statusu.");
                 }
             })
-            .catch(function(err) {
+            .catch(err => {
                 console.error("Błąd zmiany statusu:", err);
-                alert("Wystąpił krytyczny błąd. Sprawdź konsolę deweloperską (F12).");
+                alert("Wystąpił krytyczny błąd.");
             });
         });
     }
-
-    // 3. Podpięcie obsługi AJAX do wszystkich formularzy zmiany statusu na stronie
     document.querySelectorAll('.update-status-form').forEach(setupAjaxStatusChange);
+
+    // 3. Logika dla modala PDF
+    const pdfModal = document.getElementById('pdfImageModal');
+    let orderIdForPdf;
+
+    document.querySelectorAll('.btn-generate-pdf').forEach(button => {
+        button.addEventListener('click', function() {
+            orderIdForPdf = this.dataset.orderId;
+            const hasImages = this.dataset.hasImages === 'true';
+
+            if (hasImages) {
+                $('#pdfImageModal').modal('show');
+            } else {
+                window.open(`/orders/${orderIdForPdf}/pdf?with_images=false`, '_blank');
+            }
+        });
+    });
+    
+    document.getElementById('pdf-with-images').addEventListener('click', function() {
+        window.open(`/orders/${orderIdForPdf}/pdf?with_images=true`, '_blank');
+        $('#pdfImageModal').modal('hide');
+    });
+
+    document.getElementById('pdf-no-images').addEventListener('click', function() {
+        window.open(`/orders/${orderIdForPdf}/pdf?with_images=false`, '_blank');
+    });
+});
 </script>
 {% endblock %}

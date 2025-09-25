@@ -1,3 +1,5 @@
+# app/routes.py
+
 from flask import render_template, request, redirect, url_for, flash, send_from_directory, current_app, make_response, jsonify, send_file, after_this_request
 from app import app, db
 from app.models import (Order, Client, Product, OrderItem, Attachment,
@@ -176,9 +178,13 @@ def order_templates():
 @app.route('/order_templates/new', methods=['GET', 'POST'])
 def new_template():
     form = OrderTemplateForm()
+    # Przeniesiono pobieranie opcji wyboru na początek
     fabric_choices = [(f.id, f.name) for f in Fabric.query.order_by('name').all()]
+    
+    # Pętla przypisująca opcje wyboru do każdego podformularza tkaniny
     for fabric_form in form.fabrics:
         fabric_form.fabric_id.choices = fabric_choices
+        
     clients = Client.query.all()
     if form.validate_on_submit():
         template_name = form.template_name.data.strip().upper()
@@ -195,31 +201,44 @@ def new_template():
             db.session.commit()
             flash('Szablon został utworzony.', 'success')
             return redirect(url_for('order_templates'))
+            
     return render_template('order_template_form.html', form=form, clients=clients, fabric_choices=fabric_choices)
 
 @app.route('/order_templates/edit/<int:template_id>', methods=['GET', 'POST'])
 def edit_template(template_id):
     template = OrderTemplate.query.get_or_404(template_id)
     form = OrderTemplateForm(obj=template)
+    clients = Client.query.all()
     fabric_choices = [(f.id, f.name) for f in Fabric.query.order_by('name').all()]
+
+    # --- POCZĄTEK KLUCZOWEJ ZMIANY ---
+    # Wczytaj zapisane tkaniny do formularza przy żądaniu GET
+    if request.method == 'GET':
+        form.fabrics.entries = [] # Wyczyść listę, aby uniknąć duplikatów
+        for tf in template.fabrics:
+            form.fabrics.append_entry({'fabric_id': tf.fabric_id})
+
+    # Ustaw opcje wyboru dla wszystkich (także tych już wczytanych) podformularzy tkanin
     for fabric_form in form.fabrics:
         fabric_form.fabric_id.choices = fabric_choices
-    clients = Client.query.all()
+    # --- KONIEC KLUCZOWEJ ZMIANY ---
+
     if form.validate_on_submit():
         template.template_name = form.template_name.data.strip().upper()
         template.client_name = form.client_name.data.strip().upper()
         template.description = form.description.data.strip().upper()
         template.login_info = form.login_info.data.strip().upper()
+        
+        # Usuń stare powiązania i dodaj nowe na podstawie danych z formularza
         TemplateFabric.query.filter_by(template_id=template.id).delete()
         for fabric_data in form.fabrics.data:
-            template.fabrics.append(TemplateFabric(fabric_id=fabric_data['fabric_id']))
+            if fabric_data['fabric_id']: # Upewnij się, że ID tkaniny nie jest puste
+                template.fabrics.append(TemplateFabric(fabric_id=fabric_data['fabric_id']))
+                
         db.session.commit()
         flash('Szablon został zaktualizowany.', 'success')
         return redirect(url_for('order_templates'))
-    if request.method == 'GET':
-        form.fabrics.entries = []
-        for tf in template.fabrics:
-            form.fabrics.append_entry({'fabric_id': tf.fabric_id})
+
     return render_template('order_template_form.html', form=form, clients=clients, fabric_choices=fabric_choices)
 
 # ### POCZĄTEK OSTATECZNEJ POPRAWKI w app/routes.py ###
@@ -283,16 +302,23 @@ def orders_list():
     if status_filter: orders_query = orders_query.filter(Order.status == status_filter)
     if year_filter: orders_query = orders_query.filter(extract('year', Order.created_at) == int(year_filter))
     if month_filter: orders_query = orders_query.filter(extract('month', Order.created_at) == int(month_filter))
+    
     all_orders = orders_query.order_by(Order.created_at.desc()).all()
+    
     for order in all_orders:
         order.planned_materials = calculate_material_summary(order)
         order.cost_details = calculate_order_total_cost(order)
+        # --- NOWA LINIA: Sprawdzanie, czy zlecenie ma zdjęcia ---
+        order.has_images = any(item.product.images for item in order.order_items if item.product)
+
     in_progress_orders = [o for o in all_orders if o.status == 'W REALIZACJI']
     new_orders = [o for o in all_orders if o.status == 'NOWE']
     completed_orders = [o for o in all_orders if o.status == 'ZREALIZOWANE']
+    
     years_query = db.session.query(extract('year', Order.created_at)).distinct().all()
     years = sorted({int(y[0]) for y in years_query})
     clients = Client.query.order_by(Client.name).all()
+    
     return render_template('orders_list.html', in_progress_orders=in_progress_orders, new_orders=new_orders,
                            completed_orders=completed_orders, clients=clients, years=years)
 
@@ -352,8 +378,17 @@ def update_order_status(order_id):
 def order_pdf(order_id):
     order = Order.query.get_or_404(order_id)
     material_summary = calculate_material_summary(order)
-    rendered = render_template('order_pdf.html', order=order, material_summary=material_summary)
-    pdf = pdfkit.from_string(rendered, False, configuration=config)
+    
+    with_images = request.args.get('with_images', 'false') == 'true'
+    
+    rendered = render_template('order_pdf.html', order=order, material_summary=material_summary, with_images=with_images)
+    
+    # --- POPRAWKA: Dodanie opcji 'enable-local-file-access' ---
+    options = {
+        "enable-local-file-access": ""
+    }
+    pdf = pdfkit.from_string(rendered, False, configuration=config, options=options)
+    
     response = make_response(pdf)
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = f'inline; filename=zlecenie_{order.id}.pdf'
@@ -451,7 +486,7 @@ def edit_product(product_id):
         # --- NOWA LOGIKA DLA WIELU ZDJĘĆ ---
         if form.images.data:
             for image_file in form.images.data:
-                if image_file.filename:
+                if hasattr(image_file, 'filename') and image_file.filename:
                     drive_image_id = upload_image_to_drive(image_file)
                     if drive_image_id:
                         new_image = ProductImage(image_id=drive_image_id, product_id=product.id)
