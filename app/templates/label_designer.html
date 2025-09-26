@@ -47,9 +47,9 @@
     .canvas-wrapper {
         flex-grow: 1;
         display: flex;
-        flex-direction: column; /* Zmieniono na kolumnę */
+        flex-direction: column;
         justify-content: center;
-        align-items: center; /* Wycentrowanie */
+        align-items: center;
         padding: 20px;
         background-color: rgba(0,0,0,0.05);
         border-radius: 8px;
@@ -65,7 +65,7 @@
         background-color: white;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         position: relative;
-        border: 1px solid #333;
+        /*border: 1px solid #333;*/
         transition: height 0.2s;
     }
     .cut-line {
@@ -76,8 +76,11 @@
         border-top: 1px dashed #888;
         pointer-events: none;
     }
+     /* --- NOWY STYL DLA ZAZNACZONEGO ELEMENTU --- */
+    .draggable-element.selected {
+        border: 2px solid #007bff !important;
+    }
 
-    /* NOWY BLOK: Wyświetlanie wymiarów */
     .dimension-display {
         margin-top: 15px;
         padding: 5px 10px;
@@ -87,7 +90,6 @@
         border-radius: 5px;
         font-family: monospace;
     }
-
 
     .properties-panel {
         flex: 0 0 250px;
@@ -105,7 +107,6 @@
         font-family: 'WashCareSymbols', sans-serif;
     }
 
-    /* Style dla okna z symbolami */
     .modal-symbols-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
@@ -125,6 +126,21 @@
         background-color: #e9ecef;
     }
 
+    #preview-box {
+        border: 2px dashed #ccc;
+        padding: 10px;
+        margin-top: 15px;
+        min-height: 100px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: #f8f9fa;
+    }
+    #preview-image {
+        max-width: 100%;
+        max-height: 200px;
+        border: 1px solid #ddd;
+    }
 </style>
 {% endblock %}
 
@@ -175,6 +191,38 @@
 <div class="mt-3">
     <input type="text" id="templateName" class="form-control" placeholder="Wpisz nazwę szablonu...">
     <button id="saveTemplateBtn" class="btn btn-success mt-2"><i class="fas fa-save"></i> Zapisz Szablon</button>
+    <button id="testPrintBtn" class="btn btn-info mt-2"><i class="fas fa-print"></i> Testowy Wydruk</button>
+</div>
+
+<div class="modal fade" id="printTestModal" tabindex="-1" role="dialog" aria-labelledby="printModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="printModalLabel">Testowy Wydruk Metki</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+          <div class="form-group">
+            <label for="printServerIp">Adres IP serwera drukowania</label>
+            <input type="text" class="form-control" id="printServerIp" placeholder="np. http://192.168.1.100:5001">
+            <small class="form-text text-muted">Adres zostanie zapamiętany w przeglądarce.</small>
+          </div>
+          
+          <div id="preview-box">
+              <img id="preview-image" src="#" alt="Podgląd etykiety" style="display: none;">
+              <span id="preview-text">Generowanie podglądu...</span>
+          </div>
+          
+          <div id="printStatus" class="mt-3"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Anuluj</button>
+        <button type="button" class="btn btn-primary" id="confirmPrintBtn" disabled>Drukuj</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="modal fade" id="symbolsModal" tabindex="-1" role="dialog" aria-labelledby="symbolsModalLabel" aria-hidden="true">
@@ -185,21 +233,8 @@
         <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
       </div>
       <div class="modal-body">
-          <ul class="nav nav-tabs" id="symbolTabs" role="tablist">
-            <li class="nav-item"><a class="nav-link active" id="washing-tab" data-toggle="tab" href="#washing" role="tab">Pranie</a></li>
-            <li class="nav-item"><a class="nav-link" id="bleaching-tab" data-toggle="tab" href="#bleaching" role="tab">Wybielanie</a></li>
-            <li class="nav-item"><a class="nav-link" id="drying-tab" data-toggle="tab" href="#drying" role="tab">Suszenie</a></li>
-            <li class="nav-item"><a class="nav-link" id="ironing-tab" data-toggle="tab" href="#ironing" role="tab">Prasowanie</a></li>
-            <li class="nav-item"><a class="nav-link" id="pro-tab" data-toggle="tab" href="#pro" role="tab">Pranie Prof.</a></li>
-            <li class="nav-item"><a class="nav-link" id="misc-tab" data-toggle="tab" href="#misc" role="tab">Pozostałe</a></li>
-          </ul>
-          <div class="tab-content mt-3">
-            <div class="tab-pane fade show active" id="washing" role="tabpanel">
-                <div class="modal-symbols-grid">
-                    {% for char in "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" %}<div class="symbol-picker" data-symbol="{{ char }}">{{ char }}</div>{% endfor %}
-                </div>
-            </div>
-            </div>
+          <div class="modal-symbols-grid">
+              {% for char in "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" %}<div class="symbol-picker" data-symbol="{{ char }}">{{ char }}</div>{% endfor %}
           </div>
       </div>
     </div>
@@ -209,6 +244,7 @@
 
 
 {% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
 
 <script>
@@ -225,10 +261,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const dimensionDisplay = document.getElementById('dimensionDisplay');
     let elementCounter = 0;
 
-    // Funkcja do przeliczania pikseli na mm (w przybliżeniu)
     const pxToMm = (px) => (px * 25.4 / 96).toFixed(0);
 
-    // Funkcja do aktualizacji wyświetlanych wymiarów
     function updateDimensionDisplay() {
         const heightPx = canvas.offsetHeight;
         const widthPx = canvas.offsetWidth;
@@ -383,6 +417,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
 
+    
     saveBtn.addEventListener('click', function() {
         const templateName = templateNameInput.value.trim();
         const currentId = currentTemplateIdInput.value;
@@ -545,6 +580,104 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .catch(error => console.error('Błąd usuwania:', error));
         }
+    });
+   
+
+    // --- ZAKTUALIZOWANA LOGIKA DRUKOWANIA ---
+    const testPrintBtn = document.getElementById('testPrintBtn');
+    const printServerIpInput = document.getElementById('printServerIp');
+    const confirmPrintBtn = document.getElementById('confirmPrintBtn');
+    const printStatusDiv = document.getElementById('printStatus');
+    const previewImage = document.getElementById('preview-image');
+    const previewText = document.getElementById('preview-text');
+    
+    const savedIp = localStorage.getItem('printServerIp');
+    if (savedIp) {
+        printServerIpInput.value = savedIp;
+    }
+
+    testPrintBtn.addEventListener('click', function() {
+        printStatusDiv.innerHTML = '';
+        previewImage.style.display = 'none';
+        previewText.style.display = 'block';
+        previewText.textContent = 'Generowanie podglądu...';
+        confirmPrintBtn.disabled = true;
+        $('#printTestModal').modal('show');
+
+        // --- POCZĄTEK POPRAWKI: UKRYWANIE RAMEK ---
+        // Usuń zaznaczenie i ukryj ramki wszystkich elementów
+        document.querySelectorAll('.draggable-element').forEach(el => {
+            el.classList.remove('selected');
+            el.style.border = 'none'; 
+        });
+        // --- KONIEC POPRAWKI ---
+
+        html2canvas(document.getElementById('labelCanvas'), {
+            scale: 3,
+            useCORS: true,
+            backgroundColor: null
+        }).then(canvasElement => {
+            // --- POCZĄTEK POPRAWKI: PRZYWRACANIE RAMEK ---
+            // Przywróć ramki po zrobieniu zrzutu ekranu
+            document.querySelectorAll('.draggable-element').forEach(el => {
+                el.style.border = '1px dashed #ccc';
+            });
+            // --- KONIEC POPRAWKI ---
+
+            previewImage.src = canvasElement.toDataURL('image/png');
+            previewImage.style.display = 'block';
+            previewText.style.display = 'none';
+            confirmPrintBtn.disabled = false;
+        }).catch(err => {
+            // Przywróć ramki również w przypadku błędu
+            document.querySelectorAll('.draggable-element').forEach(el => {
+                el.style.border = '1px dashed #ccc';
+            });
+            console.error('Błąd html2canvas:', err);
+            previewText.textContent = `Błąd generowania podglądu: ${err}`;
+        });
+    });
+
+    confirmPrintBtn.addEventListener('click', function() {
+        let currentIp = printServerIpInput.value.trim();
+        if (!currentIp) {
+            printStatusDiv.innerHTML = '<div class="alert alert-danger">Proszę wpisać adres IP.</div>';
+            return;
+        }
+        if (!currentIp.startsWith('http://')) {
+            currentIp = 'http://' + currentIp.replace(/^https?:\/\//, '');
+        }
+        localStorage.setItem('printServerIp', currentIp);
+
+        fetch(previewImage.src)
+            .then(res => res.blob())
+            .then(imageBlob => {
+                const formData = new FormData();
+                formData.append('image', imageBlob, 'label_test_print.png');
+                formData.append('width_mm', pxToMm(canvas.offsetWidth));
+                formData.append('height_mm', pxToMm(canvas.offsetHeight));
+                formData.append('quantity', 1);
+
+                const printServerUrl = `${currentIp.replace(/\/$/, '')}/print_label`;
+                
+                printStatusDiv.innerHTML = '<div class="alert alert-info">Wysyłanie do drukarki...</div>';
+                confirmPrintBtn.disabled = true;
+
+                return fetch(printServerUrl, { method: 'POST', body: formData });
+            })
+            .then(response => {
+                if (!response.ok) return response.json().then(err => { throw new Error(err.error || `Błąd serwera druku: ${response.status}`) });
+                return response.json();
+            })
+            .then(data => {
+                printStatusDiv.innerHTML = `<div class="alert alert-success"><strong>Sukces!</strong> ${data.status}</div>`;
+            })
+            .catch(error => {
+                printStatusDiv.innerHTML = `<div class="alert alert-danger"><strong>Błąd:</strong> ${error.message}</div>`;
+            })
+            .finally(() => {
+                confirmPrintBtn.disabled = false;
+            });
     });
     
     initializeCanvas();

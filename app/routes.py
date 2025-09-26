@@ -13,6 +13,7 @@ import os
 import re
 from datetime import datetime, date, timedelta
 import pdfkit
+import imgkit
 from sqlalchemy import extract
 from app.doc_generator import save_order_as_word
 import platform
@@ -26,10 +27,20 @@ import json
 import math
 from .drive_service import upload_image_to_drive, delete_image_from_drive
 
+
 if platform.system() == 'Windows':
-    config = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
+    config_pdf = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
 else:
-    config = pdfkit.configuration(wkhtmltopdf='/usr/bin/wkhtmltopdf')
+    config_pdf = pdfkit.configuration(wkhtmltopdf='/usr/bin/wkhtmltopdf')
+
+# NOWA, OSOBNA konfiguracja dla OBRAZÓW przy użyciu imgkit
+if platform.system() == 'Windows':
+    # --- ZMIANA: Użycie imgkit.config ---
+    config_img = imgkit.config(wkhtmltoimage=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltoimage.exe')
+else:
+    config_img = imgkit.config(wkhtmltoimage='/usr/bin/wkhtmltoimage')
+
+# --- KONIEC POPRAWIONEJ KONFIGURACJI ---
 
 ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'}
 
@@ -387,7 +398,7 @@ def order_pdf(order_id):
     options = {
         "enable-local-file-access": ""
     }
-    pdf = pdfkit.from_string(rendered, False, configuration=config, options=options)
+    pdf = pdfkit.from_string(rendered, False, configuration=config_pdf, options=options)
     
     response = make_response(pdf)
     response.headers['Content-Type'] = 'application/pdf'
@@ -567,7 +578,7 @@ def order_labels(order_id):
         'margin-bottom': '0mm', 'margin-left': '0mm', 'margin-right': '0mm',
         'disable-smart-shrinking': '', 'enable-local-file-access': ''
     }
-    pdf = pdfkit.from_string(rendered_html, False, configuration=config, options=options)
+    pdf = pdfkit.from_string(rendered_html, False, configuration=config_pdf, options=options)
     response = make_response(pdf)
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = 'inline; filename=labels.pdf'
@@ -1487,3 +1498,5 @@ def delete_label_template(template_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
+    
+
