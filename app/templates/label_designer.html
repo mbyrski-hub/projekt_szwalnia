@@ -3,13 +3,7 @@
 
 {% block head %}
 <style>
-    /* Import specjalistycznej czcionki do symboli prania */
-    @font-face {
-        font-family: 'WashCareSymbols';
-        src: url("{{ url_for('static', filename='fonts/wash-care-symbols.woff2') }}") format('woff2');
-        font-weight: normal;
-        font-style: normal;
-    }
+
 
     .designer-container {
         display: flex;
@@ -177,7 +171,7 @@
 
     <div class="canvas-wrapper">
         <div id="labelCanvas" class="label-canvas"></div>
-        <div id="dimensionDisplay" class="dimension-display">Szer: 35mm / Wys: 50mm</div>
+        <div id="dimensionDisplay" class="dimension-display"></div>
     </div>
 
     <div class="properties-panel">
@@ -317,6 +311,7 @@ document.addEventListener('DOMContentLoaded', function () {
             newElement.dataset.type = 'text';
             newElement.dataset.fontSize = '12';
             newElement.style.fontSize = '12px';
+            newElement.dataset.isCentered = 'false'; // Domyślnie nie wyśrodkowany
         } else if (toolType === 'image') {
             newElement.innerHTML = '<i class="fas fa-image fa-2x"></i>';
             newElement.dataset.type = 'image';
@@ -328,6 +323,7 @@ document.addEventListener('DOMContentLoaded', function () {
             newElement.dataset.fontSize = '14';
             newElement.style.fontSize = '14px';
             newElement.style.fontWeight = 'bold';
+            newElement.dataset.isCentered = 'false'; // Domyślnie nie wyśrodkowany
         }
         canvas.appendChild(newElement);
         makeElementInteractive(newElement);
@@ -378,8 +374,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 inertia: true
             })
             .on('tap', function (event) {
-                document.querySelectorAll('.draggable-element').forEach(el => el.style.border = '1px dashed #ccc');
-                event.currentTarget.style.border = '2px solid #007bff';
+                document.querySelectorAll('.draggable-element').forEach(el => el.classList.remove('selected'));
+                event.currentTarget.classList.add('selected');
                 updatePropertiesPanel(event.currentTarget);
             });
     }
@@ -388,13 +384,26 @@ document.addEventListener('DOMContentLoaded', function () {
         propertiesContent.innerHTML = '';
         const type = element.dataset.type;
         let contentHtml = `<h5>Właściwości</h5><p>Typ: <strong>${type}</strong></p>`;
+
         if (type === 'text' || type === 'dynamic' || type === 'icon') {
-            if (type !== 'icon' && type !== 'dynamic') {
+            if (type !== 'dynamic') { // Pole dynamiczne nie ma edytowalnego tekstu
                 contentHtml += `<div class="form-group"><label>Tekst:</label><input type="text" class="form-control form-control-sm" value="${element.textContent}" oninput="updateElement(this, '${element.dataset.id}', 'textContent')"></div>`;
             }
             contentHtml += `<div class="form-group"><label>Rozmiar (px):</label><input type="number" class="form-control form-control-sm" value="${element.dataset.fontSize}" oninput="updateElement(this, '${element.dataset.id}', 'fontSize')"></div>`;
+            
+            // --- POCZĄTEK ZMIANY: Dodajemy checkbox centrowania ---
+            if (type === 'text' || type === 'dynamic') {
+                const isChecked = element.dataset.isCentered === 'true' ? 'checked' : '';
+                contentHtml += `
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" ${isChecked} onchange="updateElement(this, '${element.dataset.id}', 'isCentered')">
+                        <label class="form-check-label">Wyśrodkuj</label>
+                    </div>
+                `;
+            }
+            // --- KONIEC ZMIANY ---
         }
-        contentHtml += `<button class="btn btn-outline-danger btn-sm mt-2" onclick="deleteElement('${element.dataset.id}')"><i class="fas fa-trash-alt"></i> Usuń element</button>`;
+        contentHtml += `<button class="btn btn-outline-danger btn-sm mt-3" onclick="deleteElement('${element.dataset.id}')"><i class="fas fa-trash-alt"></i> Usuń element</button>`;
         propertiesContent.innerHTML = contentHtml;
     }
 
@@ -406,7 +415,11 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (property === 'fontSize') {
             element.style.fontSize = `${input.value}px`;
             element.dataset.fontSize = input.value;
-        }
+        } else if (property === 'isCentered') { // --- POCZĄTEK ZMIANY ---
+            element.dataset.isCentered = input.checked;
+            element.style.textAlign = input.checked ? 'center' : 'left';
+            element.style.width = input.checked ? '100%' : 'auto';
+        } // --- KONIEC ZMIANY ---
     };
 
     window.deleteElement = function(elementId) {
@@ -447,7 +460,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 fontSize: el.dataset.fontSize,
                 src: el.dataset.src || '',
                 width: el.style.width,
-                height: el.style.height
+                height: el.style.height,
+                // --- POCZĄTEK ZMIANY ---
+                isCentered: el.dataset.isCentered === 'true'
+                // --- KONIEC ZMIANY ---
             };
             elementsData.push(elementInfo);
         });
@@ -507,7 +523,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 newElement.style.padding = '5px';
                 newElement.dataset.id = elData.id || `element-${elementCounter++}`;
                 newElement.dataset.type = elData.type;
-                
+                if (elData.type === 'text' || elData.type === 'dynamic') {
+                    newElement.dataset.isCentered = elData.isCentered || 'false';
+                    if (elData.isCentered) {
+                        newElement.style.textAlign = 'center';
+                        newElement.style.width = '100%';
+                    }
+                }
                 if (elData.x === '50%') {
                     newElement.style.left = '50%';
                     newElement.style.transform = 'translateX(-50%)';

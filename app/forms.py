@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, DateField, SelectField, FieldList, FormField, SubmitField, BooleanField, IntegerField, FloatField, DecimalField
+from wtforms import StringField, TextAreaField, DateField, SelectField, FieldList, FormField, SubmitField, BooleanField, IntegerField, FloatField, DecimalField, SelectField
 from wtforms.validators import DataRequired, NumberRange, Optional, Length
 from wtforms import Form
 from flask_wtf.file import FileField, FileAllowed, MultipleFileField
@@ -85,6 +85,9 @@ class ProductForm(FlaskForm):
     description = TextAreaField('Opis produktu (opcjonalnie)')
     category_id = SelectField('Kategoria', coerce=int, validators=[Optional()])
     production_price = CustomDecimalField('Cena Produkcji (np. robocizna)', places=2, validators=[DataRequired(), NumberRange(min=0)])
+    # --- POCZĄTEK ZMIANY ---
+    label_template_id = SelectField('Szablon metki (opcjonalnie)', coerce=int, validators=[Optional()])
+    # --- KONIEC ZMIANY ---
     images = MultipleFileField('Dodaj zdjęcia (można wybrać kilka)', validators=[
         FileAllowed(['jpg', 'png', 'jpeg'], 'Dozwolone są tylko pliki graficzne!')
     ])

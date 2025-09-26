@@ -29,6 +29,14 @@
         --navbar-bg-color: #1e1e1e;
         --navbar-text-color: #e0e0e0;
     }
+     /* --- POCZĄTEK ZMIANY --- */
+    @font-face {
+        font-family: 'WashCareSymbols';
+        src: url("{{ url_for('static', filename='fonts/wash-care-symbols.woff2') }}") format('woff2');
+        font-weight: normal;
+        font-style: normal;
+    }
+    /* --- KONIEC ZMIANY --- */
 
     /* Krok 2: Użycie zmiennych w istniejących stylach */
     body {

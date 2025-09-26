@@ -102,7 +102,9 @@ class Product(db.Model):
     fabrics_needed = db.relationship('ProductFabric', backref='product', lazy=True, cascade="all, delete-orphan")
     materials_needed = db.relationship('ProductMaterial', backref='product', lazy=True, cascade="all, delete-orphan")
     order_items = db.relationship('OrderItem', backref='product')
-
+    label_template_id = db.Column(db.Integer, db.ForeignKey('label_template.id'), nullable=True)
+    label_template = db.relationship('LabelTemplate')
+    
     @validates('production_price')
     def validate_positive_values(self, key, value):
         if value < 0:

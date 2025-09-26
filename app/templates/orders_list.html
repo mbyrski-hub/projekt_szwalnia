@@ -38,48 +38,53 @@
         border-color: #ffffff;      /* Dopasowany, jasny kolor ramki */
     }
 
-/* Style dla animowanego przycisku "+" */
+    /* Style dla animowanego przycisku "+" */
     .btn-plus-animated {
-        /* Wymiary i kształt */
         width: 60px;
         height: 60px;
         border-radius: 50%;
-
-        /* Wygląd i animacja */
         box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
         transition: all 0.3s ease-in-out;
         animation: pulse 2s infinite;
-
-        /* Idealne centrowanie dla ikony */
         display: flex;
         justify-content: center;
         align-items: center;
     }
     
     .btn-plus-animated .fas {
-        font-size: 1.8rem; /* Dopasowany rozmiar ikony */
+        font-size: 1.8rem;
         color: white;
     }
 
-    /* Efekt po najechaniu myszką */
     .btn-plus-animated:hover {
         transform: scale(1.1);
         box-shadow: 0 6px 20px rgba(40, 167, 69, 0.6);
         animation-play-state: paused;
     }
 
-    /* Definicja animacji pulsowania */
     @keyframes pulse {
-        0% {
-            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
-        }
-        50% {
-            box-shadow: 0 4px 25px rgba(40, 167, 69, 0.7);
-        }
-        100% {
-            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
-        }
+        0% { box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4); }
+        50% { box-shadow: 0 4px 25px rgba(40, 167, 69, 0.7); }
+        100% { box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4); }
     }
+
+    #label-render-container {
+        position: absolute;
+        left: -9999px; /* Ukrywamy poza ekranem */
+        top: -9999px;
+    }
+    
+    /* --- POCZĄTEK ZMIANY: Poprawki dla modala --- */
+    #printPreviewModal .modal-dialog {
+        max-width: 50%; /* Zwiększenie szerokości modala */
+    }
+    #printPreviewModal .col-md-4 h4 {
+        font-size: 1.1rem; /* Zmniejszenie czcionki w panelu bocznym */
+    }
+    #printPreviewModal .col-md-4 p {
+        font-size: 0.9rem;
+    }
+    /* --- KONIEC ZMIANY --- */
 </style>
 {% endblock %}
 {% block title %}Lista Zleceń{% endblock %}
@@ -187,6 +192,9 @@
                         <i class="fas fa-file-pdf"></i>
                     </button>
                     <a href="{{ url_for('order_print', order_id=order.id) }}" class="btn btn-sm btn-info"><i class="fas fa-print"></i></a>
+                    <button class="btn btn-sm btn-dark btn-print-labels" data-order-id="{{ order.id }}" title="Drukuj metki">
+                        <i class="fas fa-tags"></i>
+                    </button>
                     <form method="POST" action="{{ url_for('delete_order', order_id=order.id) }}" class="d-inline" onsubmit="return confirm('Czy na pewno usunąć?');">
                         <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
                     </form>
@@ -318,10 +326,63 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="assignLabelModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Wybierz domyślne metki</h5>
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Niektóre produkty w tym zleceniu nie mają przypisanych metek. Wybierz szablony, które mają być dla nich użyte:</p>
+        <form id="assign-labels-form"></form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Anuluj</button>
+        <button type="button" class="btn btn-primary" id="confirm-assign-btn">Przejdź do drukowania</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="printPreviewModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-xl" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Podgląd i Drukowanie Metek</h5>
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+          <div class="row">
+              <div class="col-md-8" style="height: 60vh; overflow-y: auto; background: #f0f0f0; padding: 1rem; border-radius: 8px;">
+                  <div id="print-preview-area" class="d-flex flex-wrap justify-content-center align-items-start" style="gap: 10px;">
+                      </div>
+              </div>
+              <div class="col-md-4">
+                  <h4>Ustawienia Drukarki</h4>
+                  <div class="form-group">
+                      <label for="printServerIp">Adres IP serwera drukowania</label>
+                      <input type="text" class="form-control" id="printServerIp" placeholder="np. http://192.168.1.100:5001">
+                  </div>
+                  <hr>
+                  <h4>Podsumowanie</h4>
+                  <p>Całkowita liczba metek do wydruku: <strong id="total-labels-count">0</strong></p>
+                  <button id="start-print-btn" class="btn btn-success btn-lg w-100"><i class="fas fa-print"></i> Drukuj</button>
+                  <div id="print-status" class="mt-3"></div>
+              </div>
+          </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="label-render-container"></div>
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Rozwijanie/zwijanie szczegółów zamówienia po kliknięciu w wiersz
@@ -392,6 +453,238 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('pdf-no-images').addEventListener('click', function() {
         window.open(`/orders/${orderIdForPdf}/pdf?with_images=false`, '_blank');
     });
+
+    // --- NOWA LOGIKA DRUKOWANIA METEK ---
+    let currentOrderId = null;
+    let labelsToPrintQueue = [];
+
+    document.querySelectorAll('.btn-print-labels').forEach(button => {
+        button.addEventListener('click', function() {
+            currentOrderId = this.dataset.orderId;
+            fetch(`/api/order/${currentOrderId}/prepare_labels`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.without_labels.length > 0) {
+                        populateAssignModal(data.without_labels, data.all_templates);
+                        $('#assignLabelModal').modal('show');
+                    } else {
+                        prepareAndShowPrintPreview({});
+                    }
+                });
+        });
+    });
+
+    const assignForm = document.getElementById('assign-labels-form');
+    function populateAssignModal(products, templates) {
+        assignForm.innerHTML = '';
+        products.forEach(p => {
+            let options = templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+            assignForm.innerHTML += `
+                <div class="form-group">
+                    <label><strong>${p.product_name}</strong></label>
+                    <select class="form-control" name="template_for_${p.product_id}" required>
+                        <option value="" disabled selected>-- Wybierz szablon --</option>
+                        ${options}
+                    </select>
+                </div>
+            `;
+        });
+    }
+
+    document.getElementById('confirm-assign-btn').addEventListener('click', function() {
+        const formData = new FormData(assignForm);
+        const assignedTemplates = {};
+        for (let [key, value] of formData.entries()) {
+            const productId = key.replace('template_for_', '');
+            assignedTemplates[productId] = value;
+        }
+        $('#assignLabelModal').modal('hide');
+        prepareAndShowPrintPreview(assignedTemplates);
+    });
+
+    const previewArea = document.getElementById('print-preview-area');
+    const totalCountEl = document.getElementById('total-labels-count');
+    const startPrintBtn = document.getElementById('start-print-btn');
+    const printStatusDiv = document.getElementById('print-status');
+    const printServerIpInput = document.getElementById('printServerIp');
+    
+    printServerIpInput.value = localStorage.getItem('printServerIp') || '';
+
+    async function prepareAndShowPrintPreview(assignedTemplates) {
+        previewArea.innerHTML = '<div class="spinner-border" role="status"><span class="sr-only">Ładowanie...</span></div>';
+        totalCountEl.textContent = '...';
+        $('#printPreviewModal').modal('show');
+
+        const response = await fetch(`/api/order/${currentOrderId}/prepare_labels_for_printing`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ assigned_templates: assignedTemplates })
+        });
+        const data = await response.json();
+
+        previewArea.innerHTML = '';
+        labelsToPrintQueue = [];
+        let totalCount = 0;
+
+        const renderContainer = document.getElementById('label-render-container');
+        
+        // --- POCZĄTEK ZMIANY ---
+
+        for (const labelInfo of data) {
+            totalCount += labelInfo.quantity;
+            
+            // Stwórz HTML dla jednej metki tego typu
+            const labelHtml = createLabelHtml(labelInfo.template_json, labelInfo.size);
+            renderContainer.innerHTML = labelHtml;
+            const labelElement = renderContainer.firstElementChild;
+            
+            // "Sfotografuj" metkę
+            const canvas = await html2canvas(labelElement, { scale: 3, backgroundColor: null });
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+
+            // Dodaj do kolejki drukowania odpowiednią liczbę kopii
+            for (let i = 0; i < labelInfo.quantity; i++) {
+                labelsToPrintQueue.push(blob);
+            }
+
+            // Stwórz element podglądu (zdjęcie + ilość)
+            const previewWrapper = document.createElement('div');
+            previewWrapper.style.position = 'relative';
+            previewWrapper.style.margin = '5px';
+
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(blob);
+            img.style.width = '100px'; // Zwiększamy podgląd dla czytelności
+            img.style.border = '1px solid #ddd';
+            
+            const quantityBadge = document.createElement('span');
+            quantityBadge.className = 'badge badge-primary badge-pill';
+            quantityBadge.textContent = `x ${labelInfo.quantity}`;
+            quantityBadge.style.position = 'absolute';
+            quantityBadge.style.top = '5px';
+            quantityBadge.style.right = '5px';
+            quantityBadge.style.fontSize = '0.9rem';
+
+            previewWrapper.appendChild(img);
+            previewWrapper.appendChild(quantityBadge);
+            previewArea.appendChild(previewWrapper);
+        }
+
+        // --- KONIEC ZMIANY ---
+        
+        renderContainer.innerHTML = ''; // Wyczyść kontener po użyciu
+        totalCountEl.textContent = totalCount;
+    }
+    
+    // --- POCZĄTEK ZMIANY: Poprawiona funkcja createLabelHtml ---
+    function createLabelHtml(templateJson, size) {
+        let elementsHtml = '';
+        templateJson.elements.forEach(element => {
+            let content = '';
+            let extraStyles = '';
+            if (element.type === 'image') {
+                content = `<img src="${element.src}" style="width: 100%; height: auto;">`;
+            } else if (element.type === 'icon') {
+                content = `<span style="font-family: 'WashCareSymbols', sans-serif;">${element.symbol}</span>`;
+            } else if (element.type === 'dynamic') {
+                content = size;
+            } else {
+                content = element.content;
+            }
+
+            if (element.isCentered) {
+                extraStyles = 'text-align: center; width: 100%; left: 0;';
+            }
+
+            elementsHtml += `
+                <div style="position: absolute; 
+                            transform: ${element.x === '50%' ? 'translateX(-50%)' : `translate(${element.x}px, ${element.y}px)`};
+                            top: ${element.x === '50%' ? `${element.y}px` : '0'};
+                            left: ${element.x === '50%' ? '50%' : '0'};
+                            font-size: ${element.fontSize}px;
+                            font-weight: ${element.type === 'dynamic' ? 'bold' : 'normal'};
+                            width: ${element.width};
+                            padding: 5px;
+                            ${extraStyles}">
+                    ${content}
+                </div>
+            `;
+        });
+
+        return `
+            <div class="label-canvas-render" style="width: 132px; height: ${templateJson.height}; background-color: white; position: relative; overflow: hidden;">
+                ${elementsHtml}
+            </div>
+        `;
+    }
+    // --- KONIEC ZMIANY ---
+
+
+    async function processPrintQueue() {
+        startPrintBtn.disabled = true;
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (let i = 0; i < labelsToPrintQueue.length; i++) {
+            const imageBlob = labelsToPrintQueue[i];
+            printStatusDiv.innerHTML = `<div class="alert alert-info">Drukowanie metki ${i + 1} z ${labelsToPrintQueue.length}...</div>`;
+            
+            try {
+                const success = await sendToPrintServer(imageBlob);
+                if (success) {
+                    successCount++;
+                } else {
+                    errorCount++;
+                }
+            } catch (err) {
+                errorCount++;
+                console.error("Błąd podczas wysyłania metki:", err);
+            }
+
+            if (errorCount > 0) {
+                 printStatusDiv.innerHTML = `<div class="alert alert-danger">Wystąpił błąd. ${successCount}/${labelsToPrintQueue.length} wysłano poprawnie. Spróbuj ponownie.</div>`;
+                 startPrintBtn.disabled = false;
+                 return;
+            }
+        }
+        printStatusDiv.innerHTML = `<div class="alert alert-success">Zakończono! Wydrukowano ${successCount} metek.</div>`;
+        startPrintBtn.disabled = false;
+    }
+
+    async function sendToPrintServer(imageBlob) {
+        let ip = printServerIpInput.value.trim();
+        if (!ip) {
+            alert("Wpisz adres IP serwera drukowania!");
+            return false;
+        }
+        
+        if (!ip.startsWith('http')) {
+            ip = 'http://' + ip;
+        }
+        localStorage.setItem('printServerIp', ip);
+
+        const formData = new FormData();
+        formData.append('image', imageBlob, 'label.png');
+        formData.append('width_mm', 35);
+        formData.append('height_mm', 50); 
+        formData.append('quantity', 1);
+
+        try {
+            const response = await fetch(`${ip}/print_label`, { method: 'POST', body: formData });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Błąd serwera druku');
+            };
+            const data = await response.json();
+            return data.status.includes('Wydrukowano');
+        } catch (error) {
+            console.error('Błąd połączenia z serwerem druku:', error);
+            alert(`Błąd połączenia z serwerem druku: ${error.message}`);
+            return false;
+        }
+    }
+
+    startPrintBtn.addEventListener('click', processPrintQueue);
 });
 </script>
 {% endblock %}

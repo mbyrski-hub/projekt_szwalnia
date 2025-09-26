@@ -484,8 +484,12 @@ def save_product_picture(form_picture):
 @app.route('/products/new', methods=['GET', 'POST'])
 def add_product():
     form = ProductForm()
+    # --- POCZĄTEK ZMIANY ---
     form.category_id.choices = [(c.id, c.name) for c in ProductCategory.query.order_by('name').all()]
     form.category_id.choices.insert(0, (0, '--- Brak ---'))
+    form.label_template_id.choices = [(lt.id, lt.name) for lt in LabelTemplate.query.order_by('name').all()]
+    form.label_template_id.choices.insert(0, (0, '--- Brak ---'))
+    # --- KONIEC ZMIANY ---
     available_materials = Material.query.order_by(Material.name).all()
     fabric_choices = [(f.id, f.name) for f in Fabric.query.order_by('name').all()]
     for f_form in form.fabrics_needed:
@@ -495,7 +499,10 @@ def add_product():
             name=form.name.data.strip().upper(),
             description=form.description.data.strip(),
             production_price=form.production_price.data,
-            category_id=form.category_id.data if form.category_id.data != 0 else None
+            category_id=form.category_id.data if form.category_id.data != 0 else None,
+            # --- POCZĄTEK ZMIANY ---
+            label_template_id=form.label_template_id.data if form.label_template_id.data != 0 else None
+            # --- KONIEC ZMIANY ---
         )
         db.session.add(new_product)
 
@@ -533,8 +540,12 @@ def edit_product(product_id):
     form = ProductForm(obj=product)
     
     # Ustawienie opcji dla list wyboru
+    # --- POCZĄTEK ZMIANY ---
     form.category_id.choices = [(c.id, c.name) for c in ProductCategory.query.order_by('name').all()]
     form.category_id.choices.insert(0, (0, '--- Brak ---'))
+    form.label_template_id.choices = [(lt.id, lt.name) for lt in LabelTemplate.query.order_by('name').all()]
+    form.label_template_id.choices.insert(0, (0, '--- Brak ---'))
+    # --- KONIEC ZMIANY ---
     available_materials = Material.query.order_by(Material.name).all()
     fabric_choices = [(f.id, f.name) for f in Fabric.query.order_by('name').all()]
 
@@ -556,7 +567,9 @@ def edit_product(product_id):
         product.description = form.description.data.strip()
         product.production_price = form.production_price.data
         product.category_id = form.category_id.data if form.category_id.data != 0 else None
-
+# --- POCZĄTEK ZMIANY ---
+        product.label_template_id = form.label_template_id.data if form.label_template_id.data != 0 else None
+        # --- KONIEC ZMIANY ---
         # Aktualizacja tkanin i materiałów (Twój kod jest tutaj poprawny)
         ProductFabric.query.filter_by(product_id=product.id).delete()
         ProductMaterial.query.filter_by(product_id=product.id).delete()
@@ -1546,3 +1559,60 @@ def delete_label_template(template_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
+    
+    # --- POCZĄTEK ZMIANY: ZAKTUALIZOWANE I POPRAWIONE TRASY API DO DRUKOWANIA ---
+
+@app.route('/api/order/<int:order_id>/prepare_labels')
+def prepare_labels_for_order(order_id):
+    order = Order.query.get_or_404(order_id)
+    
+    products_with_labels = []
+    products_without_labels = []
+    
+    # Używamy seta, aby uniknąć duplikatów produktów
+    unique_products = {item.product for item in order.order_items}
+
+    for product in unique_products:
+        if product.label_template_id:
+            products_with_labels.append({
+                'product_name': product.name,
+                'template_id': product.label_template_id,
+                'template_name': product.label_template.name
+            })
+        else:
+            products_without_labels.append({
+                'product_name': product.name,
+                'product_id': product.id
+            })
+
+    all_templates = LabelTemplate.query.order_by(LabelTemplate.name).all()
+    templates_list = [{'id': t.id, 'name': t.name} for t in all_templates]
+
+    return jsonify({
+        'with_labels': products_with_labels,
+        'without_labels': products_without_labels,
+        'all_templates': templates_list
+    })
+
+@app.route('/api/order/<int:order_id>/prepare_labels_for_printing', methods=['POST'])
+def prepare_labels_for_printing(order_id):
+    order = Order.query.get_or_404(order_id)
+    assigned_templates = request.json.get('assigned_templates', {})
+    
+    labels_to_render = []
+    
+    for item in order.order_items:
+        template_id = item.product.label_template_id or assigned_templates.get(str(item.product.id))
+        
+        if not template_id:
+            continue
+
+        template = LabelTemplate.query.get(template_id)
+        if template:
+            labels_to_render.append({
+                'quantity': item.quantity,
+                'size': item.size,
+                'template_json': json.loads(template.content_json)
+            })
+            
+    return jsonify(labels_to_render)
