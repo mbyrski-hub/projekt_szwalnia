@@ -1428,6 +1428,39 @@ def create_label_template():
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+# --- POCZĄTEK NOWEGO KODU ---
+@app.route('/api/label-templates/<int:template_id>', methods=['PUT'])
+def update_label_template(template_id):
+    """Odbiera dane JSON i aktualizuje istniejący szablon metki."""
+    template = LabelTemplate.query.get_or_404(template_id)
+    data = request.get_json()
+
+    if not data or 'name' not in data or 'content_json' not in data:
+        return jsonify({'status': 'error', 'message': 'Brak wymaganych danych.'}), 400
+
+    template_name = data['name'].strip().upper()
+    if not template_name:
+        return jsonify({'status': 'error', 'message': 'Nazwa szablonu nie może być pusta.'}), 400
+
+    # Sprawdzenie, czy inna metka nie ma już takiej nazwy
+    existing = LabelTemplate.query.filter(LabelTemplate.name == template_name, LabelTemplate.id != template_id).first()
+    if existing:
+        return jsonify({'status': 'error', 'message': 'Inny szablon o tej nazwie już istnieje.'}), 409
+
+    try:
+        template.name = template_name
+        template.content_json = json.dumps(data['content_json'])
+        db.session.commit()
+        flash('Szablon metki został pomyślnie zaktualizowany!', 'success')
+        return jsonify({'status': 'success', 'message': 'Szablon zaktualizowany.'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+# --- KONIEC NOWEGO KODU ---
+
+
+
+
 @app.route('/api/label-templates/<int:template_id>')
 def get_label_template(template_id):
     """Zwraca dane JSON dla konkretnego szablonu metki."""

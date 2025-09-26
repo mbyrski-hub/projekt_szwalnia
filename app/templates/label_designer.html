@@ -47,8 +47,9 @@
     .canvas-wrapper {
         flex-grow: 1;
         display: flex;
+        flex-direction: column; /* Zmieniono na kolumnę */
         justify-content: center;
-        align-items: flex-start;
+        align-items: center; /* Wycentrowanie */
         padding: 20px;
         background-color: rgba(0,0,0,0.05);
         border-radius: 8px;
@@ -75,6 +76,18 @@
         border-top: 1px dashed #888;
         pointer-events: none;
     }
+
+    /* NOWY BLOK: Wyświetlanie wymiarów */
+    .dimension-display {
+        margin-top: 15px;
+        padding: 5px 10px;
+        background-color: rgba(0, 0, 0, 0.6);
+        color: white;
+        font-size: 0.9rem;
+        border-radius: 5px;
+        font-family: monospace;
+    }
+
 
     .properties-panel {
         flex: 0 0 250px;
@@ -111,11 +124,14 @@
     .symbol-picker:hover {
         background-color: #e9ecef;
     }
+
 </style>
 {% endblock %}
 
 {% block content %}
 <h2><i class="fas fa-magic"></i> Kreator Metek</h2>
+
+<input type="hidden" id="currentTemplateId" value="">
 
 <div class="card mb-3">
     <div class="card-body form-inline">
@@ -145,6 +161,7 @@
 
     <div class="canvas-wrapper">
         <div id="labelCanvas" class="label-canvas"></div>
+        <div id="dimensionDisplay" class="dimension-display">Szer: 35mm / Wys: 50mm</div>
     </div>
 
     <div class="properties-panel">
@@ -182,9 +199,7 @@
                     {% for char in "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" %}<div class="symbol-picker" data-symbol="{{ char }}">{{ char }}</div>{% endfor %}
                 </div>
             </div>
-            
             </div>
-    
           </div>
       </div>
     </div>
@@ -192,11 +207,11 @@
 </div>
 {% endblock %}
 
+
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
 
 <script>
-// Cały skrypt pozostaje bez zmian, jest już przygotowany na tę modyfikację.
 document.addEventListener('DOMContentLoaded', function () {
     const canvas = document.getElementById('labelCanvas');
     const toolbox = document.querySelector('.toolbox');
@@ -206,10 +221,23 @@ document.addEventListener('DOMContentLoaded', function () {
     const saveBtn = document.getElementById('saveTemplateBtn');
     const templateNameInput = document.getElementById('templateName');
     const symbolsModal = document.getElementById('symbolsModal');
+    const currentTemplateIdInput = document.getElementById('currentTemplateId');
+    const dimensionDisplay = document.getElementById('dimensionDisplay');
     let elementCounter = 0;
+
+    // Funkcja do przeliczania pikseli na mm (w przybliżeniu)
+    const pxToMm = (px) => (px * 25.4 / 96).toFixed(0);
+
+    // Funkcja do aktualizacji wyświetlanych wymiarów
+    function updateDimensionDisplay() {
+        const heightPx = canvas.offsetHeight;
+        const widthPx = canvas.offsetWidth;
+        dimensionDisplay.textContent = `Szer: ${pxToMm(widthPx)}mm / Wys: ${pxToMm(heightPx)}mm`;
+    }
 
     function initializeCanvas() {
         canvas.innerHTML = '';
+        canvas.style.height = '189px';
         const cutLine = document.createElement('div');
         cutLine.className = 'cut-line';
         canvas.appendChild(cutLine);
@@ -227,17 +255,22 @@ document.addEventListener('DOMContentLoaded', function () {
         logoElement.innerHTML = `<img src="${logoElement.dataset.src}" style="width: 100%; height: auto; pointer-events: none;">`;
         canvas.appendChild(logoElement);
         makeElementInteractive(logoElement);
+        updateDimensionDisplay();
     }
 
     function createElement(toolType, options = {}) {
         const newElement = document.createElement('div');
         newElement.classList.add('draggable-element');
         newElement.style.position = 'absolute';
-        newElement.style.left = '10px';
-        newElement.style.top = '10px';
         newElement.style.border = '1px dashed #ccc';
         newElement.style.padding = '5px';
         newElement.dataset.id = `element-${elementCounter++}`;
+        const initialX = 10;
+        const initialY = 10;
+        newElement.style.transform = `translate(${initialX}px, ${initialY}px)`;
+        newElement.setAttribute('data-x', initialX);
+        newElement.setAttribute('data-y', initialY);
+
         if (toolType === 'icon') {
             newElement.textContent = options.symbol;
             newElement.classList.add('care-symbol-element');
@@ -293,12 +326,18 @@ document.addEventListener('DOMContentLoaded', function () {
                         target.style.transform = `translate(${x}px, ${y}px)`;
                         target.setAttribute('data-x', x);
                         target.setAttribute('data-y', y);
-                        const rect = canvas.getBoundingClientRect();
-                        const targetRect = target.getBoundingClientRect();
-                        const newHeight = targetRect.bottom - rect.top + 20;
-                        if (newHeight > canvas.offsetHeight) {
-                            canvas.style.height = `${newHeight}px`;
-                        }
+                        
+                        let maxHeight = 189;
+                        const canvasRect = canvas.getBoundingClientRect();
+                        canvas.querySelectorAll('.draggable-element').forEach(el => {
+                            const elemRect = el.getBoundingClientRect();
+                            const bottomPosition = elemRect.bottom - canvasRect.top;
+                            if (bottomPosition > maxHeight) {
+                                maxHeight = bottomPosition;
+                            }
+                        });
+                        canvas.style.height = `${maxHeight + 15}px`;
+                        updateDimensionDisplay();
                     }
                 },
                 modifiers: [interact.modifiers.restrictRect({ restriction: 'parent' })],
@@ -316,8 +355,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const type = element.dataset.type;
         let contentHtml = `<h5>Właściwości</h5><p>Typ: <strong>${type}</strong></p>`;
         if (type === 'text' || type === 'dynamic' || type === 'icon') {
-            if(type !== 'icon'){
-                 contentHtml += `<div class="form-group"><label>Tekst:</label><input type="text" class="form-control form-control-sm" value="${element.textContent}" oninput="updateElement(this, '${element.dataset.id}', 'textContent')"></div>`;
+            if (type !== 'icon' && type !== 'dynamic') {
+                contentHtml += `<div class="form-group"><label>Tekst:</label><input type="text" class="form-control form-control-sm" value="${element.textContent}" oninput="updateElement(this, '${element.dataset.id}', 'textContent')"></div>`;
             }
             contentHtml += `<div class="form-group"><label>Rozmiar (px):</label><input type="number" class="form-control form-control-sm" value="${element.dataset.fontSize}" oninput="updateElement(this, '${element.dataset.id}', 'fontSize')"></div>`;
         }
@@ -346,22 +385,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     saveBtn.addEventListener('click', function() {
         const templateName = templateNameInput.value.trim();
+        const currentId = currentTemplateIdInput.value;
         if (!templateName) {
             alert('Proszę wpisać nazwę szablonu.');
             return;
         }
+        
         const elementsData = [];
         canvas.querySelectorAll('.draggable-element').forEach(el => {
-            const transform = el.style.transform;
-            const translateMatch = transform.match(/translate\((.+)px, (.+)px\)/) || transform.match(/translateX\((.+)px\)/);
             let x = 0, y = 0;
-            if (transform.includes('translateX')) {
-                 x = '50%';
-                 y = parseFloat(el.style.top) || 0;
-            } else if (translateMatch) {
-                 x = parseFloat(translateMatch[1]);
-                 y = parseFloat(translateMatch[2]);
+            if (el.style.left === '50%') {
+                x = '50%';
+                y = parseFloat(el.style.top) || 0;
+            } else {
+                x = parseFloat(el.getAttribute('data-x')) || 0;
+                y = parseFloat(el.getAttribute('data-y')) || 0;
             }
+
             const elementInfo = {
                 type: el.dataset.type,
                 id: el.dataset.id,
@@ -376,6 +416,7 @@ document.addEventListener('DOMContentLoaded', function () {
             };
             elementsData.push(elementInfo);
         });
+
         const finalTemplate = {
             name: templateName,
             content_json: {
@@ -383,8 +424,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 elements: elementsData
             }
         };
-        fetch('/api/label-templates', {
-            method: 'POST',
+
+        let url = '/api/label-templates';
+        let method = 'POST';
+        if (currentId) {
+            url = `/api/label-templates/${currentId}`;
+            method = 'PUT';
+        }
+
+        fetch(url, {
+            method: method,
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(finalTemplate),
         })
@@ -392,7 +441,7 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(data => {
             if (data.status === 'success') {
                 alert('Szablon został zapisany!');
-                window.location.reload(); 
+                window.location.reload();
             } else {
                 alert('Błąd zapisu: ' + data.message);
             }
@@ -403,51 +452,63 @@ document.addEventListener('DOMContentLoaded', function () {
     function loadTemplate(templateData) {
         canvas.innerHTML = '';
         elementCounter = 0;
+        currentTemplateIdInput.value = templateData.id;
+
         const cutLine = document.createElement('div');
         cutLine.className = 'cut-line';
         canvas.appendChild(cutLine);
+
         const content = templateData.content_json;
         if (content.height) {
             canvas.style.height = content.height;
         }
-        content.elements.forEach(elData => {
-            const newElement = document.createElement('div');
-            newElement.classList.add('draggable-element');
-            newElement.style.position = 'absolute';
-            newElement.style.border = '1px dashed #ccc';
-            newElement.style.padding = '5px';
-            newElement.dataset.id = elData.id || `element-${elementCounter++}`;
-            newElement.dataset.type = elData.type;
-            if (elData.x === '50%') {
-                 newElement.style.left = '50%';
-                 newElement.style.transform = 'translateX(-50%)';
-                 newElement.style.top = `${elData.y}px`;
-            } else {
-                 newElement.style.transform = `translate(${elData.x}px, ${elData.y}px)`;
-                 newElement.setAttribute('data-x', elData.x);
-                 newElement.setAttribute('data-y', elData.y);
-            }
-            if (elData.type === 'image') {
-                newElement.dataset.src = elData.src;
-                newElement.innerHTML = `<img src="${elData.src}" style="width: 100%; height: auto; pointer-events: none;">`;
-                newElement.style.width = elData.width;
-            } else if (elData.type === 'icon') {
-                newElement.classList.add('care-symbol-element');
-                newElement.dataset.symbol = elData.symbol;
-                newElement.textContent = elData.symbol;
-                newElement.style.fontSize = `${elData.fontSize}px`;
-                newElement.dataset.fontSize = elData.fontSize;
-            } else {
-                newElement.textContent = elData.content;
-                newElement.style.fontSize = `${elData.fontSize}px`;
-                newElement.dataset.fontSize = elData.fontSize;
-                if(elData.type === 'dynamic') newElement.style.fontWeight = 'bold';
-            }
-            canvas.appendChild(newElement);
-            makeElementInteractive(newElement);
-        });
+        
+        if (content.elements) {
+            content.elements.forEach(elData => {
+                const newElement = document.createElement('div');
+                newElement.classList.add('draggable-element');
+                newElement.style.position = 'absolute';
+                newElement.style.border = '1px dashed #ccc';
+                newElement.style.padding = '5px';
+                newElement.dataset.id = elData.id || `element-${elementCounter++}`;
+                newElement.dataset.type = elData.type;
+                
+                if (elData.x === '50%') {
+                    newElement.style.left = '50%';
+                    newElement.style.transform = 'translateX(-50%)';
+                    newElement.style.top = `${elData.y}px`;
+                } else {
+                    const x = elData.x || 0;
+                    const y = elData.y || 0;
+                    newElement.style.transform = `translate(${x}px, ${y}px)`;
+                    newElement.setAttribute('data-x', x);
+                    newElement.setAttribute('data-y', y);
+                }
+
+                if (elData.type === 'image') {
+                    newElement.dataset.src = elData.src;
+                    newElement.innerHTML = `<img src="${elData.src}" style="width: 100%; height: auto; pointer-events: none;">`;
+                    newElement.style.width = elData.width;
+                } else if (elData.type === 'icon') {
+                    newElement.classList.add('care-symbol-element');
+                    newElement.dataset.symbol = elData.symbol;
+                    newElement.textContent = elData.symbol;
+                    newElement.style.fontSize = `${elData.fontSize}px`;
+                    newElement.dataset.fontSize = elData.fontSize;
+                } else {
+                    newElement.textContent = elData.content;
+                    newElement.style.fontSize = `${elData.fontSize}px`;
+                    newElement.dataset.fontSize = elData.fontSize;
+                    if (elData.type === 'dynamic') newElement.style.fontWeight = 'bold';
+                }
+                canvas.appendChild(newElement);
+                makeElementInteractive(newElement);
+            });
+        }
+        
         templateNameInput.value = templateData.name;
         deleteBtn.style.display = 'inline-block';
+        updateDimensionDisplay();
     }
 
     templateSelector.addEventListener('change', function() {
@@ -461,6 +522,7 @@ document.addEventListener('DOMContentLoaded', function () {
             initializeCanvas();
             templateNameInput.value = '';
             deleteBtn.style.display = 'none';
+            currentTemplateIdInput.value = '';
         }
     });
 
@@ -484,7 +546,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(error => console.error('Błąd usuwania:', error));
         }
     });
-
+    
     initializeCanvas();
 });
 </script>
