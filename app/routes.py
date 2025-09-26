@@ -5,7 +5,7 @@ from app import app, db
 from app.models import (Order, Client, Product, OrderItem, Attachment,
                         OrderTemplate, Fabric, MaterialUsage, ProductMaterial,
                         SubiektProductCache, Material, ProductCategory,
-                        OrderFabric, TemplateFabric, ProductFabric, SystemInfo, ProductImage)
+                        OrderFabric, TemplateFabric, ProductFabric, SystemInfo, ProductImage, LabelTemplate)
 from app.forms import (OrderForm, OrderTemplateForm, ProductForm, FabricForm,
                        MaterialForm, ProductCategoryForm, MaterialEditForm)
 from werkzeug.utils import secure_filename
@@ -1392,3 +1392,65 @@ def delete_product_image(image_id):
 @app.route('/download_print_server')
 def download_print_server():
     return send_from_directory('static/synchronizator', 'SerwerDrukuSzwalnia.exe', as_attachment=True)
+
+@app.route('/label-designer')
+def label_designer():
+    """Wyświetla stronę kreatora metek."""
+    all_templates = LabelTemplate.query.order_by(LabelTemplate.name).all()
+    return render_template('label_designer.html', title="Kreator Metek", templates=all_templates)
+
+@app.route('/api/label-templates', methods=['POST'])
+def create_label_template():
+    """Odbiera dane JSON z kreatora i zapisuje szablon metki."""
+    data = request.get_json()
+
+    if not data or 'name' not in data or 'content_json' not in data:
+        return jsonify({'status': 'error', 'message': 'Brak wymaganych danych.'}), 400
+
+    template_name = data['name'].strip().upper()
+    if not template_name:
+        return jsonify({'status': 'error', 'message': 'Nazwa szablonu nie może być pusta.'}), 400
+
+    # Sprawdzenie, czy szablon o tej nazwie już istnieje
+    if LabelTemplate.query.filter_by(name=template_name).first():
+        return jsonify({'status': 'error', 'message': 'Szablon o tej nazwie już istnieje.'}), 409
+
+    try:
+        new_template = LabelTemplate(
+            name=template_name,
+            content_json=json.dumps(data['content_json']) # Zapisujemy dane jako string JSON
+        )
+        db.session.add(new_template)
+        db.session.commit()
+        flash('Szablon metki został pomyślnie zapisany!', 'success')
+        return jsonify({'status': 'success', 'message': 'Szablon zapisany.'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/label-templates/<int:template_id>')
+def get_label_template(template_id):
+    """Zwraca dane JSON dla konkretnego szablonu metki."""
+    template = LabelTemplate.query.get_or_404(template_id)
+    
+    # Parsujemy string JSON z bazy danych na prawdziwy obiekt JSON
+    content = json.loads(template.content_json)
+    
+    return jsonify({
+        'id': template.id,
+        'name': template.name,
+        'content_json': content
+    })
+
+@app.route('/api/label-templates/<int:template_id>', methods=['DELETE'])
+def delete_label_template(template_id):
+    """Usuwa szablon metki z bazy danych."""
+    template = LabelTemplate.query.get_or_404(template_id)
+    try:
+        db.session.delete(template)
+        db.session.commit()
+        flash('Szablon został usunięty.', 'success')
+        return jsonify({'status': 'success', 'message': 'Szablon usunięty.'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500

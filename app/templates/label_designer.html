@@ -1,0 +1,491 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block head %}
+<style>
+    /* Import specjalistycznej czcionki do symboli prania */
+    @font-face {
+        font-family: 'WashCareSymbols';
+        src: url("{{ url_for('static', filename='fonts/wash-care-symbols.woff2') }}") format('woff2');
+        font-weight: normal;
+        font-style: normal;
+    }
+
+    .designer-container {
+        display: flex;
+        gap: 20px;
+        margin-top: 20px;
+        height: 75vh;
+    }
+
+    .toolbox {
+        flex: 0 0 220px;
+        padding: 15px;
+        border: 1px solid var(--card-border-color);
+        border-radius: 8px;
+        background-color: var(--card-bg-color);
+        overflow-y: auto;
+    }
+    .toolbox h5 {
+        margin-top: 0;
+        border-bottom: 1px solid var(--card-border-color);
+        padding-bottom: 10px;
+    }
+    .tool-item {
+        padding: 10px;
+        border: 1px dashed #ccc;
+        margin-bottom: 10px;
+        cursor: grab;
+        text-align: center;
+        background-color: #f8f9fa;
+    }
+    body.dark-mode .tool-item {
+        background-color: #333;
+        border-color: #555;
+    }
+
+    .canvas-wrapper {
+        flex-grow: 1;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        padding: 20px;
+        background-color: rgba(0,0,0,0.05);
+        border-radius: 8px;
+        overflow: auto;
+    }
+    body.dark-mode .canvas-wrapper {
+        background-color: rgba(255,255,255,0.05);
+    }
+
+    .label-canvas {
+        width: 132px; /* Odpowiednik ~35mm */
+        min-height: 189px; /* Odpowiednik ~50mm */
+        background-color: white;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        position: relative;
+        border: 1px solid #333;
+        transition: height 0.2s;
+    }
+    .cut-line {
+        position: absolute;
+        top: 7.5px; /* Odpowiednik ~2mm */
+        left: 0;
+        width: 100%;
+        border-top: 1px dashed #888;
+        pointer-events: none;
+    }
+
+    .properties-panel {
+        flex: 0 0 250px;
+        padding: 15px;
+        border: 1px solid var(--card-border-color);
+        border-radius: 8px;
+        background-color: var(--card-bg-color);
+    }
+    .properties-panel h5 {
+        margin-top: 0;
+        border-bottom: 1px solid var(--card-border-color);
+        padding-bottom: 10px;
+    }
+    .care-symbol-element {
+        font-family: 'WashCareSymbols', sans-serif;
+    }
+
+    /* Style dla okna z symbolami */
+    .modal-symbols-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+        gap: 10px;
+        font-family: 'WashCareSymbols', sans-serif;
+        font-size: 2.5rem;
+        text-align: center;
+    }
+    .symbol-picker {
+        padding: 5px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .symbol-picker:hover {
+        background-color: #e9ecef;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-magic"></i> Kreator Metek</h2>
+
+<div class="card mb-3">
+    <div class="card-body form-inline">
+        <label for="templateSelector" class="mr-2"><strong>Wczytaj lub edytuj szablon:</strong></label>
+        <select id="templateSelector" class="form-control">
+            <option value="">-- Nowy szablon --</option>
+            {% for t in templates %}
+            <option value="{{ t.id }}">{{ t.name }}</option>
+            {% endfor %}
+        </select>
+         <button id="deleteTemplateBtn" class="btn btn-danger ml-2" style="display: none;"><i class="fas fa-trash"></i> Usuń</button>
+    </div>
+</div>
+
+<div class="designer-container">
+    <div class="toolbox">
+        <h5>Narzędzia</h5>
+        <div class="tool-item" data-tool="text"><i class="fas fa-font"></i> Tekst</div>
+        <div class="tool-item" data-tool="image"><i class="fas fa-image"></i> Obraz</div>
+        <div class="tool-item" data-tool="dynamic"><i class="fas fa-tag"></i> Pole [ROZMIAR]</div>
+        
+        <h5 class="mt-3">Ikony Pielęgnacji</h5>
+        <button class="btn btn-outline-secondary w-100" data-toggle="modal" data-target="#symbolsModal">
+            <i class="fas fa-plus"></i> Dodaj Symbol
+        </button>
+    </div>
+
+    <div class="canvas-wrapper">
+        <div id="labelCanvas" class="label-canvas"></div>
+    </div>
+
+    <div class="properties-panel">
+        <h5>Właściwości</h5>
+        <div id="propertiesContent">
+            <p class="text-muted">Kliknij na element, aby edytować.</p>
+        </div>
+    </div>
+</div>
+
+<div class="mt-3">
+    <input type="text" id="templateName" class="form-control" placeholder="Wpisz nazwę szablonu...">
+    <button id="saveTemplateBtn" class="btn btn-success mt-2"><i class="fas fa-save"></i> Zapisz Szablon</button>
+</div>
+
+<div class="modal fade" id="symbolsModal" tabindex="-1" role="dialog" aria-labelledby="symbolsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="symbolsModalLabel">Wybierz Symbol Pielęgnacji</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+      </div>
+      <div class="modal-body">
+          <ul class="nav nav-tabs" id="symbolTabs" role="tablist">
+            <li class="nav-item"><a class="nav-link active" id="washing-tab" data-toggle="tab" href="#washing" role="tab">Pranie</a></li>
+            <li class="nav-item"><a class="nav-link" id="bleaching-tab" data-toggle="tab" href="#bleaching" role="tab">Wybielanie</a></li>
+            <li class="nav-item"><a class="nav-link" id="drying-tab" data-toggle="tab" href="#drying" role="tab">Suszenie</a></li>
+            <li class="nav-item"><a class="nav-link" id="ironing-tab" data-toggle="tab" href="#ironing" role="tab">Prasowanie</a></li>
+            <li class="nav-item"><a class="nav-link" id="pro-tab" data-toggle="tab" href="#pro" role="tab">Pranie Prof.</a></li>
+            <li class="nav-item"><a class="nav-link" id="misc-tab" data-toggle="tab" href="#misc" role="tab">Pozostałe</a></li>
+          </ul>
+          <div class="tab-content mt-3">
+            <div class="tab-pane fade show active" id="washing" role="tabpanel">
+                <div class="modal-symbols-grid">
+                    {% for char in "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" %}<div class="symbol-picker" data-symbol="{{ char }}">{{ char }}</div>{% endfor %}
+                </div>
+            </div>
+            
+            </div>
+    
+          </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+
+<script>
+// Cały skrypt pozostaje bez zmian, jest już przygotowany na tę modyfikację.
+document.addEventListener('DOMContentLoaded', function () {
+    const canvas = document.getElementById('labelCanvas');
+    const toolbox = document.querySelector('.toolbox');
+    const propertiesContent = document.getElementById('propertiesContent');
+    const templateSelector = document.getElementById('templateSelector');
+    const deleteBtn = document.getElementById('deleteTemplateBtn');
+    const saveBtn = document.getElementById('saveTemplateBtn');
+    const templateNameInput = document.getElementById('templateName');
+    const symbolsModal = document.getElementById('symbolsModal');
+    let elementCounter = 0;
+
+    function initializeCanvas() {
+        canvas.innerHTML = '';
+        const cutLine = document.createElement('div');
+        cutLine.className = 'cut-line';
+        canvas.appendChild(cutLine);
+        const logoElement = document.createElement('div');
+        logoElement.classList.add('draggable-element');
+        logoElement.style.position = 'absolute';
+        logoElement.style.border = '1px dashed #ccc';
+        logoElement.dataset.id = `element-${elementCounter++}`;
+        logoElement.dataset.type = 'image';
+        logoElement.dataset.src = "{{ url_for('static', filename='images/hoxa_logo_bw.png') }}";
+        logoElement.style.width = '45px';
+        logoElement.style.top = '53px';
+        logoElement.style.left = '50%';
+        logoElement.style.transform = 'translateX(-50%)';
+        logoElement.innerHTML = `<img src="${logoElement.dataset.src}" style="width: 100%; height: auto; pointer-events: none;">`;
+        canvas.appendChild(logoElement);
+        makeElementInteractive(logoElement);
+    }
+
+    function createElement(toolType, options = {}) {
+        const newElement = document.createElement('div');
+        newElement.classList.add('draggable-element');
+        newElement.style.position = 'absolute';
+        newElement.style.left = '10px';
+        newElement.style.top = '10px';
+        newElement.style.border = '1px dashed #ccc';
+        newElement.style.padding = '5px';
+        newElement.dataset.id = `element-${elementCounter++}`;
+        if (toolType === 'icon') {
+            newElement.textContent = options.symbol;
+            newElement.classList.add('care-symbol-element');
+            newElement.dataset.type = 'icon';
+            newElement.dataset.symbol = options.symbol;
+            newElement.dataset.fontSize = '24';
+            newElement.style.fontSize = '24px';
+        } else if (toolType === 'text') {
+            newElement.textContent = 'Nowy Tekst';
+            newElement.dataset.type = 'text';
+            newElement.dataset.fontSize = '12';
+            newElement.style.fontSize = '12px';
+        } else if (toolType === 'image') {
+            newElement.innerHTML = '<i class="fas fa-image fa-2x"></i>';
+            newElement.dataset.type = 'image';
+            newElement.style.width = '50px';
+            newElement.style.height = '50px';
+        } else if (toolType === 'dynamic') {
+            newElement.textContent = '[ ROZMIAR ]';
+            newElement.dataset.type = 'dynamic';
+            newElement.dataset.fontSize = '14';
+            newElement.style.fontSize = '14px';
+            newElement.style.fontWeight = 'bold';
+        }
+        canvas.appendChild(newElement);
+        makeElementInteractive(newElement);
+    }
+
+    toolbox.addEventListener('click', function(event) {
+        const toolItem = event.target.closest('.tool-item');
+        if (toolItem && toolItem.dataset.tool !== 'icon') {
+            createElement(toolItem.dataset.tool);
+        }
+    });
+
+    symbolsModal.addEventListener('click', function(event) {
+        const symbolPicker = event.target.closest('.symbol-picker');
+        if (symbolPicker) {
+            const symbol = symbolPicker.dataset.symbol;
+            createElement('icon', { symbol: symbol });
+            $('#symbolsModal').modal('hide');
+        }
+    });
+
+    function makeElementInteractive(element) {
+        interact(element)
+            .draggable({
+                listeners: {
+                    move(event) {
+                        const target = event.target;
+                        const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+                        const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+                        target.style.transform = `translate(${x}px, ${y}px)`;
+                        target.setAttribute('data-x', x);
+                        target.setAttribute('data-y', y);
+                        const rect = canvas.getBoundingClientRect();
+                        const targetRect = target.getBoundingClientRect();
+                        const newHeight = targetRect.bottom - rect.top + 20;
+                        if (newHeight > canvas.offsetHeight) {
+                            canvas.style.height = `${newHeight}px`;
+                        }
+                    }
+                },
+                modifiers: [interact.modifiers.restrictRect({ restriction: 'parent' })],
+                inertia: true
+            })
+            .on('tap', function (event) {
+                document.querySelectorAll('.draggable-element').forEach(el => el.style.border = '1px dashed #ccc');
+                event.currentTarget.style.border = '2px solid #007bff';
+                updatePropertiesPanel(event.currentTarget);
+            });
+    }
+
+    function updatePropertiesPanel(element) {
+        propertiesContent.innerHTML = '';
+        const type = element.dataset.type;
+        let contentHtml = `<h5>Właściwości</h5><p>Typ: <strong>${type}</strong></p>`;
+        if (type === 'text' || type === 'dynamic' || type === 'icon') {
+            if(type !== 'icon'){
+                 contentHtml += `<div class="form-group"><label>Tekst:</label><input type="text" class="form-control form-control-sm" value="${element.textContent}" oninput="updateElement(this, '${element.dataset.id}', 'textContent')"></div>`;
+            }
+            contentHtml += `<div class="form-group"><label>Rozmiar (px):</label><input type="number" class="form-control form-control-sm" value="${element.dataset.fontSize}" oninput="updateElement(this, '${element.dataset.id}', 'fontSize')"></div>`;
+        }
+        contentHtml += `<button class="btn btn-outline-danger btn-sm mt-2" onclick="deleteElement('${element.dataset.id}')"><i class="fas fa-trash-alt"></i> Usuń element</button>`;
+        propertiesContent.innerHTML = contentHtml;
+    }
+
+    window.updateElement = function(input, elementId, property) {
+        const element = document.querySelector(`[data-id="${elementId}"]`);
+        if (!element) return;
+        if (property === 'textContent') {
+            element.textContent = input.value;
+        } else if (property === 'fontSize') {
+            element.style.fontSize = `${input.value}px`;
+            element.dataset.fontSize = input.value;
+        }
+    };
+
+    window.deleteElement = function(elementId) {
+        const element = document.querySelector(`[data-id="${elementId}"]`);
+        if (element && confirm('Czy na pewno chcesz usunąć ten element?')) {
+            element.remove();
+            propertiesContent.innerHTML = '<p class="text-muted">Kliknij na element, aby edytować.</p>';
+        }
+    };
+
+    saveBtn.addEventListener('click', function() {
+        const templateName = templateNameInput.value.trim();
+        if (!templateName) {
+            alert('Proszę wpisać nazwę szablonu.');
+            return;
+        }
+        const elementsData = [];
+        canvas.querySelectorAll('.draggable-element').forEach(el => {
+            const transform = el.style.transform;
+            const translateMatch = transform.match(/translate\((.+)px, (.+)px\)/) || transform.match(/translateX\((.+)px\)/);
+            let x = 0, y = 0;
+            if (transform.includes('translateX')) {
+                 x = '50%';
+                 y = parseFloat(el.style.top) || 0;
+            } else if (translateMatch) {
+                 x = parseFloat(translateMatch[1]);
+                 y = parseFloat(translateMatch[2]);
+            }
+            const elementInfo = {
+                type: el.dataset.type,
+                id: el.dataset.id,
+                x: x,
+                y: y,
+                content: (el.dataset.type === 'image' || el.dataset.type === 'icon') ? '' : el.textContent,
+                symbol: el.dataset.symbol || '',
+                fontSize: el.dataset.fontSize,
+                src: el.dataset.src || '',
+                width: el.style.width,
+                height: el.style.height
+            };
+            elementsData.push(elementInfo);
+        });
+        const finalTemplate = {
+            name: templateName,
+            content_json: {
+                height: canvas.style.height,
+                elements: elementsData
+            }
+        };
+        fetch('/api/label-templates', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(finalTemplate),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert('Szablon został zapisany!');
+                window.location.reload(); 
+            } else {
+                alert('Błąd zapisu: ' + data.message);
+            }
+        })
+        .catch((error) => console.error('Error:', error));
+    });
+
+    function loadTemplate(templateData) {
+        canvas.innerHTML = '';
+        elementCounter = 0;
+        const cutLine = document.createElement('div');
+        cutLine.className = 'cut-line';
+        canvas.appendChild(cutLine);
+        const content = templateData.content_json;
+        if (content.height) {
+            canvas.style.height = content.height;
+        }
+        content.elements.forEach(elData => {
+            const newElement = document.createElement('div');
+            newElement.classList.add('draggable-element');
+            newElement.style.position = 'absolute';
+            newElement.style.border = '1px dashed #ccc';
+            newElement.style.padding = '5px';
+            newElement.dataset.id = elData.id || `element-${elementCounter++}`;
+            newElement.dataset.type = elData.type;
+            if (elData.x === '50%') {
+                 newElement.style.left = '50%';
+                 newElement.style.transform = 'translateX(-50%)';
+                 newElement.style.top = `${elData.y}px`;
+            } else {
+                 newElement.style.transform = `translate(${elData.x}px, ${elData.y}px)`;
+                 newElement.setAttribute('data-x', elData.x);
+                 newElement.setAttribute('data-y', elData.y);
+            }
+            if (elData.type === 'image') {
+                newElement.dataset.src = elData.src;
+                newElement.innerHTML = `<img src="${elData.src}" style="width: 100%; height: auto; pointer-events: none;">`;
+                newElement.style.width = elData.width;
+            } else if (elData.type === 'icon') {
+                newElement.classList.add('care-symbol-element');
+                newElement.dataset.symbol = elData.symbol;
+                newElement.textContent = elData.symbol;
+                newElement.style.fontSize = `${elData.fontSize}px`;
+                newElement.dataset.fontSize = elData.fontSize;
+            } else {
+                newElement.textContent = elData.content;
+                newElement.style.fontSize = `${elData.fontSize}px`;
+                newElement.dataset.fontSize = elData.fontSize;
+                if(elData.type === 'dynamic') newElement.style.fontWeight = 'bold';
+            }
+            canvas.appendChild(newElement);
+            makeElementInteractive(newElement);
+        });
+        templateNameInput.value = templateData.name;
+        deleteBtn.style.display = 'inline-block';
+    }
+
+    templateSelector.addEventListener('change', function() {
+        const templateId = this.value;
+        if (templateId) {
+            fetch(`/api/label-templates/${templateId}`)
+                .then(response => response.json())
+                .then(data => loadTemplate(data))
+                .catch(error => console.error('Błąd wczytywania szablonu:', error));
+        } else {
+            initializeCanvas();
+            templateNameInput.value = '';
+            deleteBtn.style.display = 'none';
+        }
+    });
+
+    deleteBtn.addEventListener('click', function() {
+        const selectedId = templateSelector.value;
+        if (!selectedId) {
+            alert('Wybierz szablon, który chcesz usunąć.');
+            return;
+        }
+        if (confirm(`Czy na pewno chcesz trwale usunąć szablon "${templateSelector.options[templateSelector.selectedIndex].text}"?`)) {
+            fetch(`/api/label-templates/${selectedId}`, { method: 'DELETE' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('Szablon został usunięty.');
+                    window.location.reload();
+                } else {
+                    alert('Błąd: ' + data.message);
+                }
+            })
+            .catch(error => console.error('Błąd usuwania:', error));
+        }
+    });
+
+    initializeCanvas();
+});
+</script>
+{% endblock %}
