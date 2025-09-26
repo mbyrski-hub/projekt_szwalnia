@@ -14,12 +14,11 @@ import re
 from datetime import datetime, date, timedelta
 import pdfkit
 import imgkit
-from sqlalchemy import extract
+from sqlalchemy import extract, func
 from app.doc_generator import save_order_as_word
 import platform
 from PIL import Image
 from collections import defaultdict
-from sqlalchemy import func
 import csv
 import io
 import pandas as pd
@@ -336,31 +335,80 @@ def orders_list():
 @app.route('/orders/history')
 def orders_history():
     client_filter = request.args.get('client', '').strip().upper()
-    year_filter = request.args.get('year', '')
-    month_filter = request.args.get('month', '')
+    year_filter = request.args.get('year', type=int)
+    month_filter = request.args.get('month', type=int)
 
-    # ### POCZĄTEK ZMIANY ###
-    # Filtrujemy tylko zlecenia o statusie 'ZREALIZOWANE'
+    # --- POCZĄTEK ZMIANY ---
+
+    # Zapytanie do podsumowania miesięcznego (pozostaje bez zmian)
+    summary_query = db.session.query(
+        extract('year', Order.created_at).label('year'),
+        extract('month', Order.created_at).label('month'),
+        func.sum(OrderItem.quantity * Product.production_price).label('total_production_value'),
+        func.count(Order.id).label('order_count')
+    ).join(OrderItem).join(Product).filter(Order.status == 'ZREALIZOWANE')
+
+    # Zapytanie do pełnej listy zleceń
     orders_query = Order.query.join(Client).filter(Order.status == 'ZREALIZOWANE')
-    # ### KONIEC ZMIANY ###
-    
+
+    # Aplikowanie filtrów do obu zapytań
     if client_filter:
+        summary_query = summary_query.join(Client).filter(Client.name == client_filter)
         orders_query = orders_query.filter(Client.name == client_filter)
     if year_filter:
-        orders_query = orders_query.filter(extract('year', Order.created_at) == int(year_filter))
+        summary_query = summary_query.filter(extract('year', Order.created_at) == year_filter)
+        orders_query = orders_query.filter(extract('year', Order.created_at) == year_filter)
     if month_filter:
-        orders_query = orders_query.filter(extract('month', Order.created_at) == int(month_filter))
+        summary_query = summary_query.filter(extract('month', Order.created_at) == month_filter)
+        orders_query = orders_query.filter(extract('month', Order.created_at) == month_filter)
 
+    monthly_summary = summary_query.group_by('year', 'month').order_by(extract('year', Order.created_at).desc(), extract('month', Order.created_at).desc()).all()
     all_orders = orders_query.order_by(Order.created_at.desc()).all()
+    
+    # --- KONIEC ZMIANY ---
 
-    years_query = db.session.query(extract('year', Order.created_at)).distinct().all()
-    years = sorted({int(y[0]) for y in years_query})
     clients = Client.query.order_by(Client.name).all()
-
+    years_query = db.session.query(extract('year', Order.created_at)).distinct().all()
+    years = sorted([y[0] for y in years_query], reverse=True)
+    
     return render_template('orders_history.html', 
-                           orders=all_orders, 
+                           monthly_summary=monthly_summary, 
+                           orders=all_orders, # Przekazanie pełnej listy zleceń
                            clients=clients, 
                            years=years)
+
+@app.route('/api/monthly_production_details/<int:year>/<int:month>')
+def monthly_production_details(year, month):
+    orders_in_month = Order.query.filter(
+        extract('year', Order.created_at) == year,
+        extract('month', Order.created_at) == month,
+        Order.status == 'ZREALIZOWANE'
+    ).all()
+
+    product_details = defaultdict(lambda: {'quantity': 0, 'total_value': 0.0})
+
+    for order in orders_in_month:
+        for item in order.order_items:
+            product_name = item.product.name
+            price = item.product.production_price or 0.0
+            quantity = item.quantity
+            
+            product_details[product_name]['quantity'] += quantity
+            product_details[product_name]['total_value'] += quantity * price
+            product_details[product_name]['price'] = price
+
+
+    details_list = [
+        {
+            'name': name,
+            'quantity': data['quantity'],
+            'price': data['price'],
+            'total_value': data['total_value']
+        }
+        for name, data in product_details.items()
+    ]
+
+    return jsonify(sorted(details_list, key=lambda x: x['name']))
 
 
 @app.route('/orders/<int:order_id>')
@@ -1498,5 +1546,3 @@ def delete_label_template(template_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
-    
-

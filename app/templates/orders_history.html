@@ -27,6 +27,37 @@
     <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filtruj</button>
 </form>
 
+<h4>Podsumowanie miesięczne</h4>
+<div class="table-responsive mb-5">
+    <table class="table table-striped table-hover">
+        <thead class="thead-light">
+            <tr>
+                <th>Miesiąc</th>
+                <th>Liczba Zleceń</th>
+                <th>Wartość Produkcji</th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for summary in monthly_summary %}
+            <tr>
+                <td>{{ summary.year }}-{{ "%02d"|format(summary.month) }}</td>
+                <td>{{ summary.order_count }}</td>
+                <td>{{ "%.2f zł"|format(summary.total_production_value or 0) }}</td>
+                <td>
+                    <button class="btn btn-sm btn-info btn-show-details" data-year="{{ summary.year }}" data-month="{{ summary.month }}">Pokaż szczegóły</button>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" class="text-center">Brak danych do podsumowania.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<h4>Szczegółowa lista zrealizowanych zleceń</h4>
 <div class="table-responsive">
     <table class="table table-striped table-hover">
         <thead class="thead-light">
@@ -58,4 +89,77 @@
     </table>
 </div>
 
+<div class="modal fade" id="detailsModal" tabindex="-1" role="dialog" aria-labelledby="detailsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="detailsModalLabel">Szczegóły Produkcji</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Produkt</th>
+                    <th>Ilość</th>
+                    <th>Cena Produkcji</th>
+                    <th>Wartość</th>
+                </tr>
+            </thead>
+            <tbody id="modal-table-body">
+                </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Zamknij</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const detailsButtons = document.querySelectorAll('.btn-show-details');
+    const modalTableBody = document.getElementById('modal-table-body');
+    const modalTitle = document.getElementById('detailsModalLabel');
+
+    detailsButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const year = this.dataset.year;
+            const month = this.dataset.month;
+
+            modalTitle.textContent = `Szczegóły Produkcji dla ${year}-${month.padStart(2, '0')}`;
+            modalTableBody.innerHTML = '<tr><td colspan="4" class="text-center">Ładowanie...</td></tr>';
+
+            fetch(`/api/monthly_production_details/${year}/${month}`)
+                .then(response => response.json())
+                .then(data => {
+                    let tableContent = '';
+                    data.forEach(item => {
+                        tableContent += `
+                            <tr>
+                                <td>${item.name}</td>
+                                <td>${item.quantity}</td>
+                                <td>${item.price.toFixed(2)} zł</td>
+                                <td>${item.total_value.toFixed(2)} zł</td>
+                            </tr>
+                        `;
+                    });
+                    modalTableBody.innerHTML = tableContent;
+                    $('#detailsModal').modal('show');
+                })
+                .catch(error => {
+                    console.error('Błąd:', error);
+                    modalTableBody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Błąd ładowania danych.</td></tr>';
+                    $('#detailsModal').modal('show');
+                });
+        });
+    });
+});
+</script>
 {% endblock %}
