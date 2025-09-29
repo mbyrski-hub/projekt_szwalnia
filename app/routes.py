@@ -7,7 +7,7 @@ from app.models import (Order, Client, Product, OrderItem, Attachment,
                         SubiektProductCache, Material, ProductCategory,
                         OrderFabric, TemplateFabric, ProductFabric, SystemInfo, ProductImage, LabelTemplate)
 from app.forms import (OrderForm, OrderTemplateForm, ProductForm, FabricForm,
-                       MaterialForm, ProductCategoryForm, MaterialEditForm)
+                       MaterialForm, ProductCategoryForm, MaterialEditForm, )
 from werkzeug.utils import secure_filename
 import os
 import re
@@ -25,6 +25,10 @@ import pandas as pd
 import json
 import math
 from .drive_service import upload_image_to_drive, delete_image_from_drive
+from .ai_image_service import generate_ai_images
+from werkzeug.datastructures import FileStorage
+import threading
+from .models import AiImageTask
 
 
 if platform.system() == 'Windows':
@@ -484,40 +488,40 @@ def save_product_picture(form_picture):
 @app.route('/products/new', methods=['GET', 'POST'])
 def add_product():
     form = ProductForm()
-    # --- POCZĄTEK ZMIANY ---
     form.category_id.choices = [(c.id, c.name) for c in ProductCategory.query.order_by('name').all()]
     form.category_id.choices.insert(0, (0, '--- Brak ---'))
     form.label_template_id.choices = [(lt.id, lt.name) for lt in LabelTemplate.query.order_by('name').all()]
     form.label_template_id.choices.insert(0, (0, '--- Brak ---'))
-    # --- KONIEC ZMIANY ---
+    
     available_materials = Material.query.order_by(Material.name).all()
     fabric_choices = [(f.id, f.name) for f in Fabric.query.order_by('name').all()]
     for f_form in form.fabrics_needed:
         f_form.fabric_id.choices = fabric_choices
+        
     if form.validate_on_submit():
         new_product = Product(
             name=form.name.data.strip().upper(),
             description=form.description.data.strip(),
             production_price=form.production_price.data,
             category_id=form.category_id.data if form.category_id.data != 0 else None,
-            # --- POCZĄTEK ZMIANY ---
             label_template_id=form.label_template_id.data if form.label_template_id.data != 0 else None
-            # --- KONIEC ZMIANY ---
         )
         db.session.add(new_product)
+        db.session.flush()
 
-        # --- NOWA LOGIKA DLA WIELU ZDJĘĆ ---
+        new_images_uploaded = []
         if form.images.data:
             for image_file in form.images.data:
-                if image_file.filename: # Sprawdzenie, czy plik nie jest pusty
+                if image_file and image_file.filename:
                     drive_image_id = upload_image_to_drive(image_file)
                     if drive_image_id:
-                        new_image = ProductImage(image_id=drive_image_id, product=new_product)
+                        new_image = ProductImage(image_id=drive_image_id, product=new_product, image_type='original')
                         db.session.add(new_image)
-        # --- KONIEC NOWEJ LOGIKI ---
-
+                        new_images_uploaded.append(new_image)
+        
         for fabric_data in form.fabrics_needed.data:
             db.session.add(ProductFabric(product=new_product, fabric_id=fabric_data['fabric_id'], usage_meters=fabric_data['usage_meters']))
+        
         for material_data in form.materials_needed.data:
             material_name = material_data['material_name'].strip().upper()
             quantity = material_data['quantity'].strip()
@@ -528,9 +532,28 @@ def add_product():
                     db.session.add(material)
                     db.session.flush()
                 db.session.add(ProductMaterial(product=new_product, material_id=material.id, quantity=quantity))
+        
         db.session.commit()
-        flash('Produkt został dodany.', 'success')
+
+        # --- SEKCJA URUCHAMIANIA ZADANIA AI W TLE ---
+        if new_images_uploaded:
+            base_image_id = new_images_uploaded[0].image_id
+            
+            # Tworzymy zadanie w bazie danych zamiast uruchamiać wątek bezpośrednio
+            new_task = AiImageTask(
+                product_id=new_product.id,
+                original_image_id=base_image_id,
+                status='pending'
+            )
+            db.session.add(new_task)
+            db.session.commit()
+            
+            flash('Produkt został dodany. Zdjęcia AI zostaną wygenerowane w tle.', 'info')
+        else:
+            flash('Produkt został dodany.', 'success')
+
         return redirect(url_for('products_list'))
+        
     return render_template('product_form.html', form=form, title="Dodaj Nowy Produkt",
                            available_materials=available_materials, fabric_choices=fabric_choices)
 
@@ -539,42 +562,26 @@ def edit_product(product_id):
     product = Product.query.get_or_404(product_id)
     form = ProductForm(obj=product)
     
-    # Ustawienie opcji dla list wyboru
-    # --- POCZĄTEK ZMIANY ---
     form.category_id.choices = [(c.id, c.name) for c in ProductCategory.query.order_by('name').all()]
     form.category_id.choices.insert(0, (0, '--- Brak ---'))
     form.label_template_id.choices = [(lt.id, lt.name) for lt in LabelTemplate.query.order_by('name').all()]
     form.label_template_id.choices.insert(0, (0, '--- Brak ---'))
-    # --- KONIEC ZMIANY ---
+    
     available_materials = Material.query.order_by(Material.name).all()
     fabric_choices = [(f.id, f.name) for f in Fabric.query.order_by('name').all()]
-
     for f_form in form.fabrics_needed:
         f_form.fabric_id.choices = fabric_choices
 
     if form.validate_on_submit():
-        # --- NOWA LOGIKA DLA WIELU ZDJĘĆ ---
-        if form.images.data:
-            for image_file in form.images.data:
-                if hasattr(image_file, 'filename') and image_file.filename:
-                    drive_image_id = upload_image_to_drive(image_file)
-                    if drive_image_id:
-                        new_image = ProductImage(image_id=drive_image_id, product_id=product.id)
-                        db.session.add(new_image)
-        # --- KONIEC NOWEJ LOGIKI ---
-
         product.name = form.name.data.strip().upper()
         product.description = form.description.data.strip()
         product.production_price = form.production_price.data
         product.category_id = form.category_id.data if form.category_id.data != 0 else None
-# --- POCZĄTEK ZMIANY ---
         product.label_template_id = form.label_template_id.data if form.label_template_id.data != 0 else None
-        # --- KONIEC ZMIANY ---
-        # Aktualizacja tkanin i materiałów (Twój kod jest tutaj poprawny)
+        
         ProductFabric.query.filter_by(product_id=product.id).delete()
         ProductMaterial.query.filter_by(product_id=product.id).delete()
-        db.session.commit()
-
+        
         for fabric_data in form.fabrics_needed.data:
             if fabric_data.get('fabric_id') and fabric_data.get('usage_meters') is not None:
                 db.session.add(ProductFabric(product_id=product.id, fabric_id=fabric_data['fabric_id'], usage_meters=fabric_data['usage_meters']))
@@ -589,9 +596,35 @@ def edit_product(product_id):
                     db.session.add(material)
                     db.session.flush()
                 db.session.add(ProductMaterial(product_id=product.id, material_id=material.id, quantity=quantity))
-        
+
+        new_images_uploaded = []
+        if form.images.data:
+            for image_file in form.images.data:
+                if hasattr(image_file, 'filename') and image_file.filename:
+                    drive_image_id = upload_image_to_drive(image_file)
+                    if drive_image_id:
+                        new_image = ProductImage(image_id=drive_image_id, product_id=product.id, image_type='original')
+                        db.session.add(new_image)
+                        new_images_uploaded.append(new_image)
+                        
         db.session.commit()
-        flash('Produkt został zaktualizowany.', 'success')
+
+        # --- SEKCJA URUCHAMIANIA ZADANIA AI W TLE ---
+        if new_images_uploaded:
+            base_image_id = new_images_uploaded[0].image_id
+            
+            new_task = AiImageTask(
+                product_id=product.id,
+                original_image_id=base_image_id,
+                status='pending'
+            )
+            db.session.add(new_task)
+            db.session.commit()
+            
+            flash('Produkt został zaktualizowany. Generowanie nowych zdjęć AI rozpoczęło się w tle.', 'info')
+        else:
+            flash('Produkt został zaktualizowany.', 'success')
+            
         return redirect(url_for('products_list'))
 
     if request.method == 'GET':
@@ -600,7 +633,7 @@ def edit_product(product_id):
             form.materials_needed.append_entry({'material_name': pm_link.material.name, 'quantity': pm_link.quantity})
 
     return render_template('product_form.html', form=form, title="Edytuj Produkt",
-                           product=product, # <-- Ta linia była kluczowa do dodania
+                           product=product,
                            available_materials=available_materials, fabric_choices=fabric_choices)
 
 @app.route('/products/delete/<int:product_id>', methods=['POST'])
@@ -1616,3 +1649,86 @@ def prepare_labels_for_printing(order_id):
             })
             
     return jsonify(labels_to_render)
+
+@app.route('/api/product/<int:product_id>/ai_images')
+def get_ai_images(product_id):
+    ai_images = ProductImage.query.filter(
+        ProductImage.product_id == product_id,
+        ProductImage.image_type.like('%_ai')
+    ).all()
+    
+    images_data = {
+        'catalog': [],
+        'model': []
+    }
+
+    for img in ai_images:
+        url = f"https://drive.google.com/thumbnail?id={img.image_id}&sz=w1000"
+        if 'catalog' in img.image_type:
+            images_data['catalog'].append(url)
+        elif 'model' in img.image_type:
+            images_data['model'].append(url)
+            
+    return jsonify(images_data)
+
+# app/routes.py
+
+def generate_and_save_ai_images_task(app, product_id, original_image_id, product_name):
+    """
+    Funkcja uruchamiana w osobnym wątku do generowania i zapisywania obrazów AI.
+    """
+    with app.app_context():
+        print(f"Rozpoczynanie zadania AI w tle dla produktu ID: {product_id}")
+        
+        base_image_url = f"https://drive.google.com/thumbnail?id={original_image_id}&sz=w1024"
+        
+        # Prompty instruujące model, by bazował na wgranym zdjęciu
+        prompts = {
+            'catalog_ai': (
+                f"Analyze the provided image of a piece of clothing. Recreate it as a professional, photorealistic e-commerce catalog photo. "
+                f"The garment is: '{product_name.replace('_', ' ')}'. "
+                f"Place the *exact same garment* on a clean, uniform, light grey background (#f2f2f2). "
+                f"It must be perfectly ironed and laid flat. The lighting should be soft and professional. "
+                f"Do not change the design, color, or texture of the clothing from the original image."
+            ),
+            'model_ai': (
+                f"Analyze the provided image of the garment: '{product_name.replace('_', ' ')}'. "
+                f"Create a new, full-body, photorealistic image of a male model wearing this *exact* piece of clothing. "
+                f"The model is standing in a natural, confident pose inside a bright, modern warehouse with a blurred background. "
+                f"Ensure the clothing's color, design, and details from the original image are accurately represented on the model."
+            )
+        }
+
+        generated_images = generate_ai_images(base_image_url, prompts)
+
+        if not generated_images:
+            print(f"Nie udało się wygenerować obrazów AI dla produktu ID: {product_id}")
+            task = AiImageTask.query.filter_by(product_id=product_id, original_image_id=original_image_id).first()
+            if task:
+                task.status = 'error'
+                db.session.commit()
+            return
+
+        product = Product.query.get(product_id)
+        for image_type, image_bytes in generated_images.items():
+            image_file = FileStorage(
+                stream=io.BytesIO(image_bytes),
+                filename=f"{product.name.lower()}_{image_type}.png",
+                content_type='image/png'
+            )
+            
+            ai_drive_id = upload_image_to_drive(image_file)
+            if ai_drive_id:
+                ai_image_record = ProductImage(
+                    image_id=ai_drive_id,
+                    product_id=product.id,
+                    image_type=image_type
+                )
+                db.session.add(ai_image_record)
+        
+        task = AiImageTask.query.filter_by(product_id=product_id, original_image_id=original_image_id).first()
+        if task:
+            task.status = 'complete'
+        
+        db.session.commit()
+        print(f"Zakończono zadanie AI w tle i zapisano obrazy dla produktu ID: {product_id}")

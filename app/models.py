@@ -104,7 +104,7 @@ class Product(db.Model):
     order_items = db.relationship('OrderItem', backref='product')
     label_template_id = db.Column(db.Integer, db.ForeignKey('label_template.id'), nullable=True)
     label_template = db.relationship('LabelTemplate')
-    
+
     @validates('production_price')
     def validate_positive_values(self, key, value):
         if value < 0:
@@ -118,7 +118,7 @@ class ProductImage(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     image_id = db.Column(db.String(100), nullable=False)
     product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
-
+    image_type = db.Column(db.String(20), nullable=False, default='original')
     def __repr__(self):
         return f'<ProductImage {self.image_id}>'
 
@@ -204,3 +204,11 @@ class LabelTemplate(db.Model):
 
     def __repr__(self):
         return f'<LabelTemplate {self.name}>'
+    
+
+class AiImageTask(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, nullable=False)
+    original_image_id = db.Column(db.String(100), nullable=False) # ID obrazu z Google Drive
+    status = db.Column(db.String(20), nullable=False, default='pending') # Statusy: pending, processing, complete, error
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

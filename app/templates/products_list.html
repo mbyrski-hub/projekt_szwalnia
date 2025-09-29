@@ -92,20 +92,35 @@
                         {% endif %}
                     </td>
                    <td class="actions-cell text-right">
-                        {% if product.images %}
-                            {# --- ZMIANA: Przekazanie wszystkich ID obrazów --- #}
-                            {% set image_ids = product.images|map(attribute='image_id')|join(',') %}
+                        {% set original_images = product.images|selectattr('image_type', 'equalto', 'original')|list %}
+                        {% if original_images %}
                             <button class="btn btn-info btn-sm view-image-btn"
                                     data-toggle="modal"
                                     data-target="#imageModal"
-                                    data-image-urls="{{ image_ids }}"
+                                    data-image-urls="{{ original_images|map(attribute='image_id')|join(',') }}"
                                     data-product-name="{{ product.name }}"
-                                    title="Pokaż zdjęcia">
+                                    title="Pokaż oryginalne zdjęcia">
                                 <i class="fas fa-images"></i>
                             </button>
                         {% else %}
                             <button class="btn btn-secondary btn-sm" disabled style="opacity: 0.5;" title="Brak zdjęcia">
                                 <i class="fas fa-image"></i>
+                            </button>
+                        {% endif %}
+
+                        {% set ai_images = product.images|selectattr('image_type', 'in', ['catalog_ai', 'model_ai'])|list %}
+                        {% if ai_images %}
+                            <button class="btn btn-primary btn-sm view-ai-btn"
+                                    data-toggle="modal"
+                                    data-target="#aiImageModal"
+                                    data-product-id="{{ product.id }}"
+                                    data-product-name="{{ product.name }}"
+                                    title="Pokaż zdjęcia AI">
+                                <i class="fas fa-magic"></i>
+                            </button>
+                        {% else %}
+                            <button class="btn btn-secondary btn-sm" disabled style="opacity: 0.5;" title="Brak zdjęć AI">
+                                <i class="fas fa-magic"></i>
                             </button>
                         {% endif %}
                         
@@ -125,7 +140,7 @@
     </div>
 </div>
 
-{# --- Modal do importu (bez zmian) --- #}
+{# --- Modal do importu --- #}
 <div class="modal fade" id="importModal" tabindex="-1" role="dialog" aria-labelledby="importModalLabel" aria-hidden="true">
   <div class="modal-dialog" role="document">
     <div class="modal-content">
@@ -160,7 +175,7 @@
   </div>
 </div>
 
-{# --- ZMIANA: Modal z karuzelą na zdjęcia --- #}
+{# --- Modal z karuzelą na oryginalne zdjęcia --- #}
 <div class="modal fade" id="imageModal" tabindex="-1" role="dialog" aria-labelledby="imageModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
@@ -188,7 +203,26 @@
   </div>
 </div>
 
-{# --- Modal do dodawania kategorii (bez zmian) --- #}
+{# --- Modal na zdjęcia AI --- #}
+<div class="modal fade" id="aiImageModal" tabindex="-1" role="dialog" aria-labelledby="aiImageModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="aiImageModalLabel">Zdjęcia AI dla produktu</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="ai-images-content" class="text-center">
+          <p>Ładowanie zdjęć...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# --- Modal do dodawania kategorii --- #}
 <div class="modal fade" id="addCategoryModal" tabindex="-1" role="dialog" aria-labelledby="addCategoryModalLabel" aria-hidden="true">
   <div class="modal-dialog" role="document">
     <div class="modal-content">
@@ -219,41 +253,85 @@
 {% block scripts %}
 <script>
 $(document).ready(function() {
-    // --- ZMIANA: Ulepszony skrypt do obsługi karuzeli ---
+    // Obsługa modala do wyświetlania ORYGINALNYCH zdjęć
     $('#imageModal').on('show.bs.modal', function (event) {
         var button = $(event.relatedTarget);
-        var imageUrls = button.data('image-urls').split(',');
+        var imageUrls = button.data('image-urls').toString().split(',');
         var productName = button.data('product-name');
         var modal = $(this);
         var carouselInner = modal.find('.carousel-inner');
         
-        carouselInner.empty(); // Wyczyść poprzednie zdjęcia
+        carouselInner.empty();
 
-        imageUrls.forEach(function(imageId, index) {
-            var itemClass = (index === 0) ? "carousel-item active" : "carousel-item";
-            var fullImageUrl = `https://drive.google.com/thumbnail?id=${imageId.trim()}&sz=w1000`;
-            
-            carouselInner.append(`
-                <div class="${itemClass}">
-                    <img src="${fullImageUrl}" class="d-block w-100" alt="Zdjęcie produktu ${index + 1}">
-                </div>
-            `);
-        });
+        if (imageUrls && imageUrls[0]) {
+            imageUrls.forEach(function(imageId, index) {
+                var itemClass = (index === 0) ? "carousel-item active" : "carousel-item";
+                var fullImageUrl = `https://drive.google.com/thumbnail?id=${imageId.trim()}&sz=w1000`;
+                
+                carouselInner.append(`
+                    <div class="${itemClass}">
+                        <img src="${fullImageUrl}" class="d-block w-100" alt="Zdjęcie produktu ${index + 1}">
+                    </div>
+                `);
+            });
+        }
         
         modal.find('.modal-title').text('Zdjęcia: ' + productName);
         
-        // Ukryj strzałki nawigacyjne, jeśli jest tylko jedno zdjęcie
         if (imageUrls.length <= 1) {
             modal.find('.carousel-control-prev, .carousel-control-next').hide();
         } else {
             modal.find('.carousel-control-prev, .carousel-control-next').show();
         }
 
-        $('#imageCarousel').carousel('to', 0); // Zawsze zaczynaj od pierwszego slajdu
+        $('#imageCarousel').carousel('to', 0);
     });
 
     $('#imageModal').on('hidden.bs.modal', function () {
         $(this).find('.carousel-inner').empty();
+    });
+
+    // Obsługa modala do wyświetlania zdjęć wygenerowanych przez AI
+    $('#aiImageModal').on('show.bs.modal', function (event) {
+        var button = $(event.relatedTarget);
+        var productId = button.data('product-id');
+        var productName = button.data('product-name');
+        var modal = $(this);
+        var content = modal.find('#ai-images-content');
+
+        modal.find('.modal-title').text('Zdjęcia AI: ' + productName);
+        content.html('<div class="spinner-border" role="status"><span class="sr-only">Ładowanie...</span></div>');
+
+        fetch(`/api/product/${productId}/ai_images`)
+            .then(response => response.json())
+            .then(data => {
+                content.empty();
+                let hasImages = false;
+
+                if (data.catalog && data.catalog.length > 0) {
+                    hasImages = true;
+                    content.append('<h4>Zdjęcia katalogowe</h4>');
+                    data.catalog.forEach(url => {
+                        content.append(`<img src="${url}" class="img-fluid rounded mb-3" style="max-height: 70vh; object-fit: contain;">`);
+                    });
+                }
+
+                if (data.model && data.model.length > 0) {
+                    hasImages = true;
+                    content.append('<h4>Zdjęcia na modelu</h4>');
+                    data.model.forEach(url => {
+                        content.append(`<img src="${url}" class="img-fluid rounded mb-3" style="max-height: 70vh; object-fit: contain;">`);
+                    });
+                }
+                
+                if (!hasImages) {
+                    content.html('<p class="text-muted">Brak wygenerowanych zdjęć AI dla tego produktu.</p>');
+                }
+            })
+            .catch(error => {
+                console.error("Błąd pobierania zdjęć AI:", error);
+                content.html('<p class="text-danger">Wystąpił błąd podczas ładowania zdjęć.</p>');
+            });
     });
 });
 </script>

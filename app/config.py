@@ -10,3 +10,4 @@ class Config:
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # maksymalnie 16 MB na upload
     # NOWY KLUCZ DO ZABEZPIECZENIA API
     API_SECRET_KEY = 'jYHGYSjdsaj86H28299..as1237f'
+    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or 'AIzaSyCEacw-zMUVSbNXVGk7CcEpF05k5zOlUAE'
