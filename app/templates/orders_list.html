@@ -1,67 +1,97 @@
 {% extends "base.html" %}
 {% block head %}
 <style>
+    /* NOWE STYLE - ZMODYFIKOWANE I POPRAWIONE */
+
     /* Odstęp między sekcjami akordeonu */
     #accordion .card {
         margin-bottom: 1rem;
-        border: none; /* Usuwamy domyślne obramowanie karty */
+        border: 1px solid var(--border-color);
+        background-color: var(--card-bg);
+        border-radius: .5rem !important;
+        overflow: hidden;
     }
 
-    /* Pastelowe tła i cienie dla nagłówków */
-    .header-in-progress { 
-        background-color: #FFF9E6; /* Delikatny żółty */
-        box-shadow: 0 4px 15px -5px rgba(255, 193, 7, 0.5);
+    /* Nagłówki akordeonu */
+    .accordion .card-header {
+        padding: 0;
+        border-bottom: 1px solid var(--border-color);
     }
-    .header-new { 
-        background-color: #E6F0FF; /* Delikatny niebieski */
-        box-shadow: 0 4px 15px -5px rgba(0, 123, 255, 0.4);
-    }
-    .header-completed { 
-        background-color: #E6F9EE; /* Delikatny zielony */
-        box-shadow: 0 4px 15px -5px rgba(40, 167, 69, 0.5);
+    
+    .accordion .card-header button {
+        text-decoration: none;
+        font-size: 1.1rem;
+        font-weight: 600;
+        padding: 1rem 1.5rem;
+        width: 100%;
+        text-align: left;
+        background: transparent;
+        border: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: background-color 0.2s ease-in-out;
     }
 
-    /* Style dla przycisków w nagłówkach - ciemniejszy odcień koloru */
-    .header-in-progress .btn-link { color: #c89400; }
-    .header-new .btn-link { color: #004085; }
-    .header-completed .btn-link { color: #155724; }
+    .accordion .card-header button:hover {
+        background-color: var(--hover-bg-color);
+    }
+    
+    .accordion .card-header button .badge {
+        font-size: 0.9rem;
+        padding: .5em .8em;
+        background-color: #495057;
+    }
 
-    /* Kolorowanie wierszy w tabelach */
-    .status-w-realizacji { background-color: rgba(255, 243, 205, 0.5) !important; }
-    .status-nowe { background-color: rgba(207, 226, 255, 0.5) !important; }
-    .status-zrealizowane { background-color: rgba(209, 231, 221, 0.5) !important; }
+    /* Kolory dla tytułów sekcji akordeonu - ZGODNIE Z PROŚBĄ */
+    #headingInProgress .btn-link { color: var(--accent-color) !important; }
+    #headingNew .btn-link { color: var(--primary-color) !important; }
+    #headingCompleted .btn-link { color: #28a745 !important; }
+    
+    .card-body {
+        padding: 0;
+    }
 
-    /* Jaśniejszy i delikatniejszy kolor dla nagłówka tabeli */
+    .table {
+        margin-bottom: 0;
+    }
+
+    /* Nagłówek tabeli w ciemnym motywie */
     .table thead.thead-dark th {
-        background-color: #f1f3f5; /* Bardzo jasny, neutralny szary */
-        color: #495057;          /* Ciemniejszy tekst dla dobrego kontrastu */
-        border-color: #ffffff;      /* Dopasowany, jasny kolor ramki */
+        background-color: #343a40;
+        color: var(--text-color);
+        border-color: var(--border-color);
+    }
+    
+    /* POPRAWKA: Kolorowanie wierszy i czytelność tekstu po najechaniu */
+    .status-w-realizacji { background-color: rgba(255, 193, 7, 0.1) !important; }
+    .status-nowe { background-color: rgba(0, 123, 255, 0.1) !important; }
+    .status-zrealizowane { background-color: rgba(40, 167, 69, 0.1) !important; }
+
+    .order-details, .order-details td {
+        background-color: var(--card-bg);
     }
 
-    /* Style dla animowanego przycisku "+" */
+    tr.order-row:hover td,
+    tr.order-details:hover td {
+        background-color: var(--hover-bg-color) !important;
+        color: var(--text-color) !important; /* Jasny tekst na ciemnym tle */
+    }
+
+    /* Style dla animowanego przycisku "+" - bez zmian z Twojej wersji */
     .btn-plus-animated {
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
+        width: 60px; height: 60px; border-radius: 50%;
         box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
         transition: all 0.3s ease-in-out;
         animation: pulse 2s infinite;
-        display: flex;
-        justify-content: center;
-        align-items: center;
+        display: flex; justify-content: center; align-items: center;
     }
-    
-    .btn-plus-animated .fas {
-        font-size: 1.8rem;
-        color: white;
-    }
-
+    .btn-plus-animated .fas { font-size: 1.8rem; color: white; }
     .btn-plus-animated:hover {
         transform: scale(1.1);
         box-shadow: 0 6px 20px rgba(40, 167, 69, 0.6);
         animation-play-state: paused;
     }
-
     @keyframes pulse {
         0% { box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4); }
         50% { box-shadow: 0 4px 25px rgba(40, 167, 69, 0.7); }
@@ -69,22 +99,12 @@
     }
 
     #label-render-container {
-        position: absolute;
-        left: -9999px; /* Ukrywamy poza ekranem */
-        top: -9999px;
+        position: absolute; left: -9999px; top: -9999px;
     }
     
-    /* --- POCZĄTEK ZMIANY: Poprawki dla modala --- */
-    #printPreviewModal .modal-dialog {
-        max-width: 50%; /* Zwiększenie szerokości modala */
-    }
-    #printPreviewModal .col-md-4 h4 {
-        font-size: 1.1rem; /* Zmniejszenie czcionki w panelu bocznym */
-    }
-    #printPreviewModal .col-md-4 p {
-        font-size: 0.9rem;
-    }
-    /* --- KONIEC ZMIANY --- */
+    #printPreviewModal .modal-dialog { max-width: 50%; }
+    #printPreviewModal .col-md-4 h4 { font-size: 1.1rem; }
+    #printPreviewModal .col-md-4 p { font-size: 0.9rem; }
 </style>
 {% endblock %}
 {% block title %}Lista Zleceń{% endblock %}

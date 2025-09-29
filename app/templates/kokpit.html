@@ -77,8 +77,10 @@
 {% endblock %}
 
 {% block content %}
-<h1 class="mb-4">Kokpit</h1>
-
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Kokpit</h1>
+    <h4 id="current-datetime" class="text-muted"></h4>
+</div>
 <div class="row">
     <div class="col-md-4">
         <div class="info-card">
@@ -114,6 +116,7 @@
         </div>
     </div>
 </div>
+
 <div class="row mt-4">
      <div class="col-12">
         <div class="card">
@@ -124,6 +127,7 @@
         </div>
     </div>
 </div>
+
 <div class="row">
     <div class="col-md-12">
         <div class="info-card">
@@ -198,7 +202,37 @@
     </div>
 </div>
 
-
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-dollar-sign"></i> Ostatnie Aktualizacje Cen</h5>
+                {% if recent_price_updates %}
+                    <ul class="list-group list-group-flush">
+                        {% for update in recent_price_updates %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ update.item_name }}</strong>
+                                <small class="text-muted d-block">({{ update.item_type }})</small>
+                            </div>
+                            <div>
+                                {% if update.old_price is not none %}
+                                    <span class="text-muted" style="text-decoration: line-through;">{{ "%.2f zł"|format(update.old_price) }}</span>
+                                {% endif %}
+                                <i class="fas fa-long-arrow-alt-right mx-2"></i>
+                                <span class="badge badge-success" style="font-size: 1rem;">{{ "%.2f zł"|format(update.new_price) }}</span>
+                            </div>
+                            <span class="text-muted" style="font-size: 0.8rem;">{{ update.changed_at | to_local_time }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">Brak zarejestrowanych aktualizacji cen.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="row mt-4">
     <div class="col-12">
@@ -227,6 +261,27 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     document.addEventListener("DOMContentLoaded", function() {
+// --- NOWY SKRYPT: Zegar ---
+        function updateDateTime() {
+            const now = new Date();
+            const options = {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            };
+            const formattedDateTime = now.toLocaleDateString('pl-PL', options);
+            const capitalizedDateTime = formattedDateTime.charAt(0).toUpperCase() + formattedDateTime.slice(1);
+            document.getElementById('current-datetime').textContent = capitalizedDateTime;
+        }
+        setInterval(updateDateTime, 1000);
+        updateDateTime(); // Wywołanie początkowe
+        // --- KONIEC SKRYPTU ZEGARA ---
+
+
 // --- NOWY SKRYPT: Animowany licznik ---
         const animatedValue = document.getElementById('animated-value');
         const targetValue = parseFloat(animatedValue.dataset.value);

@@ -212,3 +212,14 @@ class AiImageTask(db.Model):
     original_image_id = db.Column(db.String(100), nullable=False) # ID obrazu z Google Drive
     status = db.Column(db.String(20), nullable=False, default='pending') # Statusy: pending, processing, complete, error
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class PriceUpdateLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    item_type = db.Column(db.String(50), nullable=False)  # np. 'Tkanina', 'Materiał'
+    item_name = db.Column(db.String(100), nullable=False)
+    old_price = db.Column(db.Float, nullable=True)
+    new_price = db.Column(db.Float, nullable=False)
+    changed_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<PriceUpdateLog {self.item_name} changed to {self.new_price}>'

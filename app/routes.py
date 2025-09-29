@@ -5,7 +5,7 @@ from app import app, db
 from app.models import (Order, Client, Product, OrderItem, Attachment,
                         OrderTemplate, Fabric, MaterialUsage, ProductMaterial,
                         SubiektProductCache, Material, ProductCategory,
-                        OrderFabric, TemplateFabric, ProductFabric, SystemInfo, ProductImage, LabelTemplate)
+                        OrderFabric, TemplateFabric, ProductFabric, SystemInfo, ProductImage, LabelTemplate, PriceUpdateLog)
 from app.forms import (OrderForm, OrderTemplateForm, ProductForm, FabricForm,
                        MaterialForm, ProductCategoryForm, MaterialEditForm, )
 from werkzeug.utils import secure_filename
@@ -973,6 +973,15 @@ def inject_in_progress_orders():
             krojownia_orders.append(order)
     return dict(krojownia_in_progress=krojownia_orders, szwalnia_in_progress=szwalnia_orders)
 
+# app/routes.py
+
+# ... (importy - upewnij się, że PriceUpdateLog jest zaimportowany z modeli)
+from app.models import (Order, Client, Product, OrderItem, Attachment,
+                        OrderTemplate, Fabric, MaterialUsage, ProductMaterial,
+                        SubiektProductCache, Material, ProductCategory,
+                        OrderFabric, TemplateFabric, ProductFabric, SystemInfo, ProductImage, LabelTemplate, PriceUpdateLog) # Dodano PriceUpdateLog
+# ...
+
 @app.route('/api/v1/update-prices', methods=['POST'])
 def receive_price_update():
     auth_key = request.headers.get('X-API-KEY')
@@ -982,8 +991,6 @@ def receive_price_update():
     if not price_data:
         return jsonify({'error': 'Brak danych'}), 400
     
-    # ### POCZĄTEK ZMIANY ###
-    
     changed_prices_count = 0
     try:
         for item_data in price_data:
@@ -991,30 +998,36 @@ def receive_price_update():
             new_price = item_data.get('price')
 
             if not (symbol and new_price is not None):
-                continue  # Pomiń, jeśli brakuje danych
+                continue
 
-            # Sprawdź, czy to tkanina
             item = Fabric.query.filter_by(subiekt_symbol=symbol).first()
-            # Jeśli nie, sprawdź, czy to materiał
+            item_type_str = 'Tkanina'
             if not item:
                 item = Material.query.filter_by(subiekt_symbol=symbol).first()
+                item_type_str = 'Materiał'
 
-            # Jeśli znaleziono produkt i cena jest inna, zaktualizuj ją
             if item:
-                # Używamy math.isclose do bezpiecznego porównania liczb zmiennoprzecinkowych
                 if item.price is None or not math.isclose(item.price, new_price):
+                    # --- NOWY KOD: Zapis do logu ---
+                    log_entry = PriceUpdateLog(
+                        item_type=item_type_str,
+                        item_name=item.name,
+                        old_price=item.price,
+                        new_price=new_price
+                    )
+                    db.session.add(log_entry)
+                    # --- KONIEC NOWEGO KODU ---
+                    
                     item.price = new_price
                     changed_prices_count += 1
 
         if changed_prices_count > 0:
-            # Zapis daty aktualizacji
             last_update_info = SystemInfo.query.filter_by(key='last_price_update').first()
             if not last_update_info:
                 last_update_info = SystemInfo(key='last_price_update')
                 db.session.add(last_update_info)
             last_update_info.value = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
 
-            # Zapis liczby ZMIENIONYCH cen
             update_count_info = SystemInfo.query.filter_by(key='last_price_update_count').first()
             if not update_count_info:
                 update_count_info = SystemInfo(key='last_price_update_count')
@@ -1025,7 +1038,6 @@ def receive_price_update():
         message = f'Sprawdzono ceny. Zaktualizowano {changed_prices_count} pozycji, których cena uległa zmianie.'
         return jsonify({'status': 'success', 'message': message}), 200
         
-    # ### KONIEC ZMIANY ###
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -1795,7 +1807,7 @@ def kokpit():
 
     # Ostatnie aktywności, dochodowe produkty, etc. (bez zmian)
     recent_activities = Order.query.order_by(Order.created_at.desc()).limit(5).all()
-    most_profitable_products = db.session.query(
+    most_profitable_products_query = db.session.query(
         Product.name,
         func.sum(OrderItem.quantity * Product.production_price).label('total_profit')
     ).join(OrderItem).join(Order)\
@@ -1803,11 +1815,18 @@ def kokpit():
     .filter(extract('month', Order.created_at) == current_month)\
     .filter(extract('year', Order.created_at) == current_year)\
     .group_by(Product.name).order_by(func.sum(OrderItem.quantity * Product.production_price).desc()).limit(5).all()
+
+    # --- NOWY KOD: Konwersja danych na listę ---
+    most_profitable_products = [list(row) for row in most_profitable_products_query]
+    # --- KONIEC NOWEGO KODU ---
     bottlenecks = Order.query.filter_by(status='W REALIZACJI').order_by(Order.created_at.asc()).limit(5).all()
     upcoming_deadlines = Order.query.filter(
         Order.deadline.between(datetime.utcnow().date(), datetime.utcnow().date() + timedelta(days=7))
     ).order_by(Order.deadline.asc()).all()
 
+# --- NOWY KOD: Pobranie ostatnich aktualizacji cen ---
+    recent_price_updates = PriceUpdateLog.query.order_by(PriceUpdateLog.changed_at.desc()).limit(8).all()
+    # --- KONIEC NOWEGO KODU ---
 
     return render_template(
         'kokpit.html',
@@ -1818,5 +1837,6 @@ def kokpit():
         recent_activities=recent_activities,
         most_profitable_products=most_profitable_products,
         bottlenecks=bottlenecks,
-        upcoming_deadlines=upcoming_deadlines
+        upcoming_deadlines=upcoming_deadlines,
+        recent_price_updates=recent_price_updates  # Dodane
     )
