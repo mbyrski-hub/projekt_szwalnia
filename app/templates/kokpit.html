@@ -6,9 +6,9 @@
     .info-card {
         background-color: var(--card-bg);
         border: none;
-        border-radius: 10px;
+        border-radius: 20px;
         color: var(--text-color);
-        margin-bottom: 15px;
+        margin-bottom: 10px;
         transition: transform 0.2s, box-shadow 0.2s;
     }
     .info-card:hover {
@@ -65,12 +65,28 @@
         100% { transform: scale(1); }
     }
 
-/* --- NOWE STYLE DLA SEKCJI PRODUKCJI --- */
-    .info-card .icon-production { color: #6f42c1; } /* Fioletowy kolor dla ikony */
-    .production-history {
-        font-size: 0.9rem;
-        color: #aaa;
-        margin-top: 10px;
+    .production-value-card {
+        border-width: 2px;
+        animation: pulse-border 2s infinite;
+    }
+
+    .production-value-card .stat-number {
+        font-size: 3.2rem; /* Zwiększona czcionka */
+    }
+
+    @keyframes pulse-border {
+        0% {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 0 rgba(255, 153, 0, 0.7);
+        }
+        70% {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 10px 15px rgba(255, 153, 0, 0);
+        }
+        100% {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 0 rgba(255, 153, 0, 0);
+        }
     }
 
     .weather-widget {
@@ -182,36 +198,35 @@
 </div>
 
 <div class="row mt-4">
-    <div class="col-md-12">
-        <div class="info-card">
-            <div class="card-body">
-                <div class="icon icon-production"><i class="fas fa-chart-line"></i></div>
-                <div>
+     <div class="col-lg-4">
+        <div class="card h-100 production-value-card">
+            <div class="card-body d-flex flex-column justify-content-center">
+                <h5 class="card-title text-center">Wartość produkcji (bieżący miesiąc)</h5>
+                <div class="text-center">
                     <div class="stat-number" id="animated-value" data-value="{{ monthly_production_value }}">0.00 zł</div>
-                    <div class="stat-label">Wartość produkcji (bieżący miesiąc)</div>
-                    <div class="production-history">
-                        <strong>Poprzednie miesiące:</strong>
+                    <div class="production-history mt-2">
+                        <strong>Poprzednie miesiące:</strong><br>
                         {% for month_data in last_months_production %}
                             {{ month_data.year }}-{{ "%02d"|format(month_data.month) }}: <strong>{{ "%.2f zł"|format(month_data.value) }}</strong>
-                            {% if not loop.last %}|{% endif %}
+                            {% if not loop.last %}<br>{% endif %}
                         {% endfor %}
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
-<div class="row mt-4">
-    <div class="col-lg-7">
-        <div class="card">
+
+    <div class="col-lg-4">
+        <div class="card h-100">
             <div class="card-body">
                 <h5 class="card-title">Najbardziej dochodowe produkty (ten miesiąc)</h5>
                 <canvas id="profitChart"></canvas>
             </div>
         </div>
     </div>
-    <div class="col-lg-5">
-        <div class="card">
+
+    <div class="col-lg-4">
+        <div class="card h-100">
             <div class="card-body">
                 <h5 class="card-title">Zużycie tkanin (ten miesiąc)</h5>
                 <div id="fabric-chart" style="height: 250px;"></div>
