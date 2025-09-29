@@ -3,8 +3,6 @@
 
 {% block head %}
 <style>
-
-
     .designer-container {
         display: flex;
         gap: 20px;
@@ -14,28 +12,35 @@
 
     .toolbox {
         flex: 0 0 220px;
-        padding: 15px;
-        border: 1px solid var(--card-border-color);
-        border-radius: 8px;
-        background-color: var(--card-bg-color);
-        overflow-y: auto;
     }
-    .toolbox h5 {
+
+    .properties-panel {
+        flex: 0 0 250px;
+    }
+
+    .toolbox h5, .properties-panel h5 {
         margin-top: 0;
         border-bottom: 1px solid var(--card-border-color);
         padding-bottom: 10px;
     }
+
     .tool-item {
         padding: 10px;
-        border: 1px dashed #ccc;
+        border: 1px dashed #888;
         margin-bottom: 10px;
         cursor: grab;
         text-align: center;
-        background-color: #080808;
+        background-color: var(--card-bg-color);
+        color: var(--text-color);
+        transition: background-color 0.2s;
     }
-    body.dark-mode .tool-item {
-        background-color: #333;
-        border-color: #555;
+
+    .tool-item:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+
+    body.dark-mode .tool-item:hover {
+        background-color: rgba(255, 255, 255, 0.1);
     }
 
     .canvas-wrapper {
@@ -45,12 +50,10 @@
         justify-content: center;
         align-items: center;
         padding: 20px;
-        background-color: rgba(0,0,0,0.05);
+        background-color: var(--bg-color);
+        border: 1px solid var(--card-border-color);
         border-radius: 8px;
         overflow: auto;
-    }
-    body.dark-mode .canvas-wrapper {
-        background-color: rgba(255,255,255,0.05);
     }
 
     .label-canvas {
@@ -59,9 +62,16 @@
         background-color: white;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         position: relative;
-        /*border: 1px solid #333;*/
         transition: height 0.2s;
     }
+
+    /* --- POPRAWKA: Dodanie domyślnego koloru dla elementów --- */
+    .draggable-element {
+        color: #000000; /* Ustawienie czarnego koloru tekstu */
+    }
+    /* --- KONIEC POPRAWKI --- */
+
+
     .cut-line {
         position: absolute;
         top: 7.5px; /* Odpowiednik ~2mm */
@@ -70,9 +80,8 @@
         border-top: 1px dashed #888;
         pointer-events: none;
     }
-     /* --- NOWY STYL DLA ZAZNACZONEGO ELEMENTU --- */
     .draggable-element.selected {
-        border: 2px solid #007bff !important;
+        border: 2px solid var(--primary-color) !important;
     }
 
     .dimension-display {
@@ -85,18 +94,6 @@
         font-family: monospace;
     }
 
-    .properties-panel {
-        flex: 0 0 250px;
-        padding: 15px;
-        border: 1px solid var(--card-border-color);
-        border-radius: 8px;
-        background-color: var(--card-bg-color);
-    }
-    .properties-panel h5 {
-        margin-top: 0;
-        border-bottom: 1px solid var(--card-border-color);
-        padding-bottom: 10px;
-    }
     .care-symbol-element {
         font-family: 'WashCareSymbols', sans-serif;
     }
@@ -119,6 +116,12 @@
     .symbol-picker:hover {
         background-color: #e9ecef;
     }
+     body.dark-mode .symbol-picker {
+        border-color: #555;
+    }
+     body.dark-mode .symbol-picker:hover {
+        background-color: #333;
+    }
 
     #preview-box {
         border: 2px dashed #ccc;
@@ -128,7 +131,7 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        background-color: #f8f9fa;
+        background-color: var(--bg-color);
     }
     #preview-image {
         max-width: 100%;
@@ -157,16 +160,18 @@
 </div>
 
 <div class="designer-container">
-    <div class="toolbox">
-        <h5>Narzędzia</h5>
-        <div class="tool-item" data-tool="text"><i class="fas fa-font"></i> Tekst</div>
-        <div class="tool-item" data-tool="image"><i class="fas fa-image"></i> Obraz</div>
-        <div class="tool-item" data-tool="dynamic"><i class="fas fa-tag"></i> Pole [ROZMIAR]</div>
-        
-        <h5 class="mt-3">Ikony Pielęgnacji</h5>
-        <button class="btn btn-outline-secondary w-100" data-toggle="modal" data-target="#symbolsModal">
-            <i class="fas fa-plus"></i> Dodaj Symbol
-        </button>
+    <div class="card toolbox">
+        <div class="card-body">
+            <h5>Narzędzia</h5>
+            <div class="tool-item" data-tool="text"><i class="fas fa-font"></i> Tekst</div>
+            <div class="tool-item" data-tool="image"><i class="fas fa-image"></i> Obraz</div>
+            <div class="tool-item" data-tool="dynamic"><i class="fas fa-tag"></i> Pole [ROZMIAR]</div>
+            
+            <h5 class="mt-3">Ikony Pielęgnacji</h5>
+            <button class="btn btn-outline-secondary w-100" data-toggle="modal" data-target="#symbolsModal">
+                <i class="fas fa-plus"></i> Dodaj Symbol
+            </button>
+        </div>
     </div>
 
     <div class="canvas-wrapper">
@@ -174,13 +179,15 @@
         <div id="dimensionDisplay" class="dimension-display"></div>
     </div>
 
-    <div class="properties-panel">
-        <h5>Właściwości</h5>
-        <div id="propertiesContent">
-            <p class="text-muted">Kliknij na element, aby edytować.</p>
+    <div class="card properties-panel">
+        <div class="card-body">
+            <h5>Właściwości</h5>
+            <div id="propertiesContent">
+                <p class="text-muted">Kliknij na element, aby edytować.</p>
+            </div>
         </div>
     </div>
-</div>
+    </div>
 
 <div class="mt-3">
     <input type="text" id="templateName" class="form-control" placeholder="Wpisz nazwę szablonu...">
@@ -242,6 +249,7 @@
 <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
 
 <script>
+// Cały skrypt pozostaje bez zmian.
 document.addEventListener('DOMContentLoaded', function () {
     const canvas = document.getElementById('labelCanvas');
     const toolbox = document.querySelector('.toolbox');
@@ -383,7 +391,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function updatePropertiesPanel(element) {
         propertiesContent.innerHTML = '';
         const type = element.dataset.type;
-        let contentHtml = `<h5>Właściwości</h5><p>Typ: <strong>${type}</strong></p>`;
+        let contentHtml = `<p>Typ: <strong>${type}</strong></p>`;
 
         if (type === 'text' || type === 'dynamic' || type === 'icon') {
             if (type !== 'dynamic') { // Pole dynamiczne nie ma edytowalnego tekstu
@@ -391,7 +399,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             contentHtml += `<div class="form-group"><label>Rozmiar (px):</label><input type="number" class="form-control form-control-sm" value="${element.dataset.fontSize}" oninput="updateElement(this, '${element.dataset.id}', 'fontSize')"></div>`;
             
-            // --- POCZĄTEK ZMIANY: Dodajemy checkbox centrowania ---
             if (type === 'text' || type === 'dynamic') {
                 const isChecked = element.dataset.isCentered === 'true' ? 'checked' : '';
                 contentHtml += `
@@ -401,7 +408,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>
                 `;
             }
-            // --- KONIEC ZMIANY ---
         }
         contentHtml += `<button class="btn btn-outline-danger btn-sm mt-3" onclick="deleteElement('${element.dataset.id}')"><i class="fas fa-trash-alt"></i> Usuń element</button>`;
         propertiesContent.innerHTML = contentHtml;
@@ -415,11 +421,11 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (property === 'fontSize') {
             element.style.fontSize = `${input.value}px`;
             element.dataset.fontSize = input.value;
-        } else if (property === 'isCentered') { // --- POCZĄTEK ZMIANY ---
+        } else if (property === 'isCentered') {
             element.dataset.isCentered = input.checked;
             element.style.textAlign = input.checked ? 'center' : 'left';
             element.style.width = input.checked ? '100%' : 'auto';
-        } // --- KONIEC ZMIANY ---
+        }
     };
 
     window.deleteElement = function(elementId) {
@@ -461,9 +467,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 src: el.dataset.src || '',
                 width: el.style.width,
                 height: el.style.height,
-                // --- POCZĄTEK ZMIANY ---
                 isCentered: el.dataset.isCentered === 'true'
-                // --- KONIEC ZMIANY ---
             };
             elementsData.push(elementInfo);
         });
@@ -604,8 +608,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
    
-
-    // --- ZAKTUALIZOWANA LOGIKA DRUKOWANIA ---
     const testPrintBtn = document.getElementById('testPrintBtn');
     const printServerIpInput = document.getElementById('printServerIp');
     const confirmPrintBtn = document.getElementById('confirmPrintBtn');
@@ -626,32 +628,24 @@ document.addEventListener('DOMContentLoaded', function () {
         confirmPrintBtn.disabled = true;
         $('#printTestModal').modal('show');
 
-        // --- POCZĄTEK POPRAWKI: UKRYWANIE RAMEK ---
-        // Usuń zaznaczenie i ukryj ramki wszystkich elementów
         document.querySelectorAll('.draggable-element').forEach(el => {
             el.classList.remove('selected');
             el.style.border = 'none'; 
         });
-        // --- KONIEC POPRAWKI ---
 
         html2canvas(document.getElementById('labelCanvas'), {
             scale: 3,
             useCORS: true,
             backgroundColor: null
         }).then(canvasElement => {
-            // --- POCZĄTEK POPRAWKI: PRZYWRACANIE RAMEK ---
-            // Przywróć ramki po zrobieniu zrzutu ekranu
             document.querySelectorAll('.draggable-element').forEach(el => {
                 el.style.border = '1px dashed #ccc';
             });
-            // --- KONIEC POPRAWKI ---
-
             previewImage.src = canvasElement.toDataURL('image/png');
             previewImage.style.display = 'block';
             previewText.style.display = 'none';
             confirmPrintBtn.disabled = false;
         }).catch(err => {
-            // Przywróć ramki również w przypadku błędu
             document.querySelectorAll('.draggable-element').forEach(el => {
                 el.style.border = '1px dashed #ccc';
             });

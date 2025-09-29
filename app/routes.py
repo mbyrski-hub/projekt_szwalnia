@@ -52,7 +52,7 @@ def allowed_file(filename):
 
 @app.route('/')
 def index():
-    return redirect(url_for('orders_list'))
+    return redirect(url_for('kokpit'))
 
 def calculate_material_summary(order):
     summary = defaultdict(float)
