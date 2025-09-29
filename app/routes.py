@@ -1732,3 +1732,72 @@ def generate_and_save_ai_images_task(app, product_id, original_image_id, product
         
         db.session.commit()
         print(f"Zakończono zadanie AI w tle i zapisano obrazy dla produktu ID: {product_id}")
+
+@app.route('/kokpit')
+def kokpit():
+    # Statystyki zleceń
+    stats = {
+        'nowe': Order.query.filter_by(status='NOWE').count(),
+        'w_realizacji': Order.query.filter_by(status='W REALIZACJI').count(),
+        'zrealizowane': Order.query.filter_by(status='ZREALIZOWANE').count()
+    }
+
+    # Zużycie tkanin w bieżącym miesiącu
+    current_month = datetime.utcnow().month
+    current_year = datetime.utcnow().year
+    
+    fabric_summary = db.session.query(
+        Fabric.name,
+        func.sum(ProductFabric.usage_meters * OrderItem.quantity)
+    ).join(ProductFabric, Fabric.id == ProductFabric.fabric_id)\
+     .join(Product, Product.id == ProductFabric.product_id)\
+     .join(OrderItem, OrderItem.product_id == Product.id)\
+     .join(Order, Order.id == OrderItem.order_id)\
+     .filter(extract('month', Order.created_at) == current_month)\
+     .filter(extract('year', Order.created_at) == current_year)\
+     .group_by(Fabric.name).all()
+
+    fabric_summary_dict = {name: round(total, 2) for name, total in fabric_summary}
+    
+    # Wartość produkcji w bieżącym miesiącu
+    monthly_production_value = db.session.query(
+        func.sum(OrderItem.quantity * Product.production_price)
+    ).join(Product).join(Order)\
+     .filter(Order.status == 'ZREALIZOWANE')\
+     .filter(extract('month', Order.created_at) == current_month)\
+     .filter(extract('year', Order.created_at) == current_year).scalar() or 0.0
+
+    # --- NOWE ELEMENTY KOKPITU ---
+
+    # 1. Ostatnie aktywności (5 najnowszych zleceń)
+    recent_activities = Order.query.order_by(Order.created_at.desc()).limit(5).all()
+
+    # 2. Najbardziej dochodowe produkty (TOP 5 w tym miesiącu)
+    most_profitable_products = db.session.query(
+        Product.name,
+        func.sum(OrderItem.quantity * Product.production_price).label('total_profit')
+    ).join(OrderItem).join(Order)\
+    .filter(Order.status == 'ZREALIZOWANE')\
+    .filter(extract('month', Order.created_at) == current_month)\
+    .filter(extract('year', Order.created_at) == current_year)\
+    .group_by(Product.name).order_by(func.sum(OrderItem.quantity * Product.production_price).desc()).limit(5).all()
+    
+    # 3. "Wąskie gardła" - zlecenia najdłużej w realizacji
+    bottlenecks = Order.query.filter_by(status='W REALIZACJI').order_by(Order.created_at.asc()).limit(5).all()
+
+    # 4. Nadchodzące terminy (w ciągu najbliższych 7 dni)
+    upcoming_deadlines = Order.query.filter(
+        Order.deadline.between(datetime.utcnow().date(), datetime.utcnow().date() + timedelta(days=7))
+    ).order_by(Order.deadline.asc()).all()
+
+
+    return render_template(
+        'kokpit.html',
+        stats=stats,
+        fabric_summary=fabric_summary_dict,
+        monthly_production_value=round(monthly_production_value, 2),
+        recent_activities=recent_activities,
+        most_profitable_products=most_profitable_products,
+        bottlenecks=bottlenecks,
+        upcoming_deadlines=upcoming_deadlines
+    )

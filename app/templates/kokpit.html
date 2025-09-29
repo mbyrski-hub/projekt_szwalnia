@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% block title %}Kokpit - Panel Szwalni{% endblock %}
+
+{% block head %}
+<style>
+    .info-card {
+        background-color: var(--card-bg);
+        border: none;
+        border-radius: 10px;
+        color: var(--text-color);
+        margin-bottom: 20px;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .info-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+    }
+    .info-card .card-body {
+        display: flex;
+        align-items: center;
+    }
+    .info-card .icon {
+        font-size: 3rem;
+        margin-right: 20px;
+        width: 80px;
+        text-align: center;
+        animation: pulse-icon 2s infinite;
+    }
+    .info-card .icon-new { color: var(--primary-color); }
+    .info-card .icon-progress { color: var(--accent-color); }
+    .info-card .icon-done { color: #28a745; }
+    
+    .info-card .stat-number {
+        font-size: 2.5rem;
+        font-weight: 600;
+    }
+    .info-card .stat-label {
+        font-size: 1rem;
+        color: #aaa;
+    }
+    .timeline {
+        list-style: none;
+        padding: 0;
+    }
+    .timeline-item {
+        position: relative;
+        padding-bottom: 20px;
+        padding-left: 30px;
+        border-left: 2px solid var(--border-color);
+    }
+    .timeline-item:before {
+        content: '';
+        position: absolute;
+        left: -11px;
+        top: 0;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background-color: var(--accent-color);
+    }
+
+    @keyframes pulse-icon {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Kokpit</h1>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="info-card">
+            <div class="card-body">
+                <div class="icon icon-new"><i class="fas fa-plus-circle"></i></div>
+                <div>
+                    <div class="stat-number">{{ stats.nowe }}</div>
+                    <div class="stat-label">Nowe zlecenia</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="info-card">
+            <div class="card-body">
+                <div class="icon icon-progress"><i class="fas fa-tasks"></i></div>
+                <div>
+                    <div class="stat-number">{{ stats.w_realizacji }}</div>
+                    <div class="stat-label">W realizacji</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="info-card">
+            <div class="card-body">
+                <div class="icon icon-done"><i class="fas fa-check-circle"></i></div>
+                <div>
+                    <div class="stat-number">{{ stats.zrealizowane }}</div>
+                    <div class="stat-label">Zrealizowane</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Najbardziej dochodowe produkty (ten miesiąc)</h5>
+                <canvas id="profitChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Zużycie tkanin (ten miesiąc)</h5>
+                <div id="fabric-chart" style="height: 250px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Ostatnie aktywności</h5>
+                <ul class="list-group list-group-flush">
+                    {% for order in recent_activities %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Zlecenie #{{ order.order_code }} dla {{ order.client.name }}
+                        <span class="badge badge-primary badge-pill">{{ order.status }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Nadchodzące terminy (7 dni)</h5>
+                 <ul class="list-group list-group-flush">
+                    {% for order in upcoming_deadlines %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ order.order_code }} - {{ order.client.name }}
+                        <span class="badge badge-danger">{{ order.deadline.strftime('%Y-%m-%d') }}</span>
+                    </li>
+                    {% else %}
+                    <li class="list-group-item">Brak nadchodzących terminów.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+     <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                 <h5 class="card-title">Aktualny stan produkcji</h5>
+                 {% include '_in_progress_strip.html' %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Wąskie gardła (najdłużej w realizacji)</h5>
+                <ul class="list-group list-group-flush">
+                    {% for order in bottlenecks %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Zlecenie #{{ order.order_code }} dla {{ order.client.name }}
+                        <span class="text-muted">W realizacji od: {{ order.created_at.strftime('%Y-%m-%d') }}</span>
+                    </li>
+                     {% else %}
+                    <li class="list-group-item">Brak zleceń w realizacji.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/raphael/2.3.0/raphael.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Wykres kołowy zużycia tkanin
+        var fabricData = {{ fabric_summary|tojson }};
+        if (Object.keys(fabricData).length > 0) {
+            var paper = Raphael("fabric-chart", "100%", "100%");
+            var pie = paper.piechart(125, 125, 100, Object.values(fabricData), {
+                legend: Object.keys(fabricData).map(key => `%% - ${key}`),
+                legendpos: "east",
+                href: ["#", "#"]
+            });
+             pie.hover(function () {
+                this.sector.stop();
+                this.sector.scale(1.1, 1.1, this.cx, this.cy);
+                if (this.label) {
+                    this.label[0].stop();
+                    this.label[0].attr({ r: 7.5 });
+                    this.label[1].attr({ "font-weight": 800 });
+                }
+            }, function () {
+                this.sector.animate({ transform: 's1 1 ' + this.cx + ' ' + this.cy }, 500, "bounce");
+                if (this.label) {
+                    this.label[0].animate({ r: 5 }, 500, "bounce");
+                    this.label[1].attr({ "font-weight": 400 });
+                }
+            });
+        } else {
+            document.getElementById("fabric-chart").innerHTML = "<p class='text-center text-muted'>Brak danych o zużyciu tkanin.</p>";
+        }
+
+        // Wykres słupkowy dochodowych produktów
+        var profitData = {{ most_profitable_products|tojson }};
+        if (profitData.length > 0) {
+            var ctx = document.getElementById('profitChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: profitData.map(p => p[0]),
+                    datasets: [{
+                        label: 'Przychód z produktu',
+                        data: profitData.map(p => p[1]),
+                        backgroundColor: 'rgba(255, 153, 0, 0.6)',
+                        borderColor: 'rgba(255, 153, 0, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { color: 'white' }
+                        },
+                        x: {
+                            ticks: { color: 'white' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                           display: false
+                        }
+                    }
+                }
+            });
+        } else {
+             document.getElementById('profitChart').parentElement.innerHTML = "<h5 class='card-title'>Najbardziej dochodowe produkty (ten miesiąc)</h5><p class='text-center text-muted'>Brak danych o zrealizowanych produktach w tym miesiącu.</p>"
+        }
+    });
+</script>
+{% endblock %}
