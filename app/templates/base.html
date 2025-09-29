@@ -107,7 +107,8 @@
             border-color: var(--border-color);
         }
         .table tbody tr:hover {
-            background-color: var(--hover-bg-color);
+            background-color: var(--hover-bg-color) !important;
+            color: var(--text-color) !important;
         }
         .table-striped tbody tr:nth-of-type(odd) {
              background-color: rgba(255, 255, 255, 0.02);
@@ -155,54 +156,54 @@
                 <a class="nav-link {% if request.endpoint == 'kokpit' %}active{% endif %}" href="{{ url_for('kokpit') }}"><i class="fas fa-tachometer-alt"></i> Kokpit</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {% if 'order' in request.endpoint %}active{% endif %}" href="{{ url_for('orders_list') }}"><i class="fas fa-list"></i> Zlecenia</a>
+                <a class="nav-link {% if request.endpoint in ['orders_list', 'new_order', 'order_detail'] %}active{% endif %}" href="{{ url_for('orders_list') }}"><i class="fas fa-list"></i> Zlecenia</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('orders_history') }}"><i class="fas fa-history"></i> Historia zleceń</a>
+                <a class="nav-link {% if request.endpoint == 'orders_history' %}active{% endif %}" href="{{ url_for('orders_history') }}"><i class="fas fa-history"></i> Historia zleceń</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('order_templates') }}">
+                <a class="nav-link {% if request.endpoint in ['order_templates', 'new_template', 'edit_template'] %}active{% endif %}" href="{{ url_for('order_templates') }}">
                     <i class="fas fa-bookmark"></i> Szablony
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('reports') }}">
+                <a class="nav-link {% if request.endpoint == 'reports' %}active{% endif %}" href="{{ url_for('reports') }}">
                     <i class="fas fa-chart-pie"></i> Zestawienia
                 </a>
             </li>
              <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('calculator') }}">
+                <a class="nav-link {% if request.endpoint == 'calculator' %}active{% endif %}" href="{{ url_for('calculator') }}">
                     <i class="fas fa-calculator"></i> Kalkulator
                 </a>
             </li>
              <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('kanban') }}">
+                <a class="nav-link {% if request.endpoint == 'kanban' %}active{% endif %}" href="{{ url_for('kanban') }}">
                     <i class="fas fa-table-columns"></i> Kto co szyje
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('krojownia') }}">
+                <a class="nav-link {% if request.endpoint == 'krojownia' %}active{% endif %}" href="{{ url_for('krojownia') }}">
                     <i class="fas fa-scissors"></i> Krojownia
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('products_list') }}">
+                <a class="nav-link {% if request.endpoint in ['products_list', 'add_product', 'edit_product'] %}active{% endif %}" href="{{ url_for('products_list') }}">
                     <i class="fas fa-box-open"></i> Produkty
                 </a>
             </li>
              <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('materials_management') }}">
+                <a class="nav-link {% if request.endpoint in ['materials_management', 'add_fabric', 'edit_fabric', 'add_material', 'edit_material', 'edit_mapped_item'] %}active{% endif %}" href="{{ url_for('materials_management') }}">
                     <i class="fas fa-scroll"></i> Tkaniny&Dodatki
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('subiekt_mapping') }}">
+                <a class="nav-link {% if request.endpoint == 'subiekt_mapping' %}active{% endif %}" href="{{ url_for('subiekt_mapping') }}">
                     <i class="fas fa-link"></i> Mapowanie Subiekt
                 </a>
             </li>
              
             <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('label_designer') }}">
+                <a class="nav-link {% if request.endpoint == 'label_designer' %}active{% endif %}" href="{{ url_for('label_designer') }}">
                     <i class="fas fa-magic"></i> Kreator Metek
                 </a>
             </li>

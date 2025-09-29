@@ -8,7 +8,7 @@
         border: none;
         border-radius: 10px;
         color: var(--text-color);
-        margin-bottom: 20px;
+        margin-bottom: 15px;
         transition: transform 0.2s, box-shadow 0.2s;
     }
     .info-card:hover {
@@ -73,12 +73,65 @@
         margin-top: 10px;
     }
 
+    .weather-widget {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+    }
+    .weather-day {
+        background-color: var(--card-bg);
+        border-radius: 8px;
+        padding: 5px;
+        text-align: center;
+        min-width: 80px;
+        border: 1px solid var(--border-color);
+        transition: all 0.2s ease-in-out;
+    }
+    .weather-day.weather-today {
+        transform: scale(1.1);
+        border: 2px solid var(--accent-color);
+        padding: 8px;
+    }
+    .weather-day .date-display {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text-color);
+    }
+    .weather-day img {
+        width: 40px;
+        height: 40px;
+        margin-top: -5px;
+        margin-bottom: -5px;
+    }
+    .weather-day .temp {
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+    .weather-day.weather-today .temp {
+        font-size: 1.3rem;
+    }
+
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>Kokpit</h1>
+    
+    {% if weather_forecast %}
+<div>
+    <h6 class="text-muted text-center mb-2" style="font-weight: 600;">Pogoda: Bielsko-Biała</h6>
+    <div class="weather-widget">
+        {% for day in weather_forecast %}
+        <div class="weather-day {% if day.is_today %}weather-today{% endif %}">
+            <div class="date-display">{{ day.date }}</div>
+            <img src="http://openweathermap.org/img/wn/{{ day.icon }}@2x.png" title="{{ day.description }}">
+            <div class="temp">{{ day.temp }}°C</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
     <h4 id="current-datetime" class="text-muted"></h4>
 </div>
 <div class="row">
@@ -128,7 +181,7 @@
     </div>
 </div>
 
-<div class="row">
+<div class="row mt-4">
     <div class="col-md-12">
         <div class="info-card">
             <div class="card-body">
@@ -238,7 +291,7 @@
     <div class="col-12">
         <div class="card">
             <div class="card-body">
-                <h5 class="card-title">Wąskie gardła (najdłużej w realizacji)</h5>
+                <h5 class="card-title">Najdłużej w realizacji)</h5>
                 <ul class="list-group list-group-flush">
                     {% for order in bottlenecks %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">
@@ -261,7 +314,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     document.addEventListener("DOMContentLoaded", function() {
-// --- NOWY SKRYPT: Zegar ---
+        // --- Zegar ---
         function updateDateTime() {
             const now = new Date();
             const options = {
@@ -278,68 +331,73 @@
             document.getElementById('current-datetime').textContent = capitalizedDateTime;
         }
         setInterval(updateDateTime, 1000);
-        updateDateTime(); // Wywołanie początkowe
-        // --- KONIEC SKRYPTU ZEGARA ---
+        updateDateTime();
 
-
-// --- NOWY SKRYPT: Animowany licznik ---
+        // --- Animowany licznik ---
         const animatedValue = document.getElementById('animated-value');
-        const targetValue = parseFloat(animatedValue.dataset.value);
-        const duration = 2000; // Czas animacji w milisekundach
-        const frameRate = 1000 / 60; // 60 klatek na sekundę
-        const totalFrames = Math.round(duration / frameRate);
-        let currentFrame = 0;
+        if (animatedValue) {
+            const targetValue = parseFloat(animatedValue.dataset.value);
+            const duration = 2000;
+            const frameRate = 1000 / 60;
+            const totalFrames = Math.round(duration / frameRate);
+            let currentFrame = 0;
 
-        const animateCounter = () => {
-            currentFrame++;
-            const progress = currentFrame / totalFrames;
-            const currentValue = targetValue * progress;
-            
-            animatedValue.textContent = `${currentValue.toFixed(2).replace('.', ',')} zł`;
+            const animateCounter = () => {
+                currentFrame++;
+                const progress = currentFrame / totalFrames;
+                const currentValue = targetValue * progress;
+                
+                animatedValue.textContent = `${currentValue.toFixed(2).replace('.', ',')} zł`;
 
-            if (currentFrame < totalFrames) {
-                requestAnimationFrame(animateCounter);
-            } else {
-                 animatedValue.textContent = `${targetValue.toFixed(2).replace('.', ',')} zł`;
-            }
-        };
-        requestAnimationFrame(animateCounter);
-        // --- KONIEC NOWEGO SKRYPTU ---
-
-
-        // Wykres kołowy zużycia tkanin
-        var fabricData = {{ fabric_summary|tojson }};
-        if (Object.keys(fabricData).length > 0) {
-            var paper = Raphael("fabric-chart", "100%", "100%");
-            var pie = paper.piechart(125, 125, 100, Object.values(fabricData), {
-                legend: Object.keys(fabricData).map(key => `%% - ${key}`),
-                legendpos: "east",
-                href: ["#", "#"]
-            });
-             pie.hover(function () {
-                this.sector.stop();
-                this.sector.scale(1.1, 1.1, this.cx, this.cy);
-                if (this.label) {
-                    this.label[0].stop();
-                    this.label[0].attr({ r: 7.5 });
-                    this.label[1].attr({ "font-weight": 800 });
+                if (currentFrame < totalFrames) {
+                    requestAnimationFrame(animateCounter);
+                } else {
+                     animatedValue.textContent = `${targetValue.toFixed(2).replace('.', ',')} zł`;
                 }
-            }, function () {
-                this.sector.animate({ transform: 's1 1 ' + this.cx + ' ' + this.cy }, 500, "bounce");
-                if (this.label) {
-                    this.label[0].animate({ r: 5 }, 500, "bounce");
-                    this.label[1].attr({ "font-weight": 400 });
-                }
-            });
-        } else {
-            document.getElementById("fabric-chart").innerHTML = "<p class='text-center text-muted'>Brak danych o zużyciu tkanin.</p>";
+            };
+            requestAnimationFrame(animateCounter);
         }
 
-        // Wykres słupkowy dochodowych produktów
+        // --- POPRAWIONY KOD WYKRESÓW ---
+
+        // Wykres kołowy (teraz Chart.js) zużycia tkanin
+        var fabricData = {{ fabric_summary|tojson }};
+        var fabricChartContainer = document.getElementById("fabric-chart");
+        if (fabricChartContainer && Object.keys(fabricData).length > 0) {
+            fabricChartContainer.innerHTML = '<canvas id="fabricPieChart"></canvas>'; // Dodajemy canvas
+            var ctxPie = document.getElementById('fabricPieChart').getContext('2d');
+            new Chart(ctxPie, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(fabricData),
+                    datasets: [{
+                        data: Object.values(fabricData),
+                        backgroundColor: ['#007bff', '#ff9900', '#28a745', '#dc3545', '#17a2b8', '#6f42c1'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                color: 'white'
+                            }
+                        }
+                    }
+                }
+            });
+        } else if (fabricChartContainer) {
+            fabricChartContainer.innerHTML = "<p class='text-center text-muted' style='padding-top: 50px;'>Brak danych o zużyciu tkanin w tym miesiącu.</p>";
+        }
+
+        // Wykres słupkowy dochodowych produktów (bez zmian, ale teraz powinien działać)
         var profitData = {{ most_profitable_products|tojson }};
-        if (profitData.length > 0) {
-            var ctx = document.getElementById('profitChart').getContext('2d');
-            new Chart(ctx, {
+        var profitChartCanvas = document.getElementById('profitChart');
+        if (profitChartCanvas && profitData.length > 0) {
+            var ctxBar = profitChartCanvas.getContext('2d');
+            new Chart(ctxBar, {
                 type: 'bar',
                 data: {
                     labels: profitData.map(p => p[0]),
@@ -368,8 +426,8 @@
                     }
                 }
             });
-        } else {
-             document.getElementById('profitChart').parentElement.innerHTML = "<h5 class='card-title'>Najbardziej dochodowe produkty (ten miesiąc)</h5><p class='text-center text-muted'>Brak danych o zrealizowanych produktach w tym miesiącu.</p>"
+        } else if (profitChartCanvas) {
+             profitChartCanvas.parentElement.innerHTML = "<h5 class='card-title'>Najbardziej dochodowe produkty (ten miesiąc)</h5><p class='text-center text-muted' style='padding-top: 50px;'>Brak danych o zrealizowanych produktach w tym miesiącu.</p>"
         }
     });
 </script>

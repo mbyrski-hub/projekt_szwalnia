@@ -14,7 +14,7 @@ import re
 from datetime import datetime, date, timedelta
 import pdfkit
 import imgkit
-from sqlalchemy import extract, func
+from sqlalchemy import extract, func, distinct
 from app.doc_generator import save_order_as_word
 import platform
 from PIL import Image
@@ -29,7 +29,8 @@ from .ai_image_service import generate_ai_images
 from werkzeug.datastructures import FileStorage
 import threading
 from .models import AiImageTask
-
+import requests
+import locale
 
 if platform.system() == 'Windows':
     config_pdf = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
@@ -84,8 +85,62 @@ def calculate_material_summary(order):
         structured_summary.append({'name': name, 'quantity': f"{total_val_str} {unit}"})
     return structured_summary
 
-# app/routes.py
+# pogoda
+# Wklej ten kod w app/routes.py, zastępując poprzednią funkcję get_weather_forecast
 
+def map_wmo_code_to_icon(wmo_code):
+    """Mapuje kody pogodowe WMO z Open-Meteo na nazwy ikon z OpenWeatherMap."""
+    if wmo_code == 0:
+        return "01d"  # Czyste niebo
+    elif wmo_code in [1, 2, 3]:
+        return "02d"  # Głównie bezchmurnie, częściowe zachmurzenie, pochmurno
+    elif wmo_code in [45, 48]:
+        return "50d"  # Mgła
+    elif wmo_code in [51, 53, 55, 56, 57]:
+        return "09d"  # Mżawka
+    elif wmo_code in [61, 63, 65, 66, 67]:
+        return "10d"  # Deszcz
+    elif wmo_code in [71, 73, 75, 77, 85, 86]:
+        return "13d"  # Śnieg
+    elif wmo_code in [80, 81, 82]:
+        return "09d"  # Przelotne opady deszczu
+    elif wmo_code in [95, 96, 99]:
+        return "11d"  # Burza
+    else:
+        return "01d"  # Domyślnie
+
+def get_weather_forecast():
+    """Pobiera 4-dniową prognozę pogody dla Bielska-Białej z Open-Meteo."""
+    # Współrzędne dla Bielska-Białej
+    lat, lon = 49.8225, 19.0444
+    url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=weathercode,temperature_2m_max&timezone=Europe/Warsaw&forecast_days=4"
+    
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        
+        forecast = []
+        daily_data = data['daily']
+        for i in range(4):
+            day_dt = datetime.strptime(daily_data['time'][i], '%Y-%m-%d')
+            
+            forecast.append({
+                'is_today': i == 0, # Znacznik dla dzisiejszego dnia
+                'date': 'Dziś' if i == 0 else day_dt.strftime('%d.%m'),
+                'temp': round(daily_data['temperature_2m_max'][i]),
+                'icon': map_wmo_code_to_icon(daily_data['weathercode'][i]),
+                'description': f"Kod pogody: {daily_data['weathercode'][i]}"
+            })
+            
+        return forecast
+    except requests.exceptions.RequestException as e:
+        print(f"Błąd podczas pobierania pogody z Open-Meteo: {e}")
+        return None
+    except (KeyError, IndexError) as e:
+        print(f"Błąd przetwarzania danych pogodowych: {e}")
+        return None
+    
 @app.route('/orders/new', methods=['GET', 'POST'])
 def new_order():
     form = OrderForm()
@@ -344,12 +399,12 @@ def orders_history():
 
     # --- POCZĄTEK ZMIANY ---
 
-    # Zapytanie do podsumowania miesięcznego (pozostaje bez zmian)
+    # Zapytanie do podsumowania miesięcznego
     summary_query = db.session.query(
         extract('year', Order.created_at).label('year'),
         extract('month', Order.created_at).label('month'),
         func.sum(OrderItem.quantity * Product.production_price).label('total_production_value'),
-        func.count(Order.id).label('order_count')
+        func.count(distinct(Order.id)).label('order_count')
     ).join(OrderItem).join(Product).filter(Order.status == 'ZREALIZOWANE')
 
     # Zapytanie do pełnej listy zleceń
@@ -1765,6 +1820,7 @@ def kokpit():
      .join(Product, Product.id == ProductFabric.product_id)\
      .join(OrderItem, OrderItem.product_id == Product.id)\
      .join(Order, Order.id == OrderItem.order_id)\
+     .filter(Order.status == 'ZREALIZOWANE')\
      .filter(extract('month', Order.created_at) == current_month)\
      .filter(extract('year', Order.created_at) == current_year)\
      .group_by(Fabric.name).all()
@@ -1827,6 +1883,7 @@ def kokpit():
 # --- NOWY KOD: Pobranie ostatnich aktualizacji cen ---
     recent_price_updates = PriceUpdateLog.query.order_by(PriceUpdateLog.changed_at.desc()).limit(8).all()
     # --- KONIEC NOWEGO KODU ---
+    weather_forecast = get_weather_forecast()
 
     return render_template(
         'kokpit.html',
@@ -1838,5 +1895,6 @@ def kokpit():
         most_profitable_products=most_profitable_products,
         bottlenecks=bottlenecks,
         upcoming_deadlines=upcoming_deadlines,
-        recent_price_updates=recent_price_updates  # Dodane
+        recent_price_updates=recent_price_updates,  
+        weather_forecast=weather_forecast  # Dodajemy pogodę
     )
