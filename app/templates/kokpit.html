@@ -64,6 +64,15 @@
         50% { transform: scale(1.1); }
         100% { transform: scale(1); }
     }
+
+/* --- NOWE STYLE DLA SEKCJI PRODUKCJI --- */
+    .info-card .icon-production { color: #6f42c1; } /* Fioletowy kolor dla ikony */
+    .production-history {
+        font-size: 0.9rem;
+        color: #aaa;
+        margin-top: 10px;
+    }
+
 </style>
 {% endblock %}
 
@@ -105,7 +114,36 @@
         </div>
     </div>
 </div>
-
+<div class="row mt-4">
+     <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                 <h5 class="card-title">Aktualny stan produkcji</h5>
+                 {% include '_in_progress_strip.html' %}
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-12">
+        <div class="info-card">
+            <div class="card-body">
+                <div class="icon icon-production"><i class="fas fa-chart-line"></i></div>
+                <div>
+                    <div class="stat-number" id="animated-value" data-value="{{ monthly_production_value }}">0.00 zł</div>
+                    <div class="stat-label">Wartość produkcji (bieżący miesiąc)</div>
+                    <div class="production-history">
+                        <strong>Poprzednie miesiące:</strong>
+                        {% for month_data in last_months_production %}
+                            {{ month_data.year }}-{{ "%02d"|format(month_data.month) }}: <strong>{{ "%.2f zł"|format(month_data.value) }}</strong>
+                            {% if not loop.last %}|{% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 <div class="row mt-4">
     <div class="col-lg-7">
         <div class="card">
@@ -160,16 +198,7 @@
     </div>
 </div>
 
-<div class="row mt-4">
-     <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                 <h5 class="card-title">Aktualny stan produkcji</h5>
-                 {% include '_in_progress_strip.html' %}
-            </div>
-        </div>
-    </div>
-</div>
+
 
 <div class="row mt-4">
     <div class="col-12">
@@ -198,6 +227,31 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     document.addEventListener("DOMContentLoaded", function() {
+// --- NOWY SKRYPT: Animowany licznik ---
+        const animatedValue = document.getElementById('animated-value');
+        const targetValue = parseFloat(animatedValue.dataset.value);
+        const duration = 2000; // Czas animacji w milisekundach
+        const frameRate = 1000 / 60; // 60 klatek na sekundę
+        const totalFrames = Math.round(duration / frameRate);
+        let currentFrame = 0;
+
+        const animateCounter = () => {
+            currentFrame++;
+            const progress = currentFrame / totalFrames;
+            const currentValue = targetValue * progress;
+            
+            animatedValue.textContent = `${currentValue.toFixed(2).replace('.', ',')} zł`;
+
+            if (currentFrame < totalFrames) {
+                requestAnimationFrame(animateCounter);
+            } else {
+                 animatedValue.textContent = `${targetValue.toFixed(2).replace('.', ',')} zł`;
+            }
+        };
+        requestAnimationFrame(animateCounter);
+        // --- KONIEC NOWEGO SKRYPTU ---
+
+
         // Wykres kołowy zużycia tkanin
         var fabricData = {{ fabric_summary|tojson }};
         if (Object.keys(fabricData).length > 0) {

@@ -1759,6 +1759,8 @@ def kokpit():
 
     fabric_summary_dict = {name: round(total, 2) for name, total in fabric_summary}
     
+    # --- NOWY KOD: Obliczanie wartości produkcji ---
+    
     # Wartość produkcji w bieżącym miesiącu
     monthly_production_value = db.session.query(
         func.sum(OrderItem.quantity * Product.production_price)
@@ -1767,12 +1769,32 @@ def kokpit():
      .filter(extract('month', Order.created_at) == current_month)\
      .filter(extract('year', Order.created_at) == current_year).scalar() or 0.0
 
-    # --- NOWE ELEMENTY KOKPITU ---
+    # Wartość produkcji z 3 ostatnich miesięcy
+    last_months_production = []
+    for i in range(1, 4):
+        month = current_month - i
+        year = current_year
+        if month < 1:
+            month += 12
+            year -= 1
+        
+        value = db.session.query(
+            func.sum(OrderItem.quantity * Product.production_price)
+        ).join(Product).join(Order)\
+         .filter(Order.status == 'ZREALIZOWANE')\
+         .filter(extract('month', Order.created_at) == month)\
+         .filter(extract('year', Order.created_at) == year).scalar() or 0.0
+        
+        last_months_production.append({
+            'month': month,
+            'year': year,
+            'value': round(value, 2)
+        })
 
-    # 1. Ostatnie aktywności (5 najnowszych zleceń)
+    # --- KONIEC NOWEGO KODU ---
+
+    # Ostatnie aktywności, dochodowe produkty, etc. (bez zmian)
     recent_activities = Order.query.order_by(Order.created_at.desc()).limit(5).all()
-
-    # 2. Najbardziej dochodowe produkty (TOP 5 w tym miesiącu)
     most_profitable_products = db.session.query(
         Product.name,
         func.sum(OrderItem.quantity * Product.production_price).label('total_profit')
@@ -1781,11 +1803,7 @@ def kokpit():
     .filter(extract('month', Order.created_at) == current_month)\
     .filter(extract('year', Order.created_at) == current_year)\
     .group_by(Product.name).order_by(func.sum(OrderItem.quantity * Product.production_price).desc()).limit(5).all()
-    
-    # 3. "Wąskie gardła" - zlecenia najdłużej w realizacji
     bottlenecks = Order.query.filter_by(status='W REALIZACJI').order_by(Order.created_at.asc()).limit(5).all()
-
-    # 4. Nadchodzące terminy (w ciągu najbliższych 7 dni)
     upcoming_deadlines = Order.query.filter(
         Order.deadline.between(datetime.utcnow().date(), datetime.utcnow().date() + timedelta(days=7))
     ).order_by(Order.deadline.asc()).all()
@@ -1796,6 +1814,7 @@ def kokpit():
         stats=stats,
         fabric_summary=fabric_summary_dict,
         monthly_production_value=round(monthly_production_value, 2),
+        last_months_production=last_months_production, # Dodane
         recent_activities=recent_activities,
         most_profitable_products=most_profitable_products,
         bottlenecks=bottlenecks,
