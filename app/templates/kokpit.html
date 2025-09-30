@@ -126,28 +126,66 @@
     .weather-day.weather-today .temp {
         font-size: 1.3rem;
     }
+    .status-indicator-kokpit {
+        display: flex;
+        align-items: center;
+        gap: 15px; /* Zwiększony odstęp */
+    }
+
+    .status-indicator {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 0;
+        border-left: 1px solid var(--border-color); /* Dodany separator */
+        padding-left: 15px;
+    }
+
+    .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: #dc3545; /* Czerwony - offline */
+        transition: background-color 0.5s;
+    }
+
+    .status-dot.online {
+        background-color: #28a745; /* Zielony - online */
+    }
 
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Kokpit</h1>
+    <div class="status-indicator-kokpit">
+        <h4 id="current-datetime" class="text-muted mb-0"></h4>
+        <div class="status-indicator">
+            <div id="print-server-status" class="status-dot"></div>
+            <span>Serwer Druku</span>
+            <a href="#" id="refresh-print-status" class="ml-auto text-white-50"><i class="fas fa-sync-alt"></i></a>
+        </div>
+        <div class="status-indicator">
+            <div id="sync-server-status" class="status-dot"></div>
+            <span>Synchronizator</span>
+            <a href="#" id="refresh-sync-status" class="ml-auto text-white-50"><i class="fas fa-sync-alt"></i></a>
+        </div>
+    </div>
     
     {% if weather_forecast %}
-<div>
-    <h6 class="text-muted text-center mb-2" style="font-weight: 600;">Pogoda: Bielsko-Biała</h6>
-    <div class="weather-widget">
-        {% for day in weather_forecast %}
-        <div class="weather-day {% if day.is_today %}weather-today{% endif %}">
-            <div class="date-display">{{ day.date }}</div>
-            <img src="{{ url_for('static', filename='images/weather/' + day.icon) }}" title="{{ day.description }}">
-            <div class="temp">{{ day.temp }}°C</div>
+    <div>
+        <h6 class="text-muted text-center mb-2" style="font-weight: 600;">Pogoda: Bielsko-Biała</h6>
+        <div class="weather-widget">
+            {% for day in weather_forecast %}
+            <div class="weather-day {% if day.is_today %}weather-today{% endif %}">
+                <div class="date-display">{{ day.date }}</div>
+                <img src="{{ url_for('static', filename='images/weather/' + day.icon) }}" title="{{ day.description }}">
+                <div class="temp">{{ day.temp }}°C</div>
+            </div>
+            {% endfor %}
         </div>
-        {% endfor %}
     </div>
-</div>
-{% endif %}
+    {% endif %}
     <h4 id="current-datetime" class="text-muted"></h4>
 </div>
 <div class="row">
@@ -352,7 +390,7 @@
         const animatedValue = document.getElementById('animated-value');
         if (animatedValue) {
             const targetValue = parseFloat(animatedValue.dataset.value);
-            const duration = 2000;
+            const duration = 500;
             const frameRate = 1000 / 60;
             const totalFrames = Math.round(duration / frameRate);
             let currentFrame = 0;

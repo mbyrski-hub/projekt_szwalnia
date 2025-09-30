@@ -59,11 +59,13 @@
         font-size: 1.8rem;
         font-weight: 600;
         color: var(--accent-color);
+        opacity: 0.8;
     }
     
     .sidebar .logo img {
         max-width: 60%;
         margin-bottom: 1rem;
+        
     }
     
     .sidebar .logo .fa-cut {
@@ -155,23 +157,16 @@
         border-color: var(--border-color);
     }
 
-    .status-indicator {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 5px 0;
+    /* NOWY STYL DLA OBRAZKA W MENU */
+    .sidebar-image {
+        margin-top: auto; /* Wypchnij na dół */
+        padding: 1rem 0;
+        text-align: center;
     }
-
-    .status-dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background-color: #dc3545; /* Czerwony - offline */
-        transition: background-color 0.5s;
-    }
-
-    .status-dot.online {
-        background-color: #28a745; /* Zielony - online */
+    .sidebar-image img {
+        max-width: 100%;
+        height: auto;
+        opacity: 0.6;
     }
 </style>
     {% block head %}{% endblock %}
@@ -241,19 +236,10 @@
                 </li>
             </ul>
         </div>
-
-        <div class="mt-auto">
-            <div class="status-indicator">
-                <div id="print-server-status" class="status-dot"></div>
-                <span>Serwer Druku</span>
-                <a href="#" id="refresh-print-status" class="ml-auto text-white-50"><i class="fas fa-sync-alt"></i></a>
-            </div>
-            <div class="status-indicator mt-2">
-                <div id="sync-server-status" class="status-dot"></div>
-                <span>Synchronizator</span>
-                 <a href="#" id="refresh-sync-status" class="ml-auto text-white-50"><i class="fas fa-sync-alt"></i></a>
-            </div>
+<div class="sidebar-image">
+            <img src="{{ url_for('static', filename='images/menu_bg.png') }}" alt="Dekoracja">
         </div>
+        
     </div>
     <div class="main-content">
         {% with messages = get_flashed_messages(with_categories=true) %}
