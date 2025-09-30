@@ -31,6 +31,8 @@ import threading
 from .models import AiImageTask
 import requests
 import locale
+import pathlib
+
 
 if platform.system() == 'Windows':
     config_pdf = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
@@ -89,25 +91,29 @@ def calculate_material_summary(order):
 # Wklej ten kod w app/routes.py, zastępując poprzednią funkcję get_weather_forecast
 
 def map_wmo_code_to_icon(wmo_code):
-    """Mapuje kody pogodowe WMO z Open-Meteo na nazwy ikon z OpenWeatherMap."""
+    """Mapuje kody pogodowe WMO na animowane ikony SVG."""
     if wmo_code == 0:
-        return "01d"  # Czyste niebo
-    elif wmo_code in [1, 2, 3]:
-        return "02d"  # Głównie bezchmurnie, częściowe zachmurzenie, pochmurno
+        return "day.svg"  # Czyste niebo
+    elif wmo_code == 1:
+        return "cloudy-day-1.svg"
+    elif wmo_code == 2:
+        return "cloudy-day-2.svg"
+    elif wmo_code == 3:
+        return "cloudy.svg"  # Pochmurno
     elif wmo_code in [45, 48]:
-        return "50d"  # Mgła
+        return "snowy-2.svg"  # Mgła
     elif wmo_code in [51, 53, 55, 56, 57]:
-        return "09d"  # Mżawka
+        return "rainy-2.svg"  # Mżawka
     elif wmo_code in [61, 63, 65, 66, 67]:
-        return "10d"  # Deszcz
+        return "rainy-3.svg"  # Deszcz
     elif wmo_code in [71, 73, 75, 77, 85, 86]:
-        return "13d"  # Śnieg
+        return "snowy-3.svg"  # Śnieg
     elif wmo_code in [80, 81, 82]:
-        return "09d"  # Przelotne opady deszczu
+        return "rainy-1.svg"  # Przelotne opady deszczu
     elif wmo_code in [95, 96, 99]:
-        return "11d"  # Burza
+        return "thunder.svg"  # Burza
     else:
-        return "01d"  # Domyślnie
+        return "day.svg"  # Domyślnie
 
 def get_weather_forecast():
     """Pobiera 4-dniową prognozę pogody dla Bielska-Białej z Open-Meteo."""
@@ -1898,3 +1904,10 @@ def kokpit():
         recent_price_updates=recent_price_updates,  
         weather_forecast=weather_forecast  # Dodajemy pogodę
     )
+
+
+@app.route('/label_gallery_content')
+def label_gallery_content():
+    """Renderuje samą zawartość galerii metek do wstrzyknięcia w modal."""
+    templates = LabelTemplate.query.order_by(LabelTemplate.name).all()
+    return render_template('_label_gallery_content.html', templates=templates)

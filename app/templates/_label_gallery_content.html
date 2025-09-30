@@ -1,0 +1,11 @@
+<div class="label-gallery-grid">
+    {% for template in templates %}
+    <div class="gallery-item" data-template-id="{{ template.id }}" data-template-name="{{ template.name }}">
+        <div class="preview-container"></div> 
+        <div class="gallery-item-name">{{ template.name }}</div>
+        <div class="template-data" style="display: none;">{{ template.content_json|tojson }}</div>
+    </div>
+    {% else %}
+    <p class="text-muted">Brak zapisanych szablonów metek.</p>
+    {% endfor %}
+</div>

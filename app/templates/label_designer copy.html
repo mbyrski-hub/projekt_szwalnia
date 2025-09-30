@@ -168,12 +168,6 @@
         font-size: 0.9rem;
         font-weight: 600;
     }
-
-    #label-render-container {
-    position: absolute;
-    left: -9999px;
-    top: -9999px;
-}
 </style>
 {% endblock %}
 
@@ -191,27 +185,8 @@
             <option value="{{ t.id }}">{{ t.name }}</option>
             {% endfor %}
         </select>
-        <button type="button" class="btn btn-info ml-2" data-toggle="modal" data-target="#galleryModal" title="Pokaż galerię szablonów">
-            <i class="fas fa-images"></i>
-        </button>
          <button id="deleteTemplateBtn" class="btn btn-danger ml-2" style="display: none;"><i class="fas fa-trash"></i> Usuń</button>
     </div>
-</div>
-
-<div class="modal fade" id="galleryModal" tabindex="-1" role="dialog" aria-labelledby="galleryModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-xl" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="galleryModalLabel">Galeria Szablonów Metek</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      <div class="modal-body" id="galleryModalBody">
-        <div class="text-center"><div class="spinner-border" role="status"><span class="sr-only">Ładowanie...</span></div></div>
-      </div>
-    </div>
-  </div>
 </div>
 
 <div class="designer-container">
@@ -296,11 +271,6 @@
     </div>
   </div>
 </div>
-
-
-<div id="label-render-container"></div>
-
-
 {% endblock %}
 
 
@@ -309,8 +279,8 @@
 <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
 
 <script>
+// Cały skrypt pozostaje bez zmian.
 document.addEventListener('DOMContentLoaded', function () {
-    // Wszystkie zmienne i podstawowe funkcje kreatora
     const canvas = document.getElementById('labelCanvas');
     const toolbox = document.querySelector('.toolbox');
     const propertiesContent = document.getElementById('propertiesContent');
@@ -379,7 +349,7 @@ document.addEventListener('DOMContentLoaded', function () {
             newElement.dataset.type = 'text';
             newElement.dataset.fontSize = '12';
             newElement.style.fontSize = '12px';
-            newElement.dataset.isCentered = 'false';
+            newElement.dataset.isCentered = 'false'; // Domyślnie nie wyśrodkowany
         } else if (toolType === 'image') {
             newElement.innerHTML = '<i class="fas fa-image fa-2x"></i>';
             newElement.dataset.type = 'image';
@@ -391,7 +361,7 @@ document.addEventListener('DOMContentLoaded', function () {
             newElement.dataset.fontSize = '14';
             newElement.style.fontSize = '14px';
             newElement.style.fontWeight = 'bold';
-            newElement.dataset.isCentered = 'false';
+            newElement.dataset.isCentered = 'false'; // Domyślnie nie wyśrodkowany
         }
         canvas.appendChild(newElement);
         makeElementInteractive(newElement);
@@ -454,7 +424,7 @@ document.addEventListener('DOMContentLoaded', function () {
         let contentHtml = `<p>Typ: <strong>${type}</strong></p>`;
 
         if (type === 'text' || type === 'dynamic' || type === 'icon') {
-            if (type !== 'dynamic') {
+            if (type !== 'dynamic') { // Pole dynamiczne nie ma edytowalnego tekstu
                 contentHtml += `<div class="form-group"><label>Tekst:</label><input type="text" class="form-control form-control-sm" value="${element.textContent}" oninput="updateElement(this, '${element.dataset.id}', 'textContent')"></div>`;
             }
             contentHtml += `<div class="form-group"><label>Rozmiar (px):</label><input type="number" class="form-control form-control-sm" value="${element.dataset.fontSize}" oninput="updateElement(this, '${element.dataset.id}', 'fontSize')"></div>`;
@@ -496,6 +466,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
 
+    
     saveBtn.addEventListener('click', function() {
         const templateName = templateNameInput.value.trim();
         const currentId = currentTemplateIdInput.value;
@@ -518,7 +489,8 @@ document.addEventListener('DOMContentLoaded', function () {
             const elementInfo = {
                 type: el.dataset.type,
                 id: el.dataset.id,
-                x: x, y: y,
+                x: x,
+                y: y,
                 content: (el.dataset.type === 'image' || el.dataset.type === 'icon') ? '' : el.textContent,
                 symbol: el.dataset.symbol || '',
                 fontSize: el.dataset.fontSize,
@@ -572,7 +544,9 @@ document.addEventListener('DOMContentLoaded', function () {
         canvas.appendChild(cutLine);
 
         const content = templateData.content_json;
-        if (content.height) canvas.style.height = content.height;
+        if (content.height) {
+            canvas.style.height = content.height;
+        }
         
         if (content.elements) {
             content.elements.forEach(elData => {
@@ -663,8 +637,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(error => console.error('Błąd usuwania:', error));
         }
     });
-    
-    // Logika testowego wydruku
+   
     const testPrintBtn = document.getElementById('testPrintBtn');
     const printServerIpInput = document.getElementById('printServerIp');
     const confirmPrintBtn = document.getElementById('confirmPrintBtn');
@@ -673,7 +646,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const previewText = document.getElementById('preview-text');
     
     const savedIp = localStorage.getItem('printServerIp');
-    if (savedIp) printServerIpInput.value = savedIp;
+    if (savedIp) {
+        printServerIpInput.value = savedIp;
+    }
 
     testPrintBtn.addEventListener('click', function() {
         printStatusDiv.innerHTML = '';
@@ -689,7 +664,9 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         html2canvas(document.getElementById('labelCanvas'), {
-            scale: 3, useCORS: true, backgroundColor: null
+            scale: 3,
+            useCORS: true,
+            backgroundColor: null
         }).then(canvasElement => {
             document.querySelectorAll('.draggable-element').forEach(el => {
                 el.style.border = '1px dashed #ccc';
@@ -746,99 +723,6 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .finally(() => {
                 confirmPrintBtn.disabled = false;
-            });
-    });
-
-    // --- NOWA, POPRAWIONA LOGIKA DLA MODALA GALERII ---
-    function renderLabelHtmlForPreview(templateJson, size = 'M') {
-        let elementsHtml = '';
-        if (!templateJson || !Array.isArray(templateJson.elements)) return '';
-
-        templateJson.elements.forEach(element => {
-            if (typeof element !== 'object' || element === null) return;
-            let content = '';
-            let extraStyles = '';
-            const elementType = element.type || 'text';
-
-            if (elementType === 'image') {
-                content = `<img src="${element.src || ''}" style="width: 100%; height: auto;">`;
-            } else if (elementType === 'icon') {
-                content = `<span style="font-family: 'WashCareSymbols', sans-serif;">${element.symbol || ''}</span>`;
-            } else if (elementType === 'dynamic') {
-                content = size;
-            } else {
-                content = element.content || '';
-            }
-
-            if (element.isCentered) {
-                extraStyles = 'text-align: center; width: 100%; left: 0;';
-            }
-            
-            const xPos = element.x === '50%' ? '50%' : `${element.x || 0}px`;
-            const yPos = `${element.y || 0}px`;
-            const transform = element.x === '50%' ? 'translateX(-50%)' : '';
-            const fontSize = element.fontSize || 12;
-            const fontWeight = elementType === 'dynamic' ? 'bold' : 'normal';
-            const width = element.width || 'auto';
-
-            elementsHtml += `
-                <div style="position: absolute; left: ${xPos}; top: ${yPos}; transform: ${transform}; font-size: ${fontSize}px; font-weight: ${fontWeight}; width: ${width}; padding: 2px; color: #000; line-height: 1.1; ${extraStyles}">
-                    ${content}
-                </div>
-            `;
-        });
-        
-        const height = templateJson.height || '189px';
-        return `
-            <div class="label-canvas-render" style="width: 132px; height: ${height}; background-color: white; position: relative; overflow: hidden; border: 1px solid #ccc;">
-                ${elementsHtml}
-            </div>
-        `;
-    }
-
-    $('#galleryModal').on('show.bs.modal', function () {
-        const modalBody = document.getElementById('galleryModalBody');
-        const renderContainer = document.getElementById('label-render-container');
-
-        fetch("{{ url_for('label_gallery_content') }}")
-            .then(response => response.text())
-            .then(html => {
-                modalBody.innerHTML = html;
-                modalBody.querySelectorAll('.gallery-item').forEach(async (item) => {
-                    const previewContainer = item.querySelector('.preview-container');
-                    previewContainer.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>'; // Pokaż spinner
-                    
-                    const templateDataJson = item.querySelector('.template-data').textContent;
-                    
-                    try {
-                        const templateData = JSON.parse(JSON.parse(templateDataJson)); // Podwójne parsowanie
-                        renderContainer.innerHTML = renderLabelHtmlForPreview(templateData);
-                        const labelElement = renderContainer.firstElementChild;
-
-                        if (!labelElement) throw new Error("Nie udało się wyrenderować HTML metki.");
-
-                        const canvasElement = await html2canvas(labelElement, { scale: 2, backgroundColor: null, useCORS: true });
-                        
-                        const img = document.createElement('img');
-                        img.src = canvasElement.toDataURL('image/png');
-                        img.alt = item.dataset.templateName;
-                        previewContainer.innerHTML = '';
-                        previewContainer.appendChild(img);
-
-                        item.addEventListener('click', function() {
-                            const templateId = this.dataset.templateId;
-                            templateSelector.value = templateId;
-                            templateSelector.dispatchEvent(new Event('change'));
-                            $('#galleryModal').modal('hide');
-                        });
-
-                    } catch(e) {
-                        console.error("Błąd generowania podglądu dla szablonu:", item.dataset.templateName, e);
-                        previewContainer.innerHTML = '<p class="text-danger small">Błąd</p>';
-                    } finally {
-                        renderContainer.innerHTML = '';
-                    }
-                });
             });
     });
     

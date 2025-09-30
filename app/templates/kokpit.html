@@ -141,7 +141,7 @@
         {% for day in weather_forecast %}
         <div class="weather-day {% if day.is_today %}weather-today{% endif %}">
             <div class="date-display">{{ day.date }}</div>
-            <img src="http://openweathermap.org/img/wn/{{ day.icon }}@2x.png" title="{{ day.description }}">
+            <img src="{{ url_for('static', filename='images/weather/' + day.icon) }}" title="{{ day.description }}">
             <div class="temp">{{ day.temp }}°C</div>
         </div>
         {% endfor %}
