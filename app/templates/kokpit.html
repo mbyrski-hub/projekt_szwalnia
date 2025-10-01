@@ -3,6 +3,7 @@
 
 {% block head %}
 <style>
+    /* Twoje style CSS pozostają bez zmian */
     .info-card {
         background-color: var(--card-bg);
         border: none;
@@ -163,12 +164,13 @@
         <div class="status-indicator">
             <div id="print-server-status" class="status-dot"></div>
             <span>Serwer Druku</span>
-            <a href="#" id="refresh-print-status" class="ml-auto text-white-50"><i class="fas fa-sync-alt"></i></a>
         </div>
         <div class="status-indicator">
             <div id="sync-server-status" class="status-dot"></div>
             <span>Synchronizator</span>
-            <a href="#" id="refresh-sync-status" class="ml-auto text-white-50"><i class="fas fa-sync-alt"></i></a>
+            <a href="#" id="trigger-sync-btn" class="ml-auto text-white-50" title="Uruchom pełną synchronizację cen">
+                <i class="fas fa-play-circle"></i>
+            </a>
         </div>
     </div>
     
@@ -186,8 +188,8 @@
         </div>
     </div>
     {% endif %}
-    <h4 id="current-datetime" class="text-muted"></h4>
 </div>
+
 <div class="row">
     <div class="col-md-4">
         <div class="info-card">
@@ -366,122 +368,150 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/raphael/2.3.0/raphael.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    document.addEventListener("DOMContentLoaded", function() {
-        // --- Zegar ---
-        function updateDateTime() {
-            const now = new Date();
-            const options = {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            };
-            const formattedDateTime = now.toLocaleDateString('pl-PL', options);
-            const capitalizedDateTime = formattedDateTime.charAt(0).toUpperCase() + formattedDateTime.slice(1);
-            document.getElementById('current-datetime').textContent = capitalizedDateTime;
-        }
-        setInterval(updateDateTime, 1000);
-        updateDateTime();
+document.addEventListener("DOMContentLoaded", function() {
 
-        // --- Animowany licznik ---
-        const animatedValue = document.getElementById('animated-value');
-        if (animatedValue) {
-            const targetValue = parseFloat(animatedValue.dataset.value);
-            const duration = 500;
-            const frameRate = 1000 / 60;
-            const totalFrames = Math.round(duration / frameRate);
-            let currentFrame = 0;
+    // =================================================================
+    // <<< SEKCJA ODPOWIEDZIALNA ZA STATUSY SERWERÓW (NAPRAWIONA) >>>
+    // =================================================================
+    const printStatusDot = document.getElementById('print-server-status');
+    const syncStatusDot = document.getElementById('sync-server-status');
 
-            const animateCounter = () => {
-                currentFrame++;
-                const progress = currentFrame / totalFrames;
-                const currentValue = targetValue * progress;
-                
-                animatedValue.textContent = `${currentValue.toFixed(2).replace('.', ',')} zł`;
-
-                if (currentFrame < totalFrames) {
-                    requestAnimationFrame(animateCounter);
+    function checkServerStatus() {
+        fetch('http://localhost:5001/status')
+            .then(response => {
+                if (response.ok) return response.json();
+                throw new Error('Server not responding');
+            })
+            .then(data => {
+                if (data.status === 'online') {
+                    if (printStatusDot) printStatusDot.classList.add('online');
+                    if (syncStatusDot) syncStatusDot.classList.add('online');
                 } else {
-                     animatedValue.textContent = `${targetValue.toFixed(2).replace('.', ',')} zł`;
+                    if (printStatusDot) printStatusDot.classList.remove('online');
+                    if (syncStatusDot) syncStatusDot.classList.remove('online');
                 }
-            };
-            requestAnimationFrame(animateCounter);
-        }
+            })
+            .catch(error => {
+                console.error('Błąd sprawdzania statusu serwera:', error);
+                if (printStatusDot) printStatusDot.classList.remove('online');
+                if (syncStatusDot) syncStatusDot.classList.remove('online');
+            });
+    }
+    checkServerStatus();
+    setInterval(checkServerStatus, 5000);
 
-        // --- POPRAWIONY KOD WYKRESÓW ---
 
-        // Wykres kołowy (teraz Chart.js) zużycia tkanin
-        var fabricData = {{ fabric_summary|tojson }};
-        var fabricChartContainer = document.getElementById("fabric-chart");
-        if (fabricChartContainer && Object.keys(fabricData).length > 0) {
-            fabricChartContainer.innerHTML = '<canvas id="fabricPieChart"></canvas>'; // Dodajemy canvas
-            var ctxPie = document.getElementById('fabricPieChart').getContext('2d');
-            new Chart(ctxPie, {
-                type: 'pie',
-                data: {
-                    labels: Object.keys(fabricData),
-                    datasets: [{
-                        data: Object.values(fabricData),
-                        backgroundColor: ['#007bff', '#ff9900', '#28a745', '#dc3545', '#17a2b8', '#6f42c1'],
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'right',
-                            labels: {
-                                color: 'white'
-                            }
-                        }
-                    }
+    // =================================================================
+    // <<< TWÓJ ISTNIEJĄCY KOD (BEZ ZMIAN) >>>
+    // =================================================================
+    
+    // --- Zegar ---
+    function updateDateTime() {
+        const now = new Date();
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+        const formattedDateTime = now.toLocaleDateString('pl-PL', options);
+        const capitalizedDateTime = formattedDateTime.charAt(0).toUpperCase() + formattedDateTime.slice(1);
+        document.getElementById('current-datetime').textContent = capitalizedDateTime;
+    }
+    setInterval(updateDateTime, 1000);
+    updateDateTime();
+
+    // --- Animowany licznik ---
+    const animatedValue = document.getElementById('animated-value');
+    if (animatedValue) {
+        const targetValue = parseFloat(animatedValue.dataset.value);
+        const duration = 500;
+        const frameRate = 1000 / 60;
+        const totalFrames = Math.round(duration / frameRate);
+        let currentFrame = 0;
+        const animateCounter = () => {
+            currentFrame++;
+            const progress = currentFrame / totalFrames;
+            const currentValue = targetValue * progress;
+            animatedValue.textContent = `${currentValue.toFixed(2).replace('.', ',')} zł`;
+            if (currentFrame < totalFrames) {
+                requestAnimationFrame(animateCounter);
+            } else {
+                 animatedValue.textContent = `${targetValue.toFixed(2).replace('.', ',')} zł`;
+            }
+        };
+        requestAnimationFrame(animateCounter);
+    }
+
+    // --- Wykresy ---
+    var fabricData = {{ fabric_summary|tojson }};
+    var fabricChartContainer = document.getElementById("fabric-chart");
+    if (fabricChartContainer && Object.keys(fabricData).length > 0) {
+        fabricChartContainer.innerHTML = '<canvas id="fabricPieChart"></canvas>';
+        var ctxPie = document.getElementById('fabricPieChart').getContext('2d');
+        new Chart(ctxPie, {
+            type: 'pie', data: { labels: Object.keys(fabricData), datasets: [{ data: Object.values(fabricData), backgroundColor: ['#007bff', '#ff9900', '#28a745', '#dc3545', '#17a2b8', '#6f42c1'], }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'white' } } } }
+        });
+    } else if (fabricChartContainer) {
+        fabricChartContainer.innerHTML = "<p class='text-center text-muted' style='padding-top: 50px;'>Brak danych o zużyciu tkanin w tym miesiącu.</p>";
+    }
+
+    var profitData = {{ most_profitable_products|tojson }};
+    var profitChartCanvas = document.getElementById('profitChart');
+    if (profitChartCanvas && profitData.length > 0) {
+        var ctxBar = profitChartCanvas.getContext('2d');
+        new Chart(ctxBar, {
+            type: 'bar', data: { labels: profitData.map(p => p[0]), datasets: [{ label: 'Przychód z produktu', data: profitData.map(p => p[1]), backgroundColor: 'rgba(255, 153, 0, 0.6)', borderColor: 'rgba(255, 153, 0, 1)', borderWidth: 1 }] },
+            options: { scales: { y: { beginAtZero: true, ticks: { color: 'white' } }, x: { ticks: { color: 'white' } } }, plugins: { legend: { display: false } } }
+        });
+    } else if (profitChartCanvas) {
+         profitChartCanvas.parentElement.innerHTML = "<h5 class='card-title'>Najbardziej dochodowe produkty (ten miesiąc)</h5><p class='text-center text-muted' style='padding-top: 50px;'>Brak danych o zrealizowanych produktach w tym miesiącu.</p>"
+    }
+
+    // =================================================================
+    // <<< NOWY KOD DO URUCHAMIANIA SYNCHRONIZACJI >>>
+    // =================================================================
+    const triggerSyncBtn = document.getElementById('trigger-sync-btn');
+    if (triggerSyncBtn) {
+        triggerSyncBtn.addEventListener('click', function(event) {
+            event.preventDefault();
+            Swal.fire({
+                title: 'Czy chcesz uruchomić synchronizację?',
+                text: "Proces może potrwać kilka minut. Upewnij się, że aplikacja 'Szwalnia_Serwer' jest uruchomiona.",
+                icon: 'question', showCancelButton: true, confirmButtonColor: '#3085d6', cancelButtonColor: '#d33', confirmButtonText: 'Tak, uruchom!', cancelButtonText: 'Anuluj'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    triggerSynchronization();
                 }
             });
-        } else if (fabricChartContainer) {
-            fabricChartContainer.innerHTML = "<p class='text-center text-muted' style='padding-top: 50px;'>Brak danych o zużyciu tkanin w tym miesiącu.</p>";
-        }
+        });
+    }
 
-        // Wykres słupkowy dochodowych produktów (bez zmian, ale teraz powinien działać)
-        var profitData = {{ most_profitable_products|tojson }};
-        var profitChartCanvas = document.getElementById('profitChart');
-        if (profitChartCanvas && profitData.length > 0) {
-            var ctxBar = profitChartCanvas.getContext('2d');
-            new Chart(ctxBar, {
-                type: 'bar',
-                data: {
-                    labels: profitData.map(p => p[0]),
-                    datasets: [{
-                        label: 'Przychód z produktu',
-                        data: profitData.map(p => p[1]),
-                        backgroundColor: 'rgba(255, 153, 0, 0.6)',
-                        borderColor: 'rgba(255, 153, 0, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { color: 'white' }
-                        },
-                        x: {
-                            ticks: { color: 'white' }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                           display: false
-                        }
-                    }
-                }
-            });
-        } else if (profitChartCanvas) {
-             profitChartCanvas.parentElement.innerHTML = "<h5 class='card-title'>Najbardziej dochodowe produkty (ten miesiąc)</h5><p class='text-center text-muted' style='padding-top: 50px;'>Brak danych o zrealizowanych produktach w tym miesiącu.</p>"
-        }
-    });
+    function triggerSynchronization() {
+        const syncIcon = triggerSyncBtn.querySelector('i');
+        Swal.fire({
+            title: 'Rozpoczynam synchronizację...', text: 'Wysyłam polecenie do lokalnego serwera.', allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+                syncIcon.classList.remove('fa-play-circle');
+                syncIcon.classList.add('fa-spinner', 'fa-spin');
+            }
+        });
+
+        fetch('/trigger-local-sync', { method: 'POST' })
+        .then(response => response.json().then(data => ({ status: response.status, body: data })))
+        .then(({ status, body }) => {
+            syncIcon.classList.remove('fa-spinner', 'fa-spin');
+            syncIcon.classList.add('fa-play-circle');
+            if (status === 202) {
+                Swal.fire({ title: 'Synchronizacja uruchomiona!', text: 'Proces został rozpoczęty w tle. Sprawdź postęp w oknie aplikacji "Szwalnia_Serwer".', icon: 'success' });
+            } else {
+                Swal.fire({ title: 'Błąd!', text: body.error || 'Wystąpił nieoczekiwany problem.', icon: 'error' });
+            }
+        })
+        .catch(error => {
+            console.error('Fetch error:', error);
+            syncIcon.classList.remove('fa-spinner', 'fa-spin');
+            syncIcon.classList.add('fa-play-circle');
+            Swal.fire({ title: 'Krytyczny błąd', text: 'Nie udało się wysłać polecenia do serwera aplikacji. Sprawdź konsolę przeglądarki (F12).', icon: 'error' });
+        });
+    }
+});
 </script>
 {% endblock %}

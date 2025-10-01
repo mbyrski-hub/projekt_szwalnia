@@ -61,7 +61,8 @@ CONFIG_FILE = 'config.json'
 
 def save_config(data):
     try:
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, indent=4)
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=4)
         return True
     except Exception as e:
         messagebox.showerror("Błąd zapisu", f"Nie można zapisać konfiguracji: {e}")
@@ -70,11 +71,15 @@ def save_config(data):
 def load_config():
     if os.path.exists(CONFIG_FILE):
         try:
-            with open(CONFIG_FILE, 'r', encoding='utf-8') as f: return json.load(f)
-        except json.JSONDecodeError: return {}
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            return {}
     return {}
 
 config = load_config()
+APP_CONFIG["SELECTED_PRINTER"] = config.get("selected_printer")
+
 
 # --- Funkcje autostartu ---
 def get_startup_folder():
@@ -93,12 +98,15 @@ def create_shortcut(enable):
 # --- Logika Aplikacji (SQL i API) ---
 def log_message(queue, message, color='black', level='info'):
     timestamp = time.strftime('%H:%M:%S')
-    
+
     log_entry = message.strip()
-    if level == 'info': logger.info(log_entry)
-    elif level == 'error': logger.error(log_entry)
-    elif level == 'warning': logger.warning(log_entry)
-    
+    if level == 'info':
+        logger.info(log_entry)
+    elif level == 'error':
+        logger.error(log_entry)
+    elif level == 'warning':
+        logger.warning(log_entry)
+
     if queue:
         queue.put({'msg': f"[{timestamp}] {message}\n", 'color': color})
 
@@ -173,7 +181,8 @@ def send_prices_to_webapp(queue, config_data, data_to_send):
     headers = {'Content-Type': 'application/json', 'X-API-KEY': config_data.get('api_key')}
     data_for_api = [{'symbol': item['symbol'], 'price': item.get('price')} for item in data_to_send if item.get('price') is not None]
     if not data_for_api:
-        log_message(queue, "Brak cen do zaktualizowania.", color='orange', level='warning'); return True
+        log_message(queue, "Brak cen do zaktualizowania.", color='orange', level='warning')
+        return True
     log_message(queue, f"Wysyłanie {len(data_for_api)} aktualizacji cen...")
     try:
         response = requests.post(url, headers=headers, data=json.dumps(data_for_api), timeout=30)
@@ -182,16 +191,19 @@ def send_prices_to_webapp(queue, config_data, data_to_send):
             log_message(queue, f"SUKCES! {msg}", color='green')
             return True
         else:
-            log_message(queue, f"BŁĄD CEN: {response.status_code} - {response.text}", color='red', level='error'); return False
+            log_message(queue, f"BŁĄD CEN: {response.status_code} - {response.text}", color='red', level='error')
+            return False
     except requests.exceptions.RequestException as e:
-        log_message(queue, f"KRYTYCZNY BŁĄD CEN: {e}", color='red', level='error'); return False
+        log_message(queue, f"KRYTYCZNY BŁĄD CEN: {e}", color='red', level='error')
+        return False
 
 def send_catalog_to_webapp(queue, config_data, data_to_send):
     url = f"{config_data.get('web_app_url')}/api/v1/receive-subiekt-catalog"
     headers = {'Content-Type': 'application/json', 'X-API-KEY': config_data.get('api_key')}
     catalog_for_api = [{'symbol': item['symbol'], 'name': item.get('name')} for item in data_to_send]
     if not catalog_for_api:
-        log_message(queue, "Brak katalogu do wysłania.", color='orange', level='warning'); return True
+        log_message(queue, "Brak katalogu do wysłania.", color='orange', level='warning')
+        return True
     log_message(queue, f"Wysyłanie {len(catalog_for_api)} towarów do zmapowania...")
     try:
         response = requests.post(url, headers=headers, data=json.dumps(catalog_for_api), timeout=30)
@@ -200,27 +212,31 @@ def send_catalog_to_webapp(queue, config_data, data_to_send):
             log_message(queue, f"SUKCES! {msg}", color='green')
             return True
         else:
-            log_message(queue, f"BŁĄD KATALOGU: {response.status_code} - {response.text}", color='red', level='error'); return False
+            log_message(queue, f"BŁĄD KATALOGU: {response.status_code} - {response.text}", color='red', level='error')
+            return False
     except requests.exceptions.RequestException as e:
-        log_message(queue, f"KRYTYCZNY BŁĄD KATALOGU: {e}", color='red', level='error'); return False
+        log_message(queue, f"KRYTYCZNY BŁĄD KATALOGU: {e}", color='red', level='error')
+        return False
 
 def full_sync_task(queue, config_data):
     warehouse_full_name = config_data.get('default_warehouse')
     if not warehouse_full_name:
-        log_message(queue, "BŁĄD: Brak domyślnego magazynu.", color='red', level='error'); return
-    
+        log_message(queue, "BŁĄD: Brak domyślnego magazynu.", color='red', level='error')
+        return
+
     warehouse_symbol = warehouse_full_name.split(' ')[0]
     log_message(queue, f"\n--- Rozpoczynam Pełną Synchronizację ({warehouse_symbol}) ---", color='blue')
     data = get_data_from_warehouse(queue, config_data, warehouse_symbol)
     if data is None:
-        log_message(queue, "Synchronizacja przerwana.", color='red', level='error'); return
+        log_message(queue, "Synchronizacja przerwana.", color='red', level='error')
+        return
 
     log_message(queue, "\nKrok 1: Wysyłanie katalogu...", color='blue')
     catalog_success = send_catalog_to_webapp(queue, config_data, data)
-    
+
     log_message(queue, "\nKrok 2: Aktualizacja cen...", color='blue')
     prices_success = send_prices_to_webapp(queue, config_data, data)
-    
+
     if catalog_success and prices_success:
         log_message(queue, "\n--- PEŁNA SYNCHRONIZACJA ZAKOŃCZONA SUKCESEM ---", color='green')
     else:
@@ -237,7 +253,7 @@ def scheduler_thread_func(queue, config_data):
     while not stop_scheduler_thread.is_set():
         schedule.run_pending()
         time.sleep(1)
-    
+
     log_message(queue, "Wątek harmonogramu zatrzymany.", color='gray')
 
 # --- Funkcje pomocnicze ---
@@ -260,10 +276,7 @@ def get_available_printers():
         messagebox.showerror("Błąd Drukarek", f"Nie można było pobrać listy drukarek: {e}")
         return []
 
-# ... (funkcje autostartu bez zmian) ...
-def get_startup_folder():
-    return os.path.join(os.path.expanduser('~'), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
-
+# --- Funkcje autostartu ---
 def create_shortcut_in_startup(target_path, shortcut_name):
     startup_path = get_startup_folder()
     shortcut_path = os.path.join(startup_path, f"{shortcut_name}.lnk")
@@ -287,28 +300,27 @@ def remove_shortcut_from_startup(shortcut_name):
 
 # --- Logika Aplikacji ---
 class LogHandler:
-    # ... (bez zmian) ...
-    def __init__(self, text_widget):
-        self.text_widget = text_widget
+    def __init__(self, queue):
+        self.queue = queue
+
     def write(self, message):
         if message.strip():
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.text_widget.after(0, self._insert_text, f"[{timestamp}] {message}\n")
-    def _insert_text(self, message):
-        self.text_widget.insert(tk.END, message)
-        self.text_widget.see(tk.END)
+            log_message(self.queue, message)
+
     def flush(self):
         pass
 
-# --- Rdzeń serwera drukowania (logika Flask) ---
-flask_app_print = Flask(__name__)
+# --- Serwery Flask ---
+flask_app_print = Flask("print_server")
 CORS(flask_app_print)
+flask_app_sync = Flask("sync_server")
+CORS(flask_app_sync)
 
 @flask_app_print.route('/print_label', methods=['POST'])
 def print_label():
     log_handler = flask_app_print.config['LOG_HANDLER']
     log_handler.write("Odebrano nowe żądanie drukowania...")
-    
+
     selected_printer = APP_CONFIG.get("SELECTED_PRINTER")
     if not selected_printer:
         return jsonify({'error': 'Drukarka nie została wybrana na serwerze druku.'}), 500
@@ -322,22 +334,22 @@ def print_label():
         quantity = int(request.form.get('quantity', 1))
     except (TypeError, ValueError):
         return jsonify({'error': 'Brak lub niepoprawne wymiary/ilość w żądaniu.'}), 400
-    
+
     try:
         img_bytes = request.files['image'].read()
         log_handler.write(f"Odebrano plik ({len(img_bytes)} bajtów) | Wymiary: {width_mm}x{height_mm}mm | Ilość: {quantity}")
-        
+
         log_handler.write("Rozpoczynanie drukowania przez sterownik Windows (GDI)...")
-        
+
         h_printer = win32print.OpenPrinter(selected_printer)
         try:
             printer_dc = win32ui.CreateDC()
             printer_dc.CreatePrinterDC(selected_printer)
-            
+
             printer_dpi_x = printer_dc.GetDeviceCaps(win32con.LOGPIXELSX)
             printer_dpi_y = printer_dc.GetDeviceCaps(win32con.LOGPIXELSY)
             log_handler.write(f"DPI sterownika: {printer_dpi_x}x{printer_dpi_y}")
-            
+
             width_px = int(width_mm * printer_dpi_x / 25.4)
             height_px = int(height_mm * printer_dpi_y / 25.4)
             log_handler.write(f"Wymiary wydruku w pikselach: {width_px}x{height_px}")
@@ -352,39 +364,83 @@ def print_label():
                 dib.draw(printer_dc.GetHandleOutput(), (0, 0, width_px, height_px))
                 printer_dc.EndPage()
                 printer_dc.EndDoc()
-            
+
             log_handler.write("Wszystkie kopie wysłane pomyślnie przez sterownik!")
-            
+
         finally:
             win32print.ClosePrinter(h_printer)
-        
+
         return jsonify({'status': f'Wydrukowano pomyślnie {quantity} kopii.'})
-        
+
     except Exception as e:
         log_handler.write(f"KRYTYCZNY BŁĄD PODCZAS DRUKOWANIA: {e}")
         return jsonify({'error': str(e)}), 500
 
 @flask_app_print.route('/status')
 def print_status():
-    return jsonify({"status": "online"})
+    return jsonify({"status": "online", "service": "print_server"})
+
+@flask_app_sync.route('/status')
+def sync_status():
+    return jsonify({"status": "online", "service": "sync_server"})
+
+@flask_app_print.route('/trigger-sync', methods=['POST'])
+def trigger_sync():
+    log_handler = flask_app_print.config['LOG_HANDLER']
+    
+    # Weryfikacja klucza API przesłanego w nagłówku
+    api_key_from_request = request.headers.get('X-API-KEY')
+    current_config = load_config() # Wczytaj aktualną konfigurację z pliku config.json
+    
+    if not api_key_from_request or api_key_from_request != current_config.get('api_key'):
+        log_handler.write("Odebrano próbę zdalnego uruchomienia synchronizacji z BŁĘDNYM kluczem API.")
+        return jsonify({'error': 'Brak autoryzacji'}), 401
+
+    log_handler.write("Odebrano zdalne polecenie synchronizacji ze strony WWW.")
+    
+    # Uruchomienie pełnej synchronizacji w osobnym wątku, aby nie blokować serwera
+    sync_thread = threading.Thread(
+        target=full_sync_task, 
+        args=(main_queue, current_config), 
+        daemon=True
+    )
+    sync_thread.start()
+    
+    return jsonify({'status': 'Synchronizacja została pomyślnie uruchomiona w tle.'}), 202
 
 # --- Interfejs Graficzny (GUI Tkinter) ---
 class PrintServerApp:
-    # ... (cała reszta klasy GUI pozostaje bez zmian) ...
     def __init__(self, root):
         self.root = root
-        self.root.title("Lokalny Serwer Drukowania Etykiet")
-        self.root.geometry("600x500")
-        self.root.minsize(500, 400)
+        self.root.title("Lokalny Serwer Drukowania i Synchronizacji")
+        self.root.geometry("700x600")
+        self.root.minsize(600, 500)
         self.tray_icon = None
+        self.queue = main_queue
+        flask_app_print.config['LOG_HANDLER'] = LogHandler(self.queue)
+        flask_app_sync.config['LOG_HANDLER'] = LogHandler(self.queue)
 
         # --- Zakładki ---
         self.notebook = ttk.Notebook(root)
         self.print_tab = ttk.Frame(self.notebook)
         self.sync_tab = ttk.Frame(self.notebook)
+        self.log_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.print_tab, text="Serwer Druku")
         self.notebook.add(self.sync_tab, text="Synchronizator")
-        self.notebook.pack(expand=True, fill="both")
+        self.notebook.add(self.log_tab, text="Główny Log")
+        self.notebook.pack(expand=True, fill="both", padx=10, pady=10)
+
+        # --- Zakładka Logów ---
+        log_frame = ttk.LabelFrame(self.log_tab, text="Log operacji")
+        log_frame.pack(fill='both', expand=True, padx=5, pady=5)
+        self.main_log_text = scrolledtext.ScrolledText(log_frame, state='disabled', wrap=tk.WORD, height=10)
+        self.main_log_text.pack(padx=5, pady=5, expand=True, fill='both')
+        self.main_log_text.tag_config('green', foreground='#4CAF50')
+        self.main_log_text.tag_config('red', foreground='#F44336')
+        self.main_log_text.tag_config('orange', foreground='#FF9800')
+        self.main_log_text.tag_config('gray', foreground='#9E9E9E')
+        self.main_log_text.tag_config('blue', foreground='#2196F3')
+        ttk.Button(log_frame, text="Otwórz plik logu", command=self.open_log_file).pack(side='bottom', pady=5)
 
         # --- Zakładka drukowania ---
         info_frame = tk.Frame(self.print_tab, pady=10)
@@ -393,36 +449,34 @@ class PrintServerApp:
         printer_label.pack()
         self.available_printers = get_available_printers()
         self.selected_printer = tk.StringVar(root)
-        if self.available_printers:
+        
+        # Wczytaj i ustaw drukarkę z konfiguracji
+        saved_printer = config.get('selected_printer')
+        if saved_printer and saved_printer in self.available_printers:
+            self.selected_printer.set(saved_printer)
+        elif self.available_printers:
             self.selected_printer.set(self.available_printers[0])
-            APP_CONFIG["SELECTED_PRINTER"] = self.available_printers[0]
         else:
             self.available_printers.append("Brak drukarek")
             self.selected_printer.set("Brak drukarek")
+        
+        APP_CONFIG["SELECTED_PRINTER"] = self.selected_printer.get()
+        
         self.printer_menu = tk.OptionMenu(info_frame, self.selected_printer, *self.available_printers, command=self.on_printer_select)
         self.printer_menu.pack(pady=5, fill='x')
         self.ip_label = tk.Label(info_frame, text="Twój adres IP w sieci lokalnej: ?")
         self.ip_label.pack()
         self.ip_button = tk.Button(info_frame, text="Odśwież adres IP", command=self.update_ip)
         self.ip_button.pack(pady=5)
-        self.status_label_print = tk.Label(info_frame, text="Status serwera: Zatrzymany", fg="red", font=("Helvetica", 10, "bold"))
+        self.status_label_print = tk.Label(info_frame, text="Status serwera druku: Zatrzymany", fg="red", font=("Helvetica", 10, "bold"))
         self.status_label_print.pack()
-        
+
         button_frame_print = tk.Frame(self.print_tab, pady=10)
         button_frame_print.pack(fill='x')
         self.start_button_print = tk.Button(button_frame_print, text="Start", command=self.start_print_server, bg="lightgreen", height=2)
         self.start_button_print.pack(side='left', expand=True, fill='x', padx=20)
         self.stop_button_print = tk.Button(button_frame_print, text="Stop", command=self.stop_server, bg="salmon", state=tk.DISABLED, height=2)
         self.stop_button_print.pack(side='right', expand=True, fill='x', padx=20)
-
-        log_frame_print = tk.Frame(self.print_tab, padx=10, pady=10)
-        log_frame_print.pack(expand=True, fill='both')
-        self.log_widget_print = scrolledtext.ScrolledText(log_frame_print, state='normal', wrap=tk.WORD, bg="#f0f0f0")
-        self.log_widget_print.pack(expand=True, fill='both')
-        self.log_handler_print = LogHandler(self.log_widget_print)
-        flask_app_print.config['LOG_HANDLER'] = self.log_handler_print
-        self.update_ip()
-        self.log_handler_print.write("Aplikacja gotowa. Wybierz drukarkę i wciśnij 'Start'.")
 
         # --- Zakładka synchronizacji ---
         self.config = load_config()
@@ -438,16 +492,22 @@ class PrintServerApp:
 
         main_frame = tk.Frame(self.sync_tab, padx=10, pady=10)
         main_frame.pack(fill='both', expand=True)
-        
+
+        status_frame_sync = tk.Frame(main_frame)
+        status_frame_sync.pack(fill='x', pady=5)
+        self.status_label_sync = tk.Label(status_frame_sync, text="Status serwera synchronizacji: Zatrzymany", fg="red", font=("Helvetica", 10, "bold"))
+        self.status_label_sync.pack()
+
         sync_frame = ttk.LabelFrame(main_frame, text="Automatyczna Synchronizacja")
         sync_frame.pack(fill='x', pady=5, ipady=10)
         self.full_sync_button = ttk.Button(sync_frame, text="🚀 Ręczna Pełna Synchronizacja", command=self.run_full_sync)
         self.full_sync_button.pack(expand=True, fill='x', padx=5, pady=5)
-        
+
         manual_frame = ttk.LabelFrame(main_frame, text="Konfiguracja i Kroki Ręczne")
         manual_frame.pack(fill='x', pady=5)
-        
-        config_frame = tk.Frame(manual_frame); config_frame.pack(fill='x', padx=5, pady=5)
+
+        config_frame = tk.Frame(manual_frame)
+        config_frame.pack(fill='x', padx=5, pady=5)
         ttk.Label(config_frame, text="Serwer SQL:").grid(row=0, column=0, sticky='w', padx=5, pady=2)
         ttk.Entry(config_frame, textvariable=self.server_var, width=40).grid(row=0, column=1, sticky='ew', padx=5, pady=2)
         ttk.Label(config_frame, text="Nazwa Bazy Danych:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
@@ -460,41 +520,38 @@ class PrintServerApp:
         ttk.Entry(config_frame, textvariable=self.web_app_url_var, width=40).grid(row=4, column=1, sticky='ew', padx=5, pady=2)
         ttk.Label(config_frame, text="Klucz API:").grid(row=5, column=0, sticky='w', padx=5, pady=2)
         ttk.Entry(config_frame, textvariable=self.api_key_var, show='*').grid(row=5, column=1, sticky='ew', padx=5, pady=2)
-        
-        data_source_frame = tk.Frame(manual_frame); data_source_frame.pack(fill='x', padx=5, pady=5)
+
+        data_source_frame = tk.Frame(manual_frame)
+        data_source_frame.pack(fill='x', padx=5, pady=5)
         self.warehouse_combo = ttk.Combobox(data_source_frame, textvariable=self.warehouse_var, state='disabled')
         self.warehouse_combo.pack(side='left', fill='x', expand=True, padx=5, pady=5)
         self.connect_button = ttk.Button(data_source_frame, text="Wczytaj magazyny", command=self.run_load_warehouses)
         self.connect_button.pack(side='left', padx=5, pady=5)
-        
+
         auto_frame = ttk.LabelFrame(manual_frame, text="Ustawienia Automatyzacji")
-        auto_frame.pack(fill='x', pady=(10,5), ipady=5, padx=5)
+        auto_frame.pack(fill='x', pady=(10, 5), ipady=5, padx=5)
         self.startup_check = tk.Checkbutton(auto_frame, text="Uruchom program przy starcie systemu Windows", var=self.autostart_var, command=self.toggle_startup)
         self.startup_check.pack(anchor='w', padx=5)
-        time_frame = tk.Frame(auto_frame); time_frame.pack(fill='x', padx=5, pady=5)
+        time_frame = tk.Frame(auto_frame)
+        time_frame.pack(fill='x', padx=5, pady=5)
         ttk.Label(time_frame, text="Synchronizuj codziennie o godzinie:").pack(side='left')
         ttk.Entry(time_frame, textvariable=self.update_time_var, width=10).pack(side='left', padx=5)
 
-        btn_config_frame = tk.Frame(manual_frame); btn_config_frame.pack(fill='x', pady=5, padx=5)
+        btn_config_frame = tk.Frame(manual_frame)
+        btn_config_frame.pack(fill='x', pady=5, padx=5)
         self.test_button = ttk.Button(btn_config_frame, text="Testuj Połączenie", command=self.run_test_connection)
         self.test_button.pack(side='left', padx=5)
         ttk.Button(btn_config_frame, text="Zapisz Konfigurację", command=self.save_current_config).pack(side='left', padx=5)
         self.fetch_button = ttk.Button(btn_config_frame, text="Pobierz i Wyślij Ręcznie...", command=self.run_fetch_data)
         self.fetch_button.pack(side='right', padx=5)
 
-        log_frame = ttk.LabelFrame(main_frame, text="Log operacji")
-        log_frame.pack(fill='both', expand=True, pady=5)
-        self.log_text_sync = scrolledtext.ScrolledText(log_frame, state='disabled', wrap=tk.WORD, height=10)
-        self.log_text_sync.pack(padx=5, pady=5, expand=True, fill='both')
-        self.log_text_sync.tag_config('green', foreground='#4CAF50'); self.log_text_sync.tag_config('red', foreground='#F44336'); self.log_text_sync.tag_config('orange', foreground='#FF9800'); self.log_text_sync.tag_config('gray', foreground='#9E9E9E'); self.log_text_sync.tag_config('blue', foreground='#2196F3')
-        
-        ttk.Button(log_frame, text="Otwórz plik logu", command=self.open_log_file).pack(side='bottom', pady=5)
-
-        self.queue = main_queue
+        # --- Inicjalizacja końcowa ---
         self.root.after(100, self.process_queue)
         self.update_full_sync_button_state()
-
+        self.update_ip()
+        self.start_sync_server() # Autostart serwera synchronizacji
         self.root.protocol("WM_DELETE_WINDOW", self.minimize_to_tray)
+
     def create_tray_image(self):
         image = Image.new('RGB', (64, 64), 'gray')
         dc = ImageDraw.Draw(image)
@@ -513,13 +570,13 @@ class PrintServerApp:
     def minimize_to_tray(self):
         self.root.withdraw()
         image = self.create_tray_image()
-        menu = (pystray.MenuItem('Pokaż', self.show_window, default=True), 
+        menu = (pystray.MenuItem('Pokaż', self.show_window, default=True),
                 pystray.MenuItem('Zakończ', self.exit_app))
-        self.tray_icon = pystray.Icon(APP_NAME, image, "Serwer Drukowania", menu)
+        self.tray_icon = pystray.Icon(APP_NAME, image, "Serwer Drukowania i Synchronizacji", menu)
         threading.Thread(target=self.tray_icon.run, daemon=True).start()
-        
+
     def on_closing(self, force=False):
-        if force or messagebox.askokcancel("Zamknij", "Czy na pewno chcesz zamknąć serwer drukowania?"):
+        if force or messagebox.askokcancel("Zamknij", "Czy na pewno chcesz zamknąć serwer?"):
             if self.tray_icon:
                 self.tray_icon.stop()
             self.root.destroy()
@@ -527,19 +584,19 @@ class PrintServerApp:
 
     def on_printer_select(self, selected_value):
         APP_CONFIG["SELECTED_PRINTER"] = selected_value
-        self.log_handler_print.write(f"Wybrano drukarkę: {selected_value}")
+        log_message(self.queue, f"Wybrano drukarkę: {selected_value}")
 
     def update_ip(self):
         ip = get_local_ip()
         self.ip_label.config(text=f"Twój adres IP w sieci lokalnej: {ip}")
-        self.log_handler_print.write(f"Sprawdzono IP: {ip}. Ten adres należy wpisać na stronie.")
+        log_message(self.queue, f"Sprawdzono IP: {ip}. Ten adres należy wpisać na stronie.")
 
     def start_print_server(self):
         if not APP_CONFIG.get("SELECTED_PRINTER") or APP_CONFIG.get("SELECTED_PRINTER") == "Brak drukarek":
             messagebox.showerror("Błąd", "Nie wybrano poprawnej drukarki!")
             return
         global flask_thread_print
-        self.log_handler_print.write(f"Uruchamianie serwera na {HOST}:{PORT_PRINT}...")
+        log_message(self.queue, f"Uruchamianie serwera druku na {HOST}:{PORT_PRINT}...")
         def run_app():
             log = logging.getLogger('werkzeug')
             log.disabled = True
@@ -547,75 +604,102 @@ class PrintServerApp:
             try:
                 flask_app_print.run(host=HOST, port=PORT_PRINT, debug=False)
             except Exception as e:
-                self.log_handler_print.write(f"Błąd krytyczny serwera: {e}")
+                log_message(self.queue, f"Błąd krytyczny serwera druku: {e}", color='red', level='error')
+
         flask_thread_print = threading.Thread(target=run_app, daemon=True)
         flask_thread_print.start()
-        self.status_label_print.config(text="Status serwera: Działa", fg="green")
+        self.status_label_print.config(text="Status serwera druku: Działa", fg="green")
         self.start_button_print.config(state=tk.DISABLED)
         self.stop_button_print.config(state=tk.NORMAL)
         self.printer_menu.config(state=tk.DISABLED)
-        self.log_handler_print.write("Serwer uruchomiony. Oczekuje na zlecenia wydruku...")
+        log_message(self.queue, "Serwer druku uruchomiony.", color='green')
+
+    def start_sync_server(self):
+        global flask_thread_sync
+        log_message(self.queue, f"Uruchamianie serwera synchronizacji na {HOST}:{PORT_SYNC}...")
+        def run_app():
+            log = logging.getLogger('werkzeug')
+            log.disabled = True
+            flask_app_sync.logger.disabled = True
+            try:
+                flask_app_sync.run(host=HOST, port=PORT_SYNC, debug=False)
+            except Exception as e:
+                log_message(self.queue, f"Błąd krytyczny serwera synchronizacji: {e}", color='red', level='error')
+        
+        flask_thread_sync = threading.Thread(target=run_app, daemon=True)
+        flask_thread_sync.start()
+        self.status_label_sync.config(text="Status serwera synchronizacji: Działa", fg="green")
+        log_message(self.queue, "Serwer synchronizacji uruchomiony.", color='green')
+
 
     def stop_server(self):
-        self.log_handler_print.write("Zatrzymywanie serwera... Aplikacja zostanie zamknięta.")
+        log_message(self.queue, "Zatrzymywanie serwera... Aplikacja zostanie zamknięta.", color='orange')
         self.on_closing(force=True)
 
     def toggle_startup(self):
         is_enabled = self.autostart_var.get()
         if getattr(sys, 'frozen', False):
-             target_path = sys.executable
+            target_path = sys.executable
         else:
             messagebox.showinfo("Informacja", "Funkcja autostartu tworzy skrót do pliku .exe. Aby w pełni przetestować tę funkcję, najpierw skompiluj aplikację.")
             target_path = os.path.abspath(__file__)
         if is_enabled:
             if create_shortcut_in_startup(target_path, APP_NAME):
-                self.log_handler_print.write("Dodano aplikację do autostartu.")
+                log_message(self.queue, "Dodano aplikację do autostartu.")
         else:
             if remove_shortcut_from_startup(APP_NAME):
-                self.log_handler_print.write("Usunięto aplikację z autostartu.")
+                log_message(self.queue, "Usunięto aplikację z autostartu.")
 
     def open_log_file(self):
         try:
-            if platform.system() == "Windows": os.startfile(log_file)
-            elif platform.system() == "Darwin": subprocess.Popen(["open", log_file])
-            else: subprocess.Popen(["xdg-open", log_file])
+            if platform.system() == "Windows":
+                os.startfile(log_file)
+            elif platform.system() == "Darwin":
+                subprocess.Popen(["open", log_file])
+            else:
+                subprocess.Popen(["xdg-open", log_file])
         except Exception as e:
             log_message(self.queue, f"Nie można otworzyć pliku logu: {e}", color='red', level='error')
 
     def get_current_config(self):
         return {
-            'server': self.server_var.get(), 'database': self.database_var.get(), 'sql_user': self.sql_user_var.get(), 
+            'server': self.server_var.get(), 'database': self.database_var.get(), 'sql_user': self.sql_user_var.get(),
             'sql_password': self.sql_password_var.get(), 'web_app_url': self.web_app_url_var.get(), 'api_key': self.api_key_var.get(),
             'default_warehouse': self.warehouse_var.get(),
-            'autostart': self.autostart_var.get(), 'update_time': self.update_time_var.get()
+            'autostart': self.autostart_var.get(), 'update_time': self.update_time_var.get(),
+            'selected_printer': self.selected_printer.get()
         }
-    
+
     def save_current_config(self):
         global config, stop_scheduler_thread
         if not self.warehouse_var.get() and (self.autostart_var.get() or self.update_time_var.get()):
             messagebox.showwarning("Brak magazynu", "Wybierz i zapisz domyślny magazyn, aby włączyć autostart i automatyzację.")
             return
-        
+
         new_config = self.get_current_config()
         if save_config(new_config):
             config = new_config
             create_shortcut(config.get('autostart'))
             messagebox.showinfo("Sukces", "Konfiguracja została zapisana.")
             self.update_full_sync_button_state()
-            
+
             stop_scheduler_thread.set()
             time.sleep(1.1)
             stop_scheduler_thread.clear()
             threading.Thread(target=scheduler_thread_func, args=(self.queue, config), daemon=True).start()
-            
+
     def process_queue(self):
         try:
             while True:
                 data = self.queue.get_nowait()
-                self.log_text_sync.configure(state='normal'); self.log_text_sync.insert(tk.END, data['msg'], data['color']); self.log_text_sync.configure(state='disabled'); self.log_text_sync.see(tk.END)
-        except queue.Empty: pass
+                self.main_log_text.configure(state='normal')
+                self.main_log_text.insert(tk.END, data['msg'], data['color'])
+                self.main_log_text.configure(state='disabled')
+                self.main_log_text.see(tk.END)
+        except queue.Empty:
+            pass
         self.root.after(100, self.process_queue)
-    
+
     def update_full_sync_button_state(self):
         self.full_sync_button.config(state='normal' if self.config.get('default_warehouse') else 'disabled')
 
@@ -629,41 +713,54 @@ class PrintServerApp:
                 self.warehouse_combo['values'] = warehouses
                 self.warehouse_combo.config(state='readonly')
                 saved_warehouse = self.config.get('default_warehouse')
-                if saved_warehouse in warehouses: self.warehouse_var.set(saved_warehouse)
-                elif warehouses: self.warehouse_var.set(warehouses[0])
+                if saved_warehouse in warehouses:
+                    self.warehouse_var.set(saved_warehouse)
+                elif warehouses:
+                    self.warehouse_var.set(warehouses[0])
         threading.Thread(target=task_wrapper, daemon=True).start()
 
     def run_test_connection(self):
         threading.Thread(target=test_sql_connection, args=(self.queue, self.get_current_config()), daemon=True).start()
 
     def run_fetch_data(self):
-        if not self.warehouse_var.get(): 
-            messagebox.showwarning("Brak magazynu", "Najpierw wczytaj i wybierz magazyn."); return
-        
+        if not self.warehouse_var.get():
+            messagebox.showwarning("Brak magazynu", "Najpierw wczytaj i wybierz magazyn.")
+            return
+
         def task_wrapper():
             data = get_data_from_warehouse(self.queue, self.get_current_config(), self.warehouse_var.get().split(' ')[0])
             if data is not None:
                 self.root.after(0, self.show_review_window, data)
         threading.Thread(target=task_wrapper, daemon=True).start()
-        
+
     def show_review_window(self, data):
         review_window = tk.Toplevel(self.root)
         review_window.title(f"Podgląd Danych ({len(data)} pozycji)")
         review_window.geometry("800x500")
         cols = ('Symbol', 'Nazwa', 'Cena Netto', 'Data Ceny')
         tree = ttk.Treeview(review_window, columns=cols, show='headings')
-        tree.heading('Symbol', text='Symbol'); tree.column('Symbol', width=150)
-        tree.heading('Nazwa', text='Nazwa'); tree.column('Nazwa', width=350)
-        tree.heading('Cena Netto', text='Cena Netto'); tree.column('Cena Netto', width=100, anchor='e')
-        tree.heading('Data Ceny', text='Data Ceny'); tree.column('Data Ceny', width=100, anchor='center')
+        tree.heading('Symbol', text='Symbol')
+        tree.column('Symbol', width=150)
+        tree.heading('Nazwa', text='Nazwa')
+        tree.column('Nazwa', width=350)
+        tree.heading('Cena Netto', text='Cena Netto')
+        tree.column('Cena Netto', width=100, anchor='e')
+        tree.heading('Data Ceny', text='Data Ceny')
+        tree.column('Data Ceny', width=100, anchor='center')
         tree.pack(expand=True, fill='both', padx=10, pady=5)
         for item in data:
             tree.insert("", "end", values=(item['symbol'], item['name'], f"{item.get('price', 0.0):.2f} zł", item.get('price_date', 'Brak')))
+
         def send_catalog_action():
-            review_window.destroy(); threading.Thread(target=send_catalog_to_webapp, args=(self.queue, self.get_current_config(), data), daemon=True).start()
+            review_window.destroy()
+            threading.Thread(target=send_catalog_to_webapp, args=(self.queue, self.get_current_config(), data), daemon=True).start()
+
         def send_prices_action():
-            review_window.destroy(); threading.Thread(target=send_prices_to_webapp, args=(self.queue, self.get_current_config(), data), daemon=True).start()
-        button_frame = tk.Frame(review_window); button_frame.pack(pady=10)
+            review_window.destroy()
+            threading.Thread(target=send_prices_to_webapp, args=(self.queue, self.get_current_config(), data), daemon=True).start()
+
+        button_frame = tk.Frame(review_window)
+        button_frame.pack(pady=10)
         ttk.Button(button_frame, text=f"Wyślij katalog ({len(data)}) do zmapowania", command=send_catalog_action).pack(side='left', padx=10)
         ttk.Button(button_frame, text=f"Aktualizuj ceny istniejących", command=send_prices_action).pack(side='left', padx=10)
 

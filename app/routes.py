@@ -1911,3 +1911,33 @@ def label_gallery_content():
     """Renderuje samą zawartość galerii metek do wstrzyknięcia w modal."""
     templates = LabelTemplate.query.order_by(LabelTemplate.name).all()
     return render_template('_label_gallery_content.html', templates=templates)
+
+@app.route('/trigger-local-sync', methods=['POST'])
+def trigger_local_sync():
+    """
+    Endpoint pośredniczący (proxy), który bezpiecznie wywołuje synchronizację
+    w lokalnej aplikacji desktopowej.
+    """
+    # Adres, pod którym aplikacja desktopowa nasłuchuje na polecenia
+    local_sync_url = 'http://localhost:5001/trigger-sync'
+
+    # Pobranie klucza API z konfiguracji serwera (zgodnie z Twoją strukturą)
+    api_key = current_app.config.get('API_SECRET_KEY')
+
+    if not api_key:
+        return jsonify({'error': 'Brak skonfigurowanego klucza API po stronie serwera.'}), 500
+
+    headers = {
+        'X-API-KEY': api_key
+    }
+
+    try:
+        response = requests.post(local_sync_url, headers=headers, timeout=5)
+        return jsonify(response.json()), response.status_code
+
+    except requests.exceptions.ConnectionError:
+        return jsonify({
+            'error': 'Nie można nawiązać połączenia z lokalnym serwerem. Upewnij się, że aplikacja "Szwalnia_Serwer" jest uruchomiona na tym komputerze.'
+        }), 503
+    except Exception as e:
+        return jsonify({'error': f'Wystąpił nieoczekiwany błąd: {str(e)}'}), 500
