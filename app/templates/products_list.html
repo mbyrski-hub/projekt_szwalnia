@@ -59,9 +59,10 @@
     <div class="card-header d-flex justify-content-between align-items-center">
         <h4><i class="fas fa-boxes"></i> Lista Produktów</h4>
         <div>
-            <button class="btn btn-info btn-sm" data-toggle="modal" data-target="#importModal"><i class="fas fa-file-excel"></i> Importuj z XLSX</button>
-            <a href="{{ url_for('add_product') }}" class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Dodaj Nowy Produkt</a>
-        </div>
+    <button class="btn btn-secondary btn-sm" data-toggle="modal" data-target="#updatePricesModal"><i class="fas fa-percentage"></i> Masowa zmiana cen</button>
+    <button class="btn btn-info btn-sm" data-toggle="modal" data-target="#importModal"><i class="fas fa-file-excel"></i> Importuj z XLSX</button>
+    <a href="{{ url_for('add_product') }}" class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Dodaj Nowy Produkt</a>
+</div>
     </div>
     <div class="card-body">
         <table class="table table-striped table-hover table-sm">
@@ -248,11 +249,86 @@
     </div>
   </div>
 </div>
+
+{# --- NOWY MODAL DO MASOWEJ ZMIANY CEN --- #}
+<div class="modal fade" id="updatePricesModal" tabindex="-1" role="dialog" aria-labelledby="updatePricesModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="updatePricesModalLabel">Masowa Zmiana Cen Produktów</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form method="POST" action="{{ url_for('update_prices_by_category') }}" id="updatePricesForm">
+        <div class="modal-body">
+            <p>Ta operacja zmieni ceny <strong>wszystkich</strong> produktów w wybranej kategorii.</p>
+            <div class="form-group">
+                <label for="category_id_mass_update">Wybierz kategorię do aktualizacji:</label>
+                <select name="category_id_mass_update" id="category_id_mass_update" class="form-control" required>
+                    <option value="" disabled selected>-- Wybierz kategorię --</option>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}">{{ category.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="percentage_change">Zmień cenę o procent (%):</label>
+                <input type="number" step="0.01" name="percentage_change" class="form-control" id="percentage_change" placeholder="np. 5.5 lub -10" required>
+                <small class="form-text text-muted">Użyj wartości dodatniej, aby podnieść cenę (np. 10), lub ujemnej, aby ją obniżyć (np. -5).</small>
+            </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Anuluj</button>
+          <button type="submit" class="btn btn-primary">Aktualizuj Ceny</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 $(document).ready(function() {
+
+// --- NOWA LOGIKA DLA MASOWEJ ZMIANY CEN ---
+$('#updatePricesModal').on('show.bs.modal', function () {
+    // Jeśli użytkownik jest na stronie przefiltrowanej kategorii,
+    // automatycznie ją zaznacz w modalu.
+    const currentCategoryId = "{{ current_category_id or '' }}";
+    if (currentCategoryId) {
+        $('#category_id_mass_update').val(currentCategoryId);
+    }
+});
+
+$('#updatePricesForm').on('submit', function(e) {
+    e.preventDefault(); // Zatrzymaj domyślne wysłanie formularza
+    const form = this;
+    const categoryName = $('#category_id_mass_update option:selected').text();
+    const percentage = $('#percentage_change').val();
+
+    if (!categoryName || !percentage) {
+        Swal.fire('Błąd', 'Wypełnij wszystkie pola!', 'error');
+        return;
+    }
+
+    Swal.fire({
+        title: 'Jesteś pewien?',
+        html: `Ta operacja zmieni ceny wszystkich produktów w kategorii <strong>${categoryName}</strong> o <strong>${percentage}%</strong>. <br><br>Tej operacji nie można cofnąć!`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Tak, zmień ceny!',
+        cancelButtonText: 'Anuluj'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            form.submit(); // Jeśli potwierdzone, wyślij formularz
+        }
+    });
+});
+
     // Obsługa modala do wyświetlania ORYGINALNYCH zdjęć
     $('#imageModal').on('show.bs.modal', function (event) {
         var button = $(event.relatedTarget);

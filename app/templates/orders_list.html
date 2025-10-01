@@ -215,9 +215,9 @@
                     <button class="btn btn-sm btn-dark btn-print-labels" data-order-id="{{ order.id }}" title="Drukuj metki">
                         <i class="fas fa-tags"></i>
                     </button>
-                    <form method="POST" action="{{ url_for('delete_order', order_id=order.id) }}" class="d-inline" onsubmit="return confirm('Czy na pewno usunąć?');">
-                        <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
-                    </form>
+                    <form method="POST" action="{{ url_for('delete_order', order_id=order.id) }}" class="d-inline delete-order-form">
+    <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+</form>
                 </td>
             </tr>
             <tr class="order-details" id="details-{{ order.id }}" style="display: none;">
@@ -623,6 +623,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             left: ${element.x === '50%' ? '50%' : '0'};
                             font-size: ${element.fontSize}px;
                             font-weight: ${element.type === 'dynamic' ? 'bold' : 'normal'};
+                            color: ${element.color || 'black'}; /* <--- DODAJ TĘ LINIĘ */
                             width: ${element.width};
                             padding: 5px;
                             ${extraStyles}">
@@ -632,10 +633,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         return `
-            <div class="label-canvas-render" style="width: 132px; height: ${templateJson.height}; background-color: white; position: relative; overflow: hidden;">
-                ${elementsHtml}
-            </div>
-        `;
+    <div class="label-canvas-render" style="width: 132px; height: ${templateJson.height}; background-color: white; position: relative; overflow: hidden;">
+        <div style="position: absolute; top: 7.5px; left: 0; width: 100%; border-top: 1px dashed #888;"></div>
+        ${elementsHtml}
+    </div>
+`;
     }
     // --- KONIEC ZMIANY ---
 
@@ -705,6 +707,33 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     startPrintBtn.addEventListener('click', processPrintQueue);
+
+// 4. Logika dla SweetAlert przy usuwaniu
+document.querySelectorAll('.delete-order-form').forEach(form => {
+    form.addEventListener('submit', function(e) {
+        e.preventDefault(); // ZATRZYMUJEMY domyślne wysyłanie formularza
+
+        Swal.fire({
+            title: 'Jesteś pewien?',
+            text: "Zlecenie zostanie trwale usunięte!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Tak, usuń!',
+            cancelButtonText: 'Anuluj'
+        }).then((result) => {
+            // Jeśli użytkownik kliknie "Tak, usuń!"
+            if (result.isConfirmed) {
+                form.submit(); // Wysyłamy formularz
+            }
+        });
+    });
+});
+
+
+
+
 });
 </script>
 {% endblock %}

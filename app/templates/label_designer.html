@@ -221,7 +221,9 @@
             <div class="tool-item" data-tool="text"><i class="fas fa-font"></i> Tekst</div>
             <div class="tool-item" data-tool="image"><i class="fas fa-image"></i> Obraz</div>
             <div class="tool-item" data-tool="dynamic"><i class="fas fa-tag"></i> Pole [ROZMIAR]</div>
-            
+            <div class="tool-item" data-tool="ce_mark">
+        <img src="{{ url_for('static', filename='images/znak_CE.png') }}" style="height: 18px; vertical-align: text-bottom;"> Znak CE
+    </div>
             <h5 class="mt-3">Ikony Pielęgnacji</h5>
             <button class="btn btn-outline-secondary w-100" data-toggle="modal" data-target="#symbolsModal">
                 <i class="fas fa-plus"></i> Dodaj Symbol
@@ -321,6 +323,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const symbolsModal = document.getElementById('symbolsModal');
     const currentTemplateIdInput = document.getElementById('currentTemplateId');
     const dimensionDisplay = document.getElementById('dimensionDisplay');
+    let selectedElement = null;
     let elementCounter = 0;
 
     const pxToMm = (px) => (px * 25.4 / 96).toFixed(0);
@@ -385,6 +388,14 @@ document.addEventListener('DOMContentLoaded', function () {
             newElement.dataset.type = 'image';
             newElement.style.width = '50px';
             newElement.style.height = '50px';
+            } else if (toolType === 'ce_mark') { // <-- NOWY BLOK DLA ZNAKU CE
+    const src = "{{ url_for('static', filename='images/znak_CE.png') }}";
+    newElement.dataset.type = 'image'; // Traktujemy go jak obrazek
+    newElement.dataset.src = src;
+    newElement.innerHTML = `<img src="${src}" style="width: 100%; height: auto; pointer-events: none;">`;
+    newElement.style.width = '25px'; // Domyślny, rozsądny rozmiar
+    newElement.style.padding = '0';
+    newElement.style.border = '1px dashed #ccc'; // Ramka do edycji
         } else if (toolType === 'dynamic') {
             newElement.textContent = '[ ROZMIAR ]';
             newElement.dataset.type = 'dynamic';
@@ -442,59 +453,107 @@ document.addEventListener('DOMContentLoaded', function () {
                 inertia: true
             })
             .on('tap', function (event) {
-                document.querySelectorAll('.draggable-element').forEach(el => el.classList.remove('selected'));
-                event.currentTarget.classList.add('selected');
-                updatePropertiesPanel(event.currentTarget);
-            });
+    // Usuń zaznaczenie ze wszystkich innych elementów
+    document.querySelectorAll('.draggable-element').forEach(el => el.classList.remove('selected'));
+    
+    // Ustaw nowo kliknięty element jako globalnie "wybrany"
+    selectedElement = event.currentTarget; 
+    
+    // Dodaj klasę wizualną do nowo wybranego elementu
+    selectedElement.classList.add('selected'); 
+    
+    // Zaktualizuj panel boczny dla nowo wybranego elementu
+    updatePropertiesPanel(selectedElement); 
+});
     }
 
     function updatePropertiesPanel(element) {
-        propertiesContent.innerHTML = '';
-        const type = element.dataset.type;
-        let contentHtml = `<p>Typ: <strong>${type}</strong></p>`;
+    propertiesContent.innerHTML = '';
+    const type = element.dataset.type;
+    let contentHtml = `<p>Typ: <strong>${type}</strong></p>`;
 
-        if (type === 'text' || type === 'dynamic' || type === 'icon') {
-            if (type !== 'dynamic') {
-                contentHtml += `<div class="form-group"><label>Tekst:</label><input type="text" class="form-control form-control-sm" value="${element.textContent}" oninput="updateElement(this, '${element.dataset.id}', 'textContent')"></div>`;
-            }
-            contentHtml += `<div class="form-group"><label>Rozmiar (px):</label><input type="number" class="form-control form-control-sm" value="${element.dataset.fontSize}" oninput="updateElement(this, '${element.dataset.id}', 'fontSize')"></div>`;
-            
-            if (type === 'text' || type === 'dynamic') {
-                const isChecked = element.dataset.isCentered === 'true' ? 'checked' : '';
-                contentHtml += `
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" ${isChecked} onchange="updateElement(this, '${element.dataset.id}', 'isCentered')">
-                        <label class="form-check-label">Wyśrodkuj</label>
-                    </div>
-                `;
-            }
+    // --- BLOK DLA TEKSTU, IKON I POLA DYNAMICZNEGO ---
+    if (type === 'text' || type === 'dynamic' || type === 'icon') {
+        if (type !== 'dynamic') {
+            contentHtml += `<div class="form-group"><label>Tekst:</label><input type="text" class="form-control form-control-sm" value="${element.textContent}" oninput="updateElement(this, '${element.dataset.id}', 'textContent')"></div>`;
         }
-        contentHtml += `<button class="btn btn-outline-danger btn-sm mt-3" onclick="deleteElement('${element.dataset.id}')"><i class="fas fa-trash-alt"></i> Usuń element</button>`;
-        propertiesContent.innerHTML = contentHtml;
+        contentHtml += `<div class="form-group"><label>Rozmiar (px):</label><input type="number" class="form-control form-control-sm" value="${element.dataset.fontSize}" oninput="updateElement(this, '${element.dataset.id}', 'fontSize')"></div>`;
+        
+        if (type === 'text' || type === 'dynamic') {
+            const isChecked = element.dataset.isCentered === 'true' ? 'checked' : '';
+            contentHtml += `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" ${isChecked} onchange="updateElement(this, '${element.dataset.id}', 'isCentered')">
+                    <label class="form-check-label">Wyśrodkuj</label>
+                </div>
+            `;
+        }
     }
 
-    window.updateElement = function(input, elementId, property) {
-        const element = document.querySelector(`[data-id="${elementId}"]`);
-        if (!element) return;
-        if (property === 'textContent') {
-            element.textContent = input.value;
-        } else if (property === 'fontSize') {
-            element.style.fontSize = `${input.value}px`;
-            element.dataset.fontSize = input.value;
-        } else if (property === 'isCentered') {
-            element.dataset.isCentered = input.checked;
-            element.style.textAlign = input.checked ? 'center' : 'left';
-            element.style.width = input.checked ? '100%' : 'auto';
-        }
-    };
+    // --- POPRAWIONY BLOK DLA OBRAZKÓW (przeniesiony poza poprzedni if) ---
+    if (type === 'image') {
+        const currentWidth = parseInt(element.style.width, 10) || 50;
+        contentHtml += `
+            <div class="form-group">
+                <label>Szerokość (px):</label>
+                <input type="number" class="form-control form-control-sm" 
+                       value="${currentWidth}" 
+                       oninput="updateElement(this, '${element.dataset.id}', 'width')">
+            </div>
+        `;
+    }
 
-    window.deleteElement = function(elementId) {
-        const element = document.querySelector(`[data-id="${elementId}"]`);
-        if (element && confirm('Czy na pewno chcesz usunąć ten element?')) {
-            element.remove();
-            propertiesContent.innerHTML = '<p class="text-muted">Kliknij na element, aby edytować.</p>';
+    contentHtml += `<button class="btn btn-outline-danger btn-sm mt-3" onclick="deleteElement('${element.dataset.id}')"><i class="fas fa-trash-alt"></i> Usuń element</button>`;
+    propertiesContent.innerHTML = contentHtml;
+}
+
+    window.updateElement = function(input, elementId, property) {
+    const element = document.querySelector(`[data-id="${elementId}"]`);
+    if (!element) return;
+
+    if (property === 'textContent') {
+        element.textContent = input.value;
+    } else if (property === 'fontSize') {
+        element.style.fontSize = `${input.value}px`;
+        element.dataset.fontSize = input.value;
+    } else if (property === 'isCentered') {
+        element.dataset.isCentered = input.checked;
+        if (input.checked) {
+            const y = parseFloat(element.getAttribute('data-y')) || 0;
+            const canvasWidth = canvas.offsetWidth;
+            const elementWidth = element.offsetWidth;
+            const newX = (canvasWidth / 2) - (elementWidth / 2);
+            element.style.transform = `translate(${newX}px, ${y}px)`;
+            element.setAttribute('data-x', newX);
         }
-    };
+        // Celowo nie ma 'else', element pozostaje na miejscu po odznaczeniu
+    } else if (property === 'width') { // POPRAWIONY BLOK ZMIANY SZEROKOŚCI
+        const newWidth = parseInt(input.value, 10);
+        if (newWidth > 0) {
+            element.style.width = `${newWidth}px`;
+        }
+    }
+};
+   window.deleteElement = function(elementId) {
+    const element = document.querySelector(`[data-id="${elementId}"]`);
+    if (element) {
+        Swal.fire({
+            title: 'Usunąć element?',
+            text: "Tej operacji nie można cofnąć.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Tak, usuń!',
+            cancelButtonText: 'Anuluj'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                element.remove();
+                propertiesContent.innerHTML = '<p class="text-muted">Kliknij na element, aby edytować.</p>';
+            }
+        });
+    }
+};
 
     saveBtn.addEventListener('click', function() {
         const templateName = templateNameInput.value.trim();
@@ -644,25 +703,51 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     deleteBtn.addEventListener('click', function() {
-        const selectedId = templateSelector.value;
-        if (!selectedId) {
-            alert('Wybierz szablon, który chcesz usunąć.');
-            return;
-        }
-        if (confirm(`Czy na pewno chcesz trwale usunąć szablon "${templateSelector.options[templateSelector.selectedIndex].text}"?`)) {
+    const selectedId = templateSelector.value;
+    if (!selectedId) {
+        alert('Wybierz szablon, który chcesz usunąć.');
+        return;
+    }
+    const templateName = templateSelector.options[templateSelector.selectedIndex].text;
+
+    Swal.fire({
+        title: 'Jesteś pewien?',
+        text: `Szablon "${templateName}" zostanie trwale usunięty!`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Tak, usuń szablon!',
+        cancelButtonText: 'Anuluj'
+    }).then((result) => {
+        if (result.isConfirmed) {
             fetch(`/api/label-templates/${selectedId}`, { method: 'DELETE' })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    alert('Szablon został usunięty.');
-                    window.location.reload();
+                    // Używamy Swala także do potwierdzenia sukcesu
+                    Swal.fire(
+                        'Usunięto!',
+                        'Szablon został usunięty.',
+                        'success'
+                    ).then(() => {
+                        window.location.reload();
+                    });
                 } else {
-                    alert('Błąd: ' + data.message);
+                    Swal.fire(
+                        'Błąd!',
+                        'Wystąpił błąd: ' + data.message,
+                        'error'
+                    );
                 }
             })
-            .catch(error => console.error('Błąd usuwania:', error));
+            .catch(error => {
+                console.error('Błąd usuwania:', error);
+                Swal.fire('Błąd!', 'Wystąpił nieoczekiwany błąd.', 'error');
+            });
         }
     });
+});
     
     // Logika testowego wydruku
     const testPrintBtn = document.getElementById('testPrintBtn');

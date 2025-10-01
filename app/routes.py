@@ -1880,8 +1880,18 @@ def kokpit():
 
     # --- NOWY KOD: Konwersja danych na listę ---
     most_profitable_products = [list(row) for row in most_profitable_products_query]
-    # --- KONIEC NOWEGO KODU ---
+    # --- KONIEC NOWEGO KODU -----
     bottlenecks = Order.query.filter_by(status='W REALIZACJI').order_by(Order.created_at.asc()).limit(5).all()
+    # --- NOWY KOD: Pobranie TOP 5 klientów ---
+    top_clients_query = db.session.query(
+        Client.name,
+        func.count(Order.id).label('order_count')
+    ).join(Order, Client.id == Order.client_id)\
+    .filter(Order.status == 'ZREALIZOWANE')\
+    .group_by(Client.name)\
+    .order_by(func.count(Order.id).desc())\
+    .limit(5).all()
+    # --- KONIEC NOWEGO KODU ---
     upcoming_deadlines = Order.query.filter(
         Order.deadline.between(datetime.utcnow().date(), datetime.utcnow().date() + timedelta(days=7))
     ).order_by(Order.deadline.asc()).all()
@@ -1902,6 +1912,7 @@ def kokpit():
         bottlenecks=bottlenecks,
         upcoming_deadlines=upcoming_deadlines,
         recent_price_updates=recent_price_updates,  
+        top_clients=top_clients_query,  # <-- DODAJ TĘ LINIĘ
         weather_forecast=weather_forecast  # Dodajemy pogodę
     )
 
@@ -1941,3 +1952,50 @@ def trigger_local_sync():
         }), 503
     except Exception as e:
         return jsonify({'error': f'Wystąpił nieoczekiwany błąd: {str(e)}'}), 500
+    
+    # --- NOWA TRASA DO MASOWEJ ZMIANY CEN ---
+@app.route('/products/update_prices_by_category', methods=['POST'])
+def update_prices_by_category():
+    """
+    Masowo aktualizuje ceny produktów w danej kategorii o podany procent.
+    """
+    try:
+        category_id = int(request.form.get('category_id_mass_update'))
+        percentage_change = float(request.form.get('percentage_change'))
+    except (ValueError, TypeError):
+        flash('Błędne dane. Upewnij się, że kategoria jest wybrana, a procent jest liczbą.', 'danger')
+        return redirect(url_for('products_list'))
+
+    if not category_id:
+        flash('Musisz wybrać kategorię, dla której chcesz zaktualizować ceny.', 'danger')
+        return redirect(url_for('products_list'))
+
+    # Znajdź wszystkie produkty w danej kategorii
+    products_to_update = Product.query.filter_by(category_id=category_id).all()
+
+    if not products_to_update:
+        flash('W wybranej kategorii nie ma żadnych produktów do zaktualizowania.', 'info')
+        return redirect(url_for('products_list', category_id=category_id))
+
+    try:
+        updated_count = 0
+        multiplier = 1 + (percentage_change / 100)
+        
+        for product in products_to_update:
+            # Upewnij się, że cena nie jest None
+            old_price = product.production_price or 0.0
+            # Oblicz nową cenę i zaokrąglij do 2 miejsc po przecinku
+            new_price = round(old_price * multiplier, 2)
+            
+            product.production_price = new_price
+            updated_count += 1
+        
+        db.session.commit()
+        flash(f'Pomyślnie zaktualizowano ceny dla {updated_count} produktów w wybranej kategorii.', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Wystąpił nieoczekiwany błąd podczas aktualizacji cen: {e}', 'danger')
+
+    return redirect(url_for('products_list', category_id=category_id))
+# --- KONIEC NOWEJ TRASY ---
