@@ -366,24 +366,53 @@ def calculate_order_total_cost(order):
 
 
 
+# app/routes.py
+
+# app/routes.py
+
 @app.route('/orders')
 def orders_list():
     client_filter = request.args.get('client', '').strip().upper()
     status_filter = request.args.get('status', '').strip().upper()
-    year_filter = request.args.get('year', '')
-    month_filter = request.args.get('month', '')
-    orders_query = Order.query.join(Client)
-    if client_filter: orders_query = orders_query.filter(Client.name == client_filter)
-    if status_filter: orders_query = orders_query.filter(Order.status == status_filter)
-    if year_filter: orders_query = orders_query.filter(extract('year', Order.created_at) == int(year_filter))
-    if month_filter: orders_query = orders_query.filter(extract('month', Order.created_at) == int(month_filter))
     
+    # --- POCZĄTEK NOWEJ LOGIKI FILTROWANIA ---
+    # Domyślnie ustawiamy widok na bieżący rok i miesiąc
+    year_filter = request.args.get('year', 'current')
+    month_filter = request.args.get('month', 'current')
+
+    orders_query = Order.query.join(Client)
+
+    # Aplikuj filtry (klient, status)
+    if client_filter:
+        orders_query = orders_query.filter(Client.name == client_filter)
+    if status_filter:
+        orders_query = orders_query.filter(Order.status == status_filter)
+
+    # Przetłumacz i aplikuj filtry daty
+    # Ustal rok do filtrowania
+    if year_filter == 'current':
+        orders_query = orders_query.filter(extract('year', Order.created_at) == datetime.utcnow().year)
+    elif year_filter != 'all':
+        try:
+            orders_query = orders_query.filter(extract('year', Order.created_at) == int(year_filter))
+        except (ValueError, TypeError):
+            pass # Ignoruj niepoprawną wartość, jeśli ktoś wpisze ją ręcznie w URL
+
+    # Ustal miesiąc do filtrowania
+    if month_filter == 'current':
+        orders_query = orders_query.filter(extract('month', Order.created_at) == datetime.utcnow().month)
+    elif month_filter != 'all':
+        try:
+            orders_query = orders_query.filter(extract('month', Order.created_at) == int(month_filter))
+        except (ValueError, TypeError):
+            pass # Ignoruj niepoprawną wartość
+
     all_orders = orders_query.order_by(Order.created_at.desc()).all()
+    # --- KONIEC NOWEJ LOGIKI FILTROWANIA ---
     
     for order in all_orders:
         order.planned_materials = calculate_material_summary(order)
         order.cost_details = calculate_order_total_cost(order)
-        # --- NOWA LINIA: Sprawdzanie, czy zlecenie ma zdjęcia ---
         order.has_images = any(item.product.images for item in order.order_items if item.product)
 
     in_progress_orders = [o for o in all_orders if o.status == 'W REALIZACJI']
@@ -395,7 +424,10 @@ def orders_list():
     clients = Client.query.order_by(Client.name).all()
     
     return render_template('orders_list.html', in_progress_orders=in_progress_orders, new_orders=new_orders,
-                           completed_orders=completed_orders, clients=clients, years=years)
+                           completed_orders=completed_orders, clients=clients, years=years,
+                           # Przekaż aktualne wartości filtrów do szablonu
+                           current_year_filter=year_filter,
+                           current_month_filter=month_filter)
 
 @app.route('/orders/history')
 def orders_history():
@@ -1815,23 +1847,47 @@ def kokpit():
         'zrealizowane': Order.query.filter_by(status='ZREALIZOWANE').count()
     }
 
-    # Zużycie tkanin w bieżącym miesiącu
+    # Zużycie tkanin w bieżącym miesiącu (POPRAWIONA LOGIKA)
     current_month = datetime.utcnow().month
     current_year = datetime.utcnow().year
-    
-    fabric_summary = db.session.query(
-        Fabric.name,
-        func.sum(ProductFabric.usage_meters * OrderItem.quantity)
-    ).join(ProductFabric, Fabric.id == ProductFabric.fabric_id)\
-     .join(Product, Product.id == ProductFabric.product_id)\
-     .join(OrderItem, OrderItem.product_id == Product.id)\
-     .join(Order, Order.id == OrderItem.order_id)\
-     .filter(Order.status == 'ZREALIZOWANE')\
-     .filter(extract('month', Order.created_at) == current_month)\
-     .filter(extract('year', Order.created_at) == current_year)\
-     .group_by(Fabric.name).all()
 
-    fabric_summary_dict = {name: round(total, 2) for name, total in fabric_summary}
+    # Pobierz nazwy wszystkich tkanin, aby odróżnić je od innych materiałów
+    all_fabric_names = {f.name.upper() for f in Fabric.query.all()}
+    fabric_summary_dict = defaultdict(float)
+
+    # Pobierz zrealizowane zlecenia z bieżącego miesiąca
+    completed_orders_this_month = Order.query.filter(
+        Order.status == 'ZREALIZOWANE',
+        extract('month', Order.created_at) == current_month,
+        extract('year', Order.created_at) == current_year
+    ).all()
+
+    # Przetwarzaj każde zlecenie
+    for order in completed_orders_this_month:
+        # 1. Sprawdź, czy istnieje ręcznie wprowadzone zużycie
+        if order.materials_used:
+            for usage in order.materials_used:
+                name = usage.material_name.strip().upper()
+                # Jeśli materiał jest tkaniną, dodaj go do podsumowania
+                if name in all_fabric_names:
+                    # Wyodrębnij wartość liczbową z ilości (np. "2.5 metra")
+                    match = re.match(r'^\s*(\d+\.?\d*)', usage.quantity)
+                    if match:
+                        value = float(match.groups()[0])
+                        fabric_summary_dict[name] += value
+        # 2. Jeśli nie, oblicz zużycie planowane
+        else:
+            planned_summary = calculate_material_summary(order)
+            for item in planned_summary:
+                name = item['name'].strip().upper()
+                if name in all_fabric_names:
+                    match = re.match(r'^\s*(\d+\.?\d*)', item['quantity'])
+                    if match:
+                        value = float(match.groups()[0])
+                        fabric_summary_dict[name] += value
+    
+    # Zaokrąglij wartości na końcu
+    fabric_summary_dict = {name: round(total, 2) for name, total in fabric_summary_dict.items()}
     
     # --- NOWY KOD: Obliczanie wartości produkcji ---
     
