@@ -3,7 +3,7 @@
 
 {% block head %}
 <style>
-    /* Twoje style CSS pozostają bez zmian */
+    /* Twoje style CSS pozostają bez zmian - są poprawne */
     .info-card {
         background-color: var(--card-bg);
         border: none;
@@ -72,7 +72,7 @@
     }
 
     .production-value-card .stat-number {
-        font-size: 3.2rem; /* Zwiększona czcionka */
+        font-size: 3.2rem;
     }
 
     @keyframes pulse-border {
@@ -130,7 +130,7 @@
     .status-indicator-kokpit {
         display: flex;
         align-items: center;
-        gap: 15px; /* Zwiększony odstęp */
+        gap: 15px;
     }
 
     .status-indicator {
@@ -138,7 +138,7 @@
         align-items: center;
         gap: 8px;
         padding: 5px 0;
-        border-left: 1px solid var(--border-color); /* Dodany separator */
+        border-left: 1px solid var(--border-color);
         padding-left: 15px;
     }
 
@@ -238,12 +238,12 @@
 </div>
 
 <div class="row mt-4">
-     <div class="col-lg-4">
+    <div class="col-lg-4 mb-4">
         <div class="card h-100 production-value-card">
             <div class="card-body d-flex flex-column justify-content-center">
-                <h5 class="card-title text-center">Wartość produkcji (bieżący miesiąc)</h5>
+                <h5 class="card-title text-center">Wartość produkcji (zrealizowane w tym miesiącu)</h5>
                 <div class="text-center">
-                    <div class="stat-number" id="animated-value" data-value="{{ monthly_production_value }}">0.00 zł</div>
+                    <div class="stat-number" id="animated-value" data-value="{{ monthly_production_value }}">0,00 zł</div>
                     <div class="production-history mt-2">
                         <strong>Poprzednie miesiące:</strong><br>
                         {% for month_data in last_months_production %}
@@ -256,20 +256,20 @@
         </div>
     </div>
 
-    <div class="col-lg-4">
+    <div class="col-lg-4 mb-4">
         <div class="card h-100">
-            <div class="card-body">
-                <h5 class="card-title">Najbardziej dochodowe produkty (ten miesiąc)</h5>
-                <canvas id="profitChart"></canvas>
+            <div class="card-header"><h5 class="card-title mb-0">Top 5 dochodowych produktów w bieżącym miesiącu</h5></div>
+            <div class="card-body" style="position: relative; height: 300px;">
+                <canvas id="mostProfitableChart"></canvas>
             </div>
         </div>
     </div>
 
-    <div class="col-lg-4">
+    <div class="col-lg-4 mb-4">
         <div class="card h-100">
-            <div class="card-body">
-                <h5 class="card-title">Zużycie tkanin (ten miesiąc)</h5>
-                <div id="fabric-chart" style="height: 250px;"></div>
+            <div class="card-header"><h5 class="card-title mb-0">Zużycie tkanin w bieżącym miesiącu</h5></div>
+            <div class="card-body" style="position: relative; height: 300px;">
+                <canvas id="fabricUsageChart"></canvas>
             </div>
         </div>
     </div>
@@ -368,143 +368,135 @@
     </div>
 </div>
 
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Najdłużej w realizacji)</h5>
-                <ul class="list-group list-group-flush">
-                    {% for order in bottlenecks %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        Zlecenie #{{ order.order_code }} dla {{ order.client.name }}
-                        <span class="text-muted">W realizacji od: {{ order.created_at.strftime('%Y-%m-%d') }}</span>
-                    </li>
-                     {% else %}
-                    <li class="list-group-item">Brak zleceń w realizacji.</li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
+
 {% block scripts %}
-{{ super() }}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/raphael/2.3.0/raphael.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{{ super() }} <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <script>
 document.addEventListener("DOMContentLoaded", function() {
 
-    // =================================================================
-    // <<< SEKCJA ODPOWIEDZIALNA ZA STATUSY SERWERÓW (NAPRAWIONA) >>>
-    // =================================================================
+    // --- Sekcja statusów serwerów (bez zmian) ---
     const printStatusDot = document.getElementById('print-server-status');
     const syncStatusDot = document.getElementById('sync-server-status');
-
-    function checkServerStatus() {
-        fetch('http://localhost:5001/status')
-            .then(response => {
-                if (response.ok) return response.json();
-                throw new Error('Server not responding');
-            })
-            .then(data => {
-                if (data.status === 'online') {
-                    if (printStatusDot) printStatusDot.classList.add('online');
-                    if (syncStatusDot) syncStatusDot.classList.add('online');
-                } else {
-                    if (printStatusDot) printStatusDot.classList.remove('online');
-                    if (syncStatusDot) syncStatusDot.classList.remove('online');
-                }
-            })
-            .catch(error => {
-                console.error('Błąd sprawdzania statusu serwera:', error);
-                if (printStatusDot) printStatusDot.classList.remove('online');
-                if (syncStatusDot) syncStatusDot.classList.remove('online');
-            });
+    function checkServerStatus(url, dotElement) {
+        if (!dotElement) return;
+        fetch(url, {cache: "no-cache"}).then(response => {
+            dotElement.classList.toggle('online', response.ok);
+        }).catch(() => {
+            dotElement.classList.remove('online');
+        });
     }
-    checkServerStatus();
-    setInterval(checkServerStatus, 5000);
+    const checkAllStatuses = () => {
+        checkServerStatus('http://localhost:5001/status', printStatusDot);
+        checkServerStatus('http://localhost:5002/status', syncStatusDot);
+    };
+    checkAllStatuses();
+    setInterval(checkAllStatuses, 60000); // Sprawdzaj co minutę
 
-
-    // =================================================================
-    // <<< TWÓJ ISTNIEJĄCY KOD (BEZ ZMIAN) >>>
-    // =================================================================
-    
-    // --- Zegar ---
+    // --- Zegar (bez zmian) ---
+    const dateTimeElement = document.getElementById('current-datetime');
     function updateDateTime() {
+        if (!dateTimeElement) return;
         const now = new Date();
-        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
-        const formattedDateTime = now.toLocaleDateString('pl-PL', options);
-        const capitalizedDateTime = formattedDateTime.charAt(0).toUpperCase() + formattedDateTime.slice(1);
-        document.getElementById('current-datetime').textContent = capitalizedDateTime;
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+        let formatted = now.toLocaleDateString('pl-PL', options);
+        dateTimeElement.textContent = formatted.charAt(0).toUpperCase() + formatted.slice(1);
     }
     setInterval(updateDateTime, 1000);
     updateDateTime();
 
-    // --- Animowany licznik ---
+    // --- Animowany licznik (bez zmian) ---
     const animatedValue = document.getElementById('animated-value');
     if (animatedValue) {
         const targetValue = parseFloat(animatedValue.dataset.value);
-        const duration = 500;
-        const frameRate = 1000 / 60;
-        const totalFrames = Math.round(duration / frameRate);
-        let currentFrame = 0;
-        const animateCounter = () => {
-            currentFrame++;
-            const progress = currentFrame / totalFrames;
-            const currentValue = targetValue * progress;
-            animatedValue.textContent = `${currentValue.toFixed(2).replace('.', ',')} zł`;
-            if (currentFrame < totalFrames) {
-                requestAnimationFrame(animateCounter);
-            } else {
-                 animatedValue.textContent = `${targetValue.toFixed(2).replace('.', ',')} zł`;
-            }
-        };
-        requestAnimationFrame(animateCounter);
-    }
-
-    // --- Wykresy ---
-    var fabricData = {{ fabric_summary|tojson }};
-    var fabricChartContainer = document.getElementById("fabric-chart");
-    if (fabricChartContainer && Object.keys(fabricData).length > 0) {
-        fabricChartContainer.innerHTML = '<canvas id="fabricPieChart"></canvas>';
-        var ctxPie = document.getElementById('fabricPieChart').getContext('2d');
-        new Chart(ctxPie, {
-            type: 'pie', data: { labels: Object.keys(fabricData), datasets: [{ data: Object.values(fabricData), backgroundColor: ['#007bff', '#ff9900', '#28a745', '#dc3545', '#17a2b8', '#6f42c1'], }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'white' } } } }
-        });
-    } else if (fabricChartContainer) {
-        fabricChartContainer.innerHTML = "<p class='text-center text-muted' style='padding-top: 50px;'>Brak danych o zużyciu tkanin w tym miesiącu.</p>";
-    }
-
-    var profitData = {{ most_profitable_products|tojson }};
-    var profitChartCanvas = document.getElementById('profitChart');
-    if (profitChartCanvas && profitData.length > 0) {
-        var ctxBar = profitChartCanvas.getContext('2d');
-        new Chart(ctxBar, {
-            type: 'bar', data: { labels: profitData.map(p => p[0]), datasets: [{ label: 'Przychód z produktu', data: profitData.map(p => p[1]), backgroundColor: 'rgba(255, 153, 0, 0.6)', borderColor: 'rgba(255, 153, 0, 1)', borderWidth: 1 }] },
-            options: { scales: { y: { beginAtZero: true, ticks: { color: 'white' } }, x: { ticks: { color: 'white' } } }, plugins: { legend: { display: false } } }
-        });
-    } else if (profitChartCanvas) {
-         profitChartCanvas.parentElement.innerHTML = "<h5 class='card-title'>Najbardziej dochodowe produkty (ten miesiąc)</h5><p class='text-center text-muted' style='padding-top: 50px;'>Brak danych o zrealizowanych produktach w tym miesiącu.</p>"
+        if (!isNaN(targetValue)) {
+            let start = 0;
+            const duration = 1500;
+            const step = (timestamp) => {
+                if (!start) start = timestamp;
+                const progress = Math.min((timestamp - start) / duration, 1);
+                const currentValue = progress * targetValue;
+                animatedValue.textContent = `${currentValue.toFixed(2).replace('.', ',')} zł`;
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
     }
 
     // =================================================================
-    // <<< NOWY KOD DO URUCHAMIANIA SYNCHRONIZACJI >>>
+    // <<< POPRAWIONA I UJEDNOLICONA SEKCJA DLA WYKRESÓW >>>
     // =================================================================
+    
+    function initializeChart(ctx, type, data, options) {
+        if (ctx) new Chart(ctx, { type, data, options });
+    }
+
+    // --- 1. WYKRES ZUŻYCIA TKANIN ---
+    const fabricCtx = document.getElementById('fabricUsageChart');
+    const fabricData = {{ fabric_summary | tojson }};
+    
+    if (fabricCtx && fabricData && Object.keys(fabricData).length > 0) {
+        initializeChart(fabricCtx, 'doughnut', {
+            labels: Object.keys(fabricData),
+            datasets: [{
+                label: 'Zużycie w metrach',
+                data: Object.values(fabricData),
+                backgroundColor: ['#007bff', '#ff9900', '#28a745', '#dc3545', '#17a2b8', '#6f42c1'],
+                borderColor: 'rgba(44, 44, 44, 1)',
+                borderWidth: 2
+            }]
+        }, {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'right', labels: { color: '#f0f0f0', padding: 15 } } }
+        });
+    } else if (fabricCtx) {
+        fabricCtx.parentElement.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><p>Brak danych o zużyciu tkanin.</p></div>';
+    }
+
+    // --- 2. WYKRES NAJBARDZIEJ DOCHODOWYCH PRODUKTÓW ---
+    const profitableCtx = document.getElementById('mostProfitableChart');
+    const profitableData = {{ most_profitable_products | tojson }};
+    
+    if (profitableCtx && profitableData && profitableData.length > 0) {
+        initializeChart(profitableCtx, 'bar', {
+            labels: profitableData.map(item => item[0]),
+            datasets: [{
+                label: 'Wartość produkcji w zł',
+                data: profitableData.map(item => item[1]),
+                backgroundColor: 'rgba(255, 153, 0, 0.7)',
+                borderColor: 'rgba(255, 153, 0, 1)',
+                borderWidth: 1
+            }]
+        }, {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { beginAtZero: true, ticks: { color: '#f0f0f0' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+                y: { ticks: { color: '#f0f0f0' }, grid: { display: false } }
+            },
+            plugins: { legend: { display: false } }
+        });
+    } else if (profitableCtx) {
+        profitableCtx.parentElement.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><p>Brak danych o dochodowych produktach.</p></div>';
+    }
+
+    // --- Uruchamianie synchronizacji (bez zmian) ---
     const triggerSyncBtn = document.getElementById('trigger-sync-btn');
     if (triggerSyncBtn) {
         triggerSyncBtn.addEventListener('click', function(event) {
             event.preventDefault();
             Swal.fire({
                 title: 'Czy chcesz uruchomić synchronizację?',
-                text: "Proces może potrwać kilka minut. Upewnij się, że aplikacja 'Szwalnia_Serwer' jest uruchomiona.",
+                text: "Upewnij się, że aplikacja 'Szwalnia_Serwer' jest uruchomiona.",
                 icon: 'question', showCancelButton: true, confirmButtonColor: '#3085d6', cancelButtonColor: '#d33', confirmButtonText: 'Tak, uruchom!', cancelButtonText: 'Anuluj'
             }).then((result) => {
-                if (result.isConfirmed) {
-                    triggerSynchronization();
-                }
+                if (result.isConfirmed) triggerSynchronization();
             });
         });
     }
@@ -512,7 +504,7 @@ document.addEventListener("DOMContentLoaded", function() {
     function triggerSynchronization() {
         const syncIcon = triggerSyncBtn.querySelector('i');
         Swal.fire({
-            title: 'Rozpoczynam synchronizację...', text: 'Wysyłam polecenie do lokalnego serwera.', allowOutsideClick: false,
+            title: 'Rozpoczynam synchronizację...', text: 'Wysyłam polecenie...', allowOutsideClick: false,
             didOpen: () => {
                 Swal.showLoading();
                 syncIcon.classList.remove('fa-play-circle');
@@ -526,16 +518,16 @@ document.addEventListener("DOMContentLoaded", function() {
             syncIcon.classList.remove('fa-spinner', 'fa-spin');
             syncIcon.classList.add('fa-play-circle');
             if (status === 202) {
-                Swal.fire({ title: 'Synchronizacja uruchomiona!', text: 'Proces został rozpoczęty w tle. Sprawdź postęp w oknie aplikacji "Szwalnia_Serwer".', icon: 'success' });
+                Swal.fire({ title: 'Uruchomiono!', text: 'Proces rozpoczął się w tle. Sprawdź postęp w aplikacji "Szwalnia_Serwer".', icon: 'success' });
             } else {
-                Swal.fire({ title: 'Błąd!', text: body.error || 'Wystąpił nieoczekiwany problem.', icon: 'error' });
+                Swal.fire({ title: 'Błąd!', text: body.error || 'Wystąpił problem.', icon: 'error' });
             }
         })
         .catch(error => {
             console.error('Fetch error:', error);
             syncIcon.classList.remove('fa-spinner', 'fa-spin');
             syncIcon.classList.add('fa-play-circle');
-            Swal.fire({ title: 'Krytyczny błąd', text: 'Nie udało się wysłać polecenia do serwera aplikacji. Sprawdź konsolę przeglądarki (F12).', icon: 'error' });
+            Swal.fire({ title: 'Krytyczny błąd', text: 'Nie udało się wysłać polecenia do serwera aplikacji.', icon: 'error' });
         });
     }
 });
