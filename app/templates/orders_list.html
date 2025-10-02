@@ -233,7 +233,8 @@
                             title="Generuj PDF">
                         <i class="fas fa-file-pdf"></i>
                     </button>
-                    <a href="{{ url_for('order_print', order_id=order.id) }}" class="btn btn-sm btn-info"><i class="fas fa-print"></i></a>
+                    
+                     
                     <button class="btn btn-sm btn-dark btn-print-labels" data-order-id="{{ order.id }}" title="Drukuj metki">
                         <i class="fas fa-tags"></i>
                     </button>
@@ -242,7 +243,7 @@
 </form>
                 </td>
             </tr>
-            <tr class="order-details" id="details-{{ order.id }}" style="display: none;">
+             <tr class="order-details" id="details-{{ order.id }}" style="display: none;">
                 <td colspan="7">
                     <strong>Opis:</strong> {{ order.description }}<br>
                     <strong>Zlecający:</strong> {{ order.zlecajacy }}<br>
