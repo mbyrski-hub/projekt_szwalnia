@@ -117,10 +117,16 @@ def map_wmo_code_to_icon(wmo_code):
 
 def get_weather_forecast():
     """Pobiera 4-dniową prognozę pogody dla Bielska-Białej z Open-Meteo."""
-    # Współrzędne dla Bielska-Białej
     lat, lon = 49.8225, 19.0444
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=weathercode,temperature_2m_max&timezone=Europe/Warsaw&forecast_days=4"
     
+    # --- POCZĄTEK ZMIANY ---
+    # Słownik do tłumaczenia nazw dni
+    day_names_pl = {
+        'Mon': 'Pon', 'Tue': 'Wt', 'Wed': 'Śr', 'Thu': 'Czw', 'Fri': 'Pt', 'Sat': 'Sob', 'Sun': 'Ndz'
+    }
+    # --- KONIEC ZMIANY ---
+
     try:
         response = requests.get(url, timeout=5)
         response.raise_for_status()
@@ -131,9 +137,16 @@ def get_weather_forecast():
         for i in range(4):
             day_dt = datetime.strptime(daily_data['time'][i], '%Y-%m-%d')
             
+            # --- POCZĄTEK ZMIANY ---
+            # Pobranie skróconej nazwy dnia po angielsku (np. 'Mon') i tłumaczenie
+            day_abbr_en = day_dt.strftime('%a')
+            day_name = day_names_pl.get(day_abbr_en, day_abbr_en) # Użyj tłumaczenia lub oryginału
+            # --- KONIEC ZMIANY ---
+
             forecast.append({
-                'is_today': i == 0, # Znacznik dla dzisiejszego dnia
+                'is_today': i == 0,
                 'date': 'Dziś' if i == 0 else day_dt.strftime('%d.%m'),
+                'day_name': day_name, # <-- DODANA NOWA DANA
                 'temp': round(daily_data['temperature_2m_max'][i]),
                 'icon': map_wmo_code_to_icon(daily_data['weathercode'][i]),
                 'description': f"Kod pogody: {daily_data['weathercode'][i]}"
@@ -1969,6 +1982,7 @@ def kokpit():
         upcoming_deadlines=upcoming_deadlines,
         recent_price_updates=recent_price_updates,  
         top_clients=top_clients_query,  # <-- DODAJ TĘ LINIĘ
+        api_key=app.config.get('API_SECRET_KEY'), 
         weather_forecast=weather_forecast  # Dodajemy pogodę
     )
 
@@ -2055,3 +2069,33 @@ def update_prices_by_category():
 
     return redirect(url_for('products_list', category_id=category_id))
 # --- KONIEC NOWEJ TRASY ---
+
+@app.route('/api/v1/get-recent-price-updates')
+def get_recent_price_updates():
+    """
+    Zwraca ostatnie aktualizacje cen zarejestrowane w logach.
+    Pobiera zmiany, które nastąpiły od czasu podanego w parametrze 'since'.
+    """
+    since_param = request.args.get('since')
+    if not since_param:
+        return jsonify({'error': 'Brak parametru "since"'}), 400
+
+    try:
+        # Konwertujemy czas z formatu ISO i dodajemy mały margines, by uniknąć problemów z precyzją
+        since_dt = datetime.fromisoformat(since_param.replace('Z', '+00:00')) - timedelta(seconds=2)
+        
+        # Pobieramy wszystkie nowsze logi
+        updates = PriceUpdateLog.query.filter(PriceUpdateLog.changed_at > since_dt).order_by(PriceUpdateLog.changed_at.desc()).all()
+
+        updates_list = [
+            {
+                'item_name': update.item_name,
+                'item_type': update.item_type,
+                'old_price': update.old_price,
+                'new_price': update.new_price
+            } for update in updates
+        ]
+        return jsonify(updates_list)
+        
+    except ValueError:
+        return jsonify({'error': 'Niepoprawny format daty dla parametru "since".'}), 400

@@ -116,29 +116,51 @@
         <i class="fas fa-plus"></i>
     </a>
 </div>
-<form method="GET" class="form-inline mb-3">
-</form>
+<form method="GET" action="{{ url_for('orders_list') }}" class="form-inline mb-4">
+    <div class="form-group mr-2">
+        <select name="client" class="form-control">
+            <option value="">Wszyscy klienci</option>
+            {% for client in clients %}
+                <option value="{{ client.name }}" {% if request.args.get('client','').upper() == client.name.upper() %}selected{% endif %}>
+                    {{ client.name }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
 
-<form method="GET" class="form-inline mb-3">
-    <select name="client" class="form-control mr-2">
-        <option value="">Wszyscy klienci</option>
-        {% for client in clients %}<option value="{{ client.name }}" {% if request.args.get('client','').upper() == client.name.upper() %}selected{% endif %}>{{ client.name }}</option>{% endfor %}
-    </select>
-    <select name="status" class="form-control mr-2">
-        <option value="">Wszystkie statusy</option>
-        <option value="NOWE" {% if request.args.get('status') == 'NOWE' %}selected{% endif %}>NOWE</option>
-        <option value="W REALIZACJI" {% if request.args.get('status') == 'W REALIZACJI' %}selected{% endif %}>W REALIZACJI</option>
-        <option value="ZREALIZOWANE" {% if request.args.get('status') == 'ZREALIZOWANE' %}selected{% endif %}>ZREALIZOWANE</option>
-    </select>
-    <select name="year" class="form-control mr-2">
-        <option value="">Wszystkie lata</option>
-        {% for y in years %}<option value="{{ y }}" {% if request.args.get('year') == y|string %}selected{% endif %}>{{ y }}</option>{% endfor %}
-    </select>
-    <select name="month" class="form-control mr-2">
-        <option value="">Wszystkie miesiące</option>
-        {% for m in range(1, 13) %}<option value="{{ m }}" {% if request.args.get('month') == m|string %}selected{% endif %}>{{ m }}</option>{% endfor %}
-    </select>
+    <div class="form-group mr-2">
+        <select name="status" class="form-control">
+            <option value="">Wszystkie statusy</option>
+            <option value="NOWE" {% if request.args.get('status') == 'NOWE' %}selected{% endif %}>NOWE</option>
+            <option value="W REALIZACJI" {% if request.args.get('status') == 'W REALIZACJI' %}selected{% endif %}>W REALIZACJI</option>
+            <option value="ZREALIZOWANE" {% if request.args.get('status') == 'ZREALIZOWANE' %}selected{% endif %}>ZREALIZOWANE</option>
+        </select>
+    </div>
+
+    <div class="form-group mr-2">
+        <select name="year" id="year" class="form-control">
+            <option value="current" {% if current_year_filter == 'current' %}selected{% endif %}>Bieżący rok</option>
+            <option value="all" {% if current_year_filter == 'all' %}selected{% endif %}>Wszystkie lata</option>
+            <option disabled>──────────</option>
+            {% for y in years %}
+                <option value="{{ y }}" {% if current_year_filter|string == y|string %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="form-group mr-2">
+        <select name="month" id="month" class="form-control">
+            <option value="current" {% if current_month_filter == 'current' %}selected{% endif %}>Bieżący miesiąc</option>
+            <option value="all" {% if current_month_filter == 'all' %}selected{% endif %}>Wszystkie miesiące</option>
+            <option disabled>──────────</option>
+            {% for m in range(1, 13) %}
+                <option value="{{ m }}" {% if current_month_filter|string == m|string %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
     <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filtruj</button>
+    <a href="{{ url_for('orders_list') }}" class="btn btn-secondary ml-2">Resetuj</a>
 </form>
 
 {% macro render_orders_table(orders) %}
