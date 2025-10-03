@@ -2099,3 +2099,26 @@ def get_recent_price_updates():
         
     except ValueError:
         return jsonify({'error': 'Niepoprawny format daty dla parametru "since".'}), 400
+    
+@app.route('/products/<int:product_id>/card')
+def product_card(product_id):
+    """Generuje kartę produktu w formacie PDF."""
+    product = Product.query.get_or_404(product_id)
+    
+    # Renderujemy szablon HTML, który posłuży jako wzór dla PDF
+    rendered = render_template('product_card_pdf.html', product=product)
+    
+    # Opcje dla pdfkit, aby poprawnie ładował zasoby (np. obrazy z URL)
+    options = {
+        "enable-local-file-access": ""
+    }
+    
+    # Tworzymy PDF z wyrenderowanego HTML
+    pdf = pdfkit.from_string(rendered, False, configuration=config_pdf, options=options)
+    
+    # Przygotowujemy odpowiedź HTTP z plikiem PDF
+    response = make_response(pdf)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'inline; filename=karta_produktu_{product.name.replace(" ", "_")}.pdf'
+    
+    return response

@@ -129,6 +129,9 @@
                         <form method="POST" action="{{ url_for('delete_product', product_id=product.id) }}" style="display:inline;" onsubmit="return confirm('Czy na pewno chcesz usunąć ten produkt?');">
                             <button type="submit" class="btn btn-danger btn-sm" title="Usuń"><i class="fas fa-trash"></i></button>
                         </form>
+                        <a href="{{ url_for('product_card', product_id=product.id) }}" class="btn btn-success btn-sm" title="Karta produktu" target="_blank">
+                    <i class="fas fa-id-card"></i>
+                </a>
                     </td>
                 </tr>
                 {% else %}

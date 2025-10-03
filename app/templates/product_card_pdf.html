@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Karta Produktu - {{ product.name }}</title>
+    <style>
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            font-size: 14px;
+        }
+        .container {
+            width: 90%;
+            margin: 30px auto;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .product-image {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .product-image img {
+            max-width: 80%;
+            max-height: 400px;
+            border-radius: 8px;
+            border: 1px solid #eee;
+        }
+        .details h2 {
+            font-size: 18px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+            margin-top: 20px;
+        }
+        .details table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .details td {
+            padding: 8px 0;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        .details td:first-child {
+            font-weight: bold;
+            width: 150px;
+        }
+        .materials-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .materials-list li {
+            background-color: #f9f9f9;
+            padding: 5px;
+            border-radius: 3px;
+            margin-bottom: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Karta Produktu</h1>
+        </div>
+
+        <div class="product-image">
+            {% set original_image = product.images|selectattr('image_type', 'equalto', 'original')|first %}
+            {% if original_image %}
+                <img src="https://drive.google.com/thumbnail?id={{ original_image.image_id }}&sz=w600" alt="Zdjęcie produktu">
+            {% else %}
+                <p>Brak zdjęcia</p>
+            {% endif %}
+        </div>
+
+        <div class="details">
+            <table>
+                <tr>
+                    <td>Nazwa Produktu:</td>
+                    <td>{{ product.name }}</td>
+                </tr>
+                <tr>
+                    <td>Cena Produkcji:</td>
+                    <td>{{ "%.2f"|format(product.production_price) }} zł</td>
+                </tr>
+                 <tr>
+                    <td>Kategoria:</td>
+                    <td>{{ product.category.name if product.category else 'Brak' }}</td>
+                </tr>
+                <tr>
+                    <td style="vertical-align: top;">Opis:</td>
+                    <td>{{ product.description or 'Brak opisu.' }}</td>
+                </tr>
+            </table>
+
+            {% if product.fabrics_needed %}
+            <h2>Wymagane tkaniny</h2>
+            <ul class="materials-list">
+                {% for pf in product.fabrics_needed %}
+                    <li>{{ pf.fabric.name }}: {{ pf.usage_meters }} m</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if product.materials_needed %}
+            <h2>Wymagane dodatki</h2>
+            <ul class="materials-list">
+                {% for pm in product.materials_needed %}
+                    <li>{{ pm.material.name }}: {{ pm.quantity }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

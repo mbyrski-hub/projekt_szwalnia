@@ -4,21 +4,62 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Panel Szwalni{% endblock %}</title>
+
+    <script>
+        (function() {
+            try {
+                var theme = localStorage.getItem('theme');
+                if (theme === 'dark') {
+                    document.documentElement.classList.add('dark-mode');
+                }
+            } catch (e) {
+                console.error("Could not apply dark mode from localStorage", e);
+            }
+        })();
+    </script>
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
+    /* === ZMIENNE DLA MOTYWU JASNNEGO (DOMYŚLNE) === */
     :root {
-        --bg-color: #1a1a1a;
         --sidebar-bg: #2c2c2c;
+        --sidebar-text-color: #f0f0f0;
+        --sidebar-accent-color: #ff9900;
+        
+        --bg-color: #d9dee4;
+        --card-bg: #ffffff;
+        --text-color: #333333;
+        --text-muted-color: #888;
+        --primary-color: #007bff;
+        --border-color: #dee2e6;
+        --hover-bg-color: #f8f9fa;
+        --table-header-bg: #e9ecef;
+        --table-header-color: #495057;
+        --form-control-bg: #fff;
+        --form-control-border: #ced4da;
+        --primary-color: #007bff;
+        --accent-color: #ff9900;
+    }
+
+    /* === ZMIENNE DLA MOTYWU CIEMNEGO === */
+    /* ZMIANA: Klasa jest teraz na <html>, aby zadziałała wcześniej */
+    html.dark-mode {
+        --bg-color: #1a1a1a;
         --card-bg: #252525;
         --text-color: #f0f0f0;
         --text-muted-color: #888;
-        --primary-color: #007bff;
-        --accent-color: #ff9900;
         --border-color: #444;
         --hover-bg-color: #333;
+        --table-header-bg: #343a40;
+        --table-header-color: #f0f0f0;
+        --form-control-bg: #333;
+        --form-control-border: #444;
+        --primary-color: #007bff;
+        --accent-color: #ff9900;
+
+
     }
 
     html {
@@ -37,6 +78,7 @@
         background-color: var(--bg-color);
         color: var(--text-color);
         display: flex;
+        transition: background-color 0.3s, color 0.3s;
     }
 
     .sidebar {
@@ -48,8 +90,8 @@
         left: 0;
         top: 0;
         transition: width 0.3s;
-        display: flex; /* Kluczowa zmiana */
-        flex-direction: column; /* Kluczowa zmiana */
+        display: flex;
+        flex-direction: column;
     }
 
     .sidebar .logo {
@@ -59,25 +101,17 @@
         margin-bottom: 2rem;
         font-size: 1.6rem;
         font-weight: 600;
-        color: var(--accent-color);
+        color: var(--sidebar-accent-color);
         opacity: 0.9;
     }
     
     .sidebar .logo img {
         max-width: 40%;
         margin-bottom: 1rem;
-        
     }
     
-    .sidebar .logo .fa-cut {
-        margin-right: 0.6rem;
-    }
-    .sidebar .logo div {
-        display: flex;
-        align-items: center;
-    }
     .sidebar .nav-link {
-        color: var(--text-color);
+        color: var(--sidebar-text-color);
         padding: 0.6rem 1rem;
         border-radius: 5px;
         margin-bottom: 0.3rem;
@@ -109,6 +143,7 @@
     .card {
         background-color: var(--card-bg);
         border: 1px solid var(--border-color);
+        transition: background-color 0.3s, border-color 0.3s;
     }
     
     .text-muted {
@@ -119,27 +154,34 @@
         color: var(--text-color);
     }
     .table thead th {
-        background-color: #343a40;
+        background-color: var(--table-header-bg);
         border-color: var(--border-color);
+        color: var(--table-header-color);
+        transition: background-color 0.3s, border-color 0.3s, color 0.3s;
     }
     .table tbody tr:hover {
         background-color: var(--hover-bg-color) !important;
         color: var(--text-color) !important;
     }
     .table-striped tbody tr:nth-of-type(odd) {
-         background-color: rgba(255, 255, 255, 0.02);
+         background-color: rgba(0, 0, 0, 0.02);
+    }
+    html.dark-mode .table-striped tbody tr:nth-of-type(odd) {
+        background-color: rgba(255, 255, 255, 0.02);
     }
     .table td, .table th {
         border-top: 1px solid var(--border-color);
+        transition: border-color 0.3s;
     }
     
     .form-control {
-        background-color: #333;
+        background-color: var(--form-control-bg);
         color: var(--text-color);
-        border: 1px solid var(--border-color);
+        border: 1px solid var(--form-control-border);
+        transition: background-color 0.3s, border-color 0.3s, color 0.3s;
     }
     .form-control:focus {
-        background-color: #333;
+        background-color: var(--form-control-bg);
         color: var(--text-color);
         border-color: var(--primary-color);
         box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
@@ -156,11 +198,61 @@
     .list-group-item {
         background-color: transparent;
         border-color: var(--border-color);
+        color: var(--text-color);
     }
 
-    /* NOWY STYL DLA OBRAZKA W MENU */
+    /* === PRZEŁĄCZNIK MOTYWU === */
+    .theme-switcher-container {
+        margin-top: auto;
+        padding: 1rem 0;
+        text-align: center;
+    }
+    .theme-switch {
+        display: inline-block;
+        height: 24px;
+        position: relative;
+        width: 50px;
+    }
+    .theme-switch input {
+        display:none;
+    }
+    .slider {
+        background-color: #555;
+        bottom: 0;
+        cursor: pointer;
+        left: 0;
+        position: absolute;
+        right: 0;
+        top: 0;
+        transition: .4s;
+        border-radius: 34px;
+    }
+    .slider:before {
+        background-color: #fff;
+        bottom: 4px;
+        content: "";
+        height: 16px;
+        left: 4px;
+        position: absolute;
+        transition: .4s;
+        width: 16px;
+        border-radius: 50%;
+    }
+    input:checked + .slider {
+        background-color: var(--primary-color);
+    }
+    input:checked + .slider:before {
+        transform: translateX(26px);
+    }
+    .theme-switcher-container .fa-sun, .theme-switcher-container .fa-moon {
+        color: var(--sidebar-text-color);
+        vertical-align: middle;
+        font-size: 1.1rem;
+    }
+    .theme-switcher-container .fa-sun { margin-right: 8px; }
+    .theme-switcher-container .fa-moon { margin-left: 8px; }
+
     .sidebar-image {
-        margin-top: auto; /* Wypchnij na dół */
         padding: 1rem 0;
         text-align: center;
     }
@@ -237,7 +329,17 @@
                 </li>
             </ul>
         </div>
-<div class="sidebar-image">
+
+        <div class="theme-switcher-container">
+            <i class="fas fa-sun"></i>
+            <label class="theme-switch">
+                <input type="checkbox" id="theme-toggle">
+                <span class="slider"></span>
+            </label>
+            <i class="fas fa-moon"></i>
+        </div>
+
+        <div class="sidebar-image">
             <img src="{{ url_for('static', filename='images/menu_bg.png') }}" alt="Dekoracja">
         </div>
         
@@ -261,6 +363,27 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // === LOGIKA PRZEŁĄCZNIKA MOTYWU ===
+            const themeToggle = document.getElementById('theme-toggle');
+            const htmlEl = document.documentElement;
+
+            // Zastosuj motyw przy ładowaniu strony (już ustawiony przez skrypt w <head>)
+            // Tutaj tylko synchronizujemy stan przełącznika
+            if (htmlEl.classList.contains('dark-mode')) {
+                themeToggle.checked = true;
+            }
+
+            themeToggle.addEventListener('change', () => {
+                if (themeToggle.checked) {
+                    htmlEl.classList.add('dark-mode');
+                    localStorage.setItem('theme', 'dark');
+                } else {
+                    htmlEl.classList.remove('dark-mode');
+                    localStorage.setItem('theme', 'light');
+                }
+            });
+
+            // === POZOSTAŁY KOD JS ===
             const printStatusDot = document.getElementById('print-server-status');
             const syncStatusDot = document.getElementById('sync-server-status');
             const refreshPrintBtn = document.getElementById('refresh-print-status');
