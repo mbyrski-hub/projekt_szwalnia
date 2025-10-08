@@ -129,6 +129,16 @@
                 </dl>
             </div>
         </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h4><i class="fas fa-qrcode"></i> Śledź Zlecenie</h4>
+            </div>
+            <div class="card-body text-center">
+                <p>Zeskanuj kod, aby zobaczyć status zlecenia na telefonie.</p>
+                <img src="{{ url_for('order_qr_code', order_id=order.id) }}" alt="Kod QR dla zlecenia {{ order.order_code }}" style="width: 150px; height: 150px;">
+            </div>
+        </div>
         </div>
 </div>
 

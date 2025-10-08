@@ -32,6 +32,7 @@ from .models import AiImageTask
 import requests
 import locale
 import pathlib
+import qrcode
 
 
 if platform.system() == 'Windows':
@@ -543,25 +544,68 @@ def update_order_status(order_id):
             return jsonify(success=True, order_id=order.id, status=order.status)
     return redirect(url_for('order_detail', order_id=order.id))
 
+# app/routes.py
+
+# Upewnij się, że te importy są na górze pliku
+import qrcode
+import os
+import io
+
+# ... (reszta Twoich tras i importów) ...
+
+# ZNAJDŹ I ZASTĄP CAŁĄ FUNKCJĘ 'order_pdf' PONIŻSZYM KODEM
 @app.route('/orders/<int:order_id>/pdf')
 def order_pdf(order_id):
     order = Order.query.get_or_404(order_id)
     material_summary = calculate_material_summary(order)
-    
     with_images = request.args.get('with_images', 'false') == 'true'
-    
-    rendered = render_template('order_pdf.html', order=order, material_summary=material_summary, with_images=with_images)
-    
-    # --- POPRAWKA: Dodanie opcji 'enable-local-file-access' ---
-    options = {
-        "enable-local-file-access": ""
-    }
-    pdf = pdfkit.from_string(rendered, False, configuration=config_pdf, options=options)
-    
-    response = make_response(pdf)
-    response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = f'inline; filename=zlecenie_{order.id}.pdf'
-    return response
+
+    qr_code_path_obj = None # Będziemy używać obiektu ścieżki dla pewności
+    try:
+        # 1. Stwórz URL, który ma być zakodowany
+        url_to_encode = url_for('show_order', order_id=order.id, _external=True)
+        
+        # 2. Wygeneruj kod QR
+        qr_img = qrcode.make(url_to_encode)
+        
+        # 3. Zapisz kod QR jako plik tymczasowy
+        qr_filename = f"qr_{order.id}_{os.urandom(4).hex()}.png"
+        
+        # --- POPRAWIONA LOGIKA TWORZENIA ŚCIEŻKI ---
+        # Określamy folder tymczasowy
+        temp_dir_str = '/tmp' if os.path.exists('/tmp') else current_app.config['UPLOAD_FOLDER']
+        # Używamy 'pathlib' do stworzenia poprawnej ścieżki niezależnej od systemu
+        qr_code_path_obj = pathlib.Path(temp_dir_str) / qr_filename
+        
+        # Zapisujemy obrazek
+        qr_img.save(str(qr_code_path_obj))
+
+        # Konwertujemy ścieżkę do formatu URI (np. file:///...),
+        # który jest poprawnie rozumiany przez wkhtmltopdf na każdym systemie
+        qr_code_uri = qr_code_path_obj.as_uri()
+        # --- KONIEC POPRAWKI ---
+
+        # 4. Przekaż poprawny URI do szablonu
+        rendered = render_template(
+            'order_pdf.html', 
+            order=order, 
+            material_summary=material_summary, 
+            with_images=with_images,
+            qr_code_path=qr_code_uri 
+        )
+        
+        options = {"enable-local-file-access": ""}
+        pdf = pdfkit.from_string(rendered, False, configuration=config_pdf, options=options)
+        
+        response = make_response(pdf)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'inline; filename=zlecenie_{order.id}.pdf'
+        return response
+
+    finally:
+        # 5. Sprzątanie - usuwamy plik tymczasowy po zakończeniu
+        if qr_code_path_obj and qr_code_path_obj.exists():
+            os.remove(str(qr_code_path_obj))
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
@@ -2122,3 +2166,41 @@ def product_card(product_id):
     response.headers['Content-Disposition'] = f'inline; filename=karta_produktu_{product.name.replace(" ", "_")}.pdf'
     
     return response
+
+# NOWA TRASA DLA PUBLICZNEJ STRONY STATUSU
+@app.route('/show_order/<int:order_id>')
+def show_order(order_id):
+    """Wyświetla publiczną, uproszczoną stronę statusu zlecenia."""
+    order = Order.query.get_or_404(order_id)
+
+    status_info = {
+        'current_step': 1,
+        'location': 'W systemie'
+    }
+    if order.cutting_table and order.cutting_table != 'skrojone':
+        status_info['current_step'] = 2
+        status_info['location'] = f"W krojowni ({order.cutting_table})"
+    elif order.assigned_team:
+        status_info['current_step'] = 3
+        status_info['location'] = f"W szwalni ({order.assigned_team})"
+
+    if order.status == 'ZREALIZOWANE':
+        status_info['current_step'] = 4
+        status_info['location'] = 'Ukończone'
+
+    return render_template('public_order_status.html', order=order, status_info=status_info)
+
+# NOWA TRASA DO GENEROWANIA OBRAZKA Z KODEM QR
+@app.route('/order/<int:order_id>/qr_code')
+def order_qr_code(order_id):
+    """Generuje obraz kodu QR dla danego zlecenia."""
+    # Ten link zostanie zakodowany w obrazku QR
+    url_to_encode = url_for('show_order', order_id=order_id, _external=True)
+
+    qr_img = qrcode.make(url_to_encode)
+
+    img_buffer = io.BytesIO()
+    qr_img.save(img_buffer, 'PNG')
+    img_buffer.seek(0)
+
+    return send_file(img_buffer, mimetype='image/png')

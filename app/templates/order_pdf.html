@@ -5,7 +5,7 @@
     <title>Zlecenie {{ order.order_code }}</title>
     <style>
         body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10pt; }
-        h1 { font-size: 18pt; text-align: center; }
+        h1 { font-size: 18pt; }
         h2 { font-size: 14pt; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-top: 20px;}
         h3 { font-size: 12pt; margin-top: 15px; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
@@ -26,11 +26,41 @@
             margin: 10px;
             vertical-align: top;
         }
+        
+        /* ### NOWE STYLE ### */
+        .header-table {
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .header-table td {
+            border: none;
+            vertical-align: top;
+            padding: 0;
+        }
+        .qr-code-container {
+            text-align: right;
+        }
+        .qr-code-container p {
+            font-size: 8pt;
+            margin: 0 0 5px 0;
+            color: #555;
+        }
+        /* ### KONIEC NOWYCH STYLI ### */
     </style>
 </head>
 <body>
-    <h1>Zlecenie Produkcyjne: {{ order.order_code }}</h1>
-
+    
+    <table class="header-table">
+    <tr>
+        <td>
+            <h1>Zlecenie Produkcyjne:<br>{{ order.order_code }}</h1>
+        </td>
+        <td class="qr-code-container">
+            <p>Zeskanuj, aby śledzić status:</p>
+            <img src="{{ qr_code_path }}" alt="Kod QR" style="width: 100px; height: 100px;">
+        </td>
+    </tr>
+</table>
     <div class="info-box">
         <strong>Klient:</strong> {{ order.client.name }}<br>
         <strong>Termin realizacji:</strong> {{ order.deadline.strftime('%Y-%m-%d') }}<br>

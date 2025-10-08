@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status Zlecenia {{ order.order_code }}</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #f4f7f6; font-family: 'Poppins', sans-serif; }
+        .status-card { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .card-header { background-color: #007bff; color: white; border-top-left-radius: 15px; border-top-right-radius: 15px; }
+        .progress-timeline { list-style: none; padding-left: 0; display: flex; justify-content: space-between; margin-top: 30px; }
+        .progress-timeline li { text-align: center; flex-basis: 25%; position: relative; }
+        .progress-timeline .icon { width: 50px; height: 50px; background: #ddd; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 20px; color: white; position: relative; z-index: 2; }
+        .progress-timeline .step-name { font-size: 0.8rem; margin-top: 10px; color: #888; }
+        .progress-timeline li::before { content: ''; position: absolute; top: 24px; left: -50%; width: 100%; height: 2px; background: #ddd; z-index: 1; }
+        .progress-timeline li:first-child::before { display: none; }
+        /* Aktywny stan */
+        .progress-timeline li.active .icon { background: #28a745; }
+        .progress-timeline li.active .step-name { color: #333; font-weight: 600; }
+        .progress-timeline li.active::before { background: #28a745; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card status-card">
+            <div class="card-header text-center p-3">
+                <h3 class="mb-0">Status Zlecenia</h3>
+                <h2 class="mb-0">{{ order.order_code }}</h2>
+            </div>
+            <div class="card-body p-4">
+                <h5 class="text-center mb-4">Klient: <strong>{{ order.client.name }}</strong></h5>
+                <p><strong>Opis:</strong> {{ order.description }}</p>
+                <hr>
+                <h6 class="text-center mb-4">Aktualna lokalizacja: <strong>{{ status_info.location }}</strong></h6>
+
+                <ul class="progress-timeline">
+                    <li class="{{ 'active' if status_info.current_step >= 1 else '' }}">
+                        <div class="icon"><i class="fas fa-plus"></i></div>
+                        <div class="step-name">Nowe</div>
+                    </li>
+                    <li class="{{ 'active' if status_info.current_step >= 2 else '' }}">
+                        <div class="icon"><i class="fas fa-cut"></i></div>
+                        <div class="step-name">Krojownia</div>
+                    </li>
+                    <li class="{{ 'active' if status_info.current_step >= 3 else '' }}">
+                        <div class="icon"><i class="fas fa-tshirt"></i></div>
+                        <div class="step-name">Szwalnia</div>
+                    </li>
+                    <li class="{{ 'active' if status_info.current_step >= 4 else '' }}">
+                        <div class="icon"><i class="fas fa-check"></i></div>
+                        <div class="step-name">Zrealizowane</div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
