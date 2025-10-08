@@ -1937,7 +1937,7 @@ def kokpit():
     # --- KONIEC NOWEGO KODU ---
 
     # Ostatnie aktywności, dochodowe produkty, etc. (bez zmian)
-    recent_activities = Order.query.order_by(Order.created_at.desc()).limit(5).all()
+    recent_activities = Order.query.order_by(Order.created_at.desc()).limit(30).all()
     most_profitable_products_query = db.session.query(
         Product.name,
         func.sum(OrderItem.quantity * Product.production_price).label('total_profit')

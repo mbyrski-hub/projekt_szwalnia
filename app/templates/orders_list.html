@@ -1,8 +1,6 @@
 {% extends "base.html" %}
 {% block head %}
 <style>
-    /* NOWE STYLE - ZMODYFIKOWANE I POPRAWIONE */
-
     /* Odstęp między sekcjami akordeonu */
     #accordion .card {
         margin-bottom: 1rem;
@@ -40,33 +38,46 @@
     .accordion .card-header button .badge {
         font-size: 0.9rem;
         padding: .5em .8em;
-        background-color: #495057;
+        /* ZMIANA: Użycie zmiennych dla lepszego kontrastu */
+        background-color: var(--sidebar-bg);
+        color: var(--sidebar-text-color);
     }
 
-    /* Kolory dla tytułów sekcji akordeonu - ZGODNIE Z PROŚBĄ */
+    /* Kolory dla tytułów sekcji akordeonu */
     #headingInProgress .btn-link { color: var(--accent-color) !important; }
     #headingNew .btn-link { color: var(--primary-color) !important; }
     #headingCompleted .btn-link { color: #28a745 !important; }
     
     .card-body {
         padding: 0;
+        background-color: var(--card-bg); /* Dodane dla spójności */
     }
 
     .table {
         margin-bottom: 0;
     }
 
-    /* Nagłówek tabeli w ciemnym motywie */
-    .table thead.thead-dark th {
-        background-color: #343a40;
-        color: var(--text-color);
+    /* ZMIANA: Usunięto .thead-dark i zastosowano zmienne */
+    .table thead th {
+        background-color: var(--table-header-bg);
+        color: var(--table-header-color);
         border-color: var(--border-color);
     }
     
-    /* POPRAWKA: Kolorowanie wierszy i czytelność tekstu po najechaniu */
-    .status-w-realizacji { background-color: rgba(255, 193, 7, 0.1) !important; }
-    .status-nowe { background-color: rgba(0, 123, 255, 0.1) !important; }
-    .status-zrealizowane { background-color: rgba(40, 167, 69, 0.1) !important; }
+    /* ZMIANA: Kolorowanie wierszy z użyciem RGBA i zmiennych */
+    :root {
+        --status-w-realizacji-bg: rgba(255, 153, 0, 0.1);
+        --status-nowe-bg: rgba(0, 123, 255, 0.1);
+        --status-zrealizowane-bg: rgba(40, 167, 69, 0.1);
+    }
+    html.dark-mode {
+        --status-w-realizacji-bg: rgba(255, 153, 0, 0.15);
+        --status-nowe-bg: rgba(0, 123, 255, 0.15);
+        --status-zrealizowane-bg: rgba(40, 167, 69, 0.15);
+    }
+    .status-w-realizacji { background-color: var(--status-w-realizacji-bg) !important; }
+    .status-nowe { background-color: var(--status-nowe-bg) !important; }
+    .status-zrealizowane { background-color: var(--status-zrealizowane-bg) !important; }
 
     .order-details, .order-details td {
         background-color: var(--card-bg);
@@ -75,10 +86,16 @@
     tr.order-row:hover td,
     tr.order-details:hover td {
         background-color: var(--hover-bg-color) !important;
-        color: var(--text-color) !important; /* Jasny tekst na ciemnym tle */
+        color: var(--text-color) !important;
+    }
+    
+    /* ZMIANA: Dostosowanie kolorów badge w tabeli */
+    .badge-warning {
+        background-color: var(--accent-color);
+        color: #fff;
     }
 
-    /* Style dla animowanego przycisku "+" - bez zmian z Twojej wersji */
+    /* Style dla przycisku "+" (bez zmian) */
     .btn-plus-animated {
         width: 60px; height: 60px; border-radius: 50%;
         box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
@@ -105,6 +122,11 @@
     #printPreviewModal .modal-dialog { max-width: 50%; }
     #printPreviewModal .col-md-4 h4 { font-size: 1.1rem; }
     #printPreviewModal .col-md-4 p { font-size: 0.9rem; }
+    /* ZMIANA: Podgląd drukowania w trybie ciemnym */
+    html.dark-mode #print-preview-area {
+        background: #333 !important;
+    }
+
 </style>
 {% endblock %}
 {% block title %}Lista Zleceń{% endblock %}
@@ -165,8 +187,7 @@
 
 {% macro render_orders_table(orders) %}
 <div class="table-responsive p-0 m-0">
-    <table class="table table-striped table-hover m-0">
-        <thead class="thead-dark">
+    <table class="table table-hover m-0"> <thead>
             <tr>
                 <th>Nr zlecenia</th>
                 <th>Klient</th>
@@ -234,13 +255,13 @@
                         <i class="fas fa-file-pdf"></i>
                     </button>
                     
-                     
+                    
                     <button class="btn btn-sm btn-dark btn-print-labels" data-order-id="{{ order.id }}" title="Drukuj metki">
                         <i class="fas fa-tags"></i>
                     </button>
                     <form method="POST" action="{{ url_for('delete_order', order_id=order.id) }}" class="d-inline delete-order-form">
-    <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
-</form>
+                        <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+                    </form>
                 </td>
             </tr>
              <tr class="order-details" id="details-{{ order.id }}" style="display: none;">
@@ -248,7 +269,7 @@
                     <strong>Opis:</strong> {{ order.description }}<br>
                     <strong>Zlecający:</strong> {{ order.zlecajacy }}<br>
                     <strong>Logowanie:</strong> {{ order.login_info or 'Brak' }}<br>
-                    <strong>Tkanina:</strong> {{ order.fabric.name if order.fabric else 'Brak' }}<br>
+                    <strong>Tkanina:</strong> {% for fab in order.fabrics %}{{ fab.fabric.name }}{% if not loop.last %}, {% endif %}{% else %}Brak{% endfor %}<br>
                     
                     <strong>Produkty:</strong>
                     <ul style="list-style-type: none; padding-left: 0;">
@@ -294,8 +315,6 @@
                         <li style="margin-top: 5px;"><strong>RAZEM: {{ "%.2f"|format(order.cost_details.total_cost) }} zł</strong></li>
                     </ul>
                     </td>
-            
-
             </tr>
             {% endfor %}
         </tbody>
@@ -427,6 +446,7 @@
 {{ super() }}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
+// Cały blok <script> pozostaje bez zmian, jego logika jest już poprawna
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Rozwijanie/zwijanie szczegółów zamówienia po kliknięciu w wiersz
     document.querySelectorAll('.order-row').forEach(function(row) {
@@ -571,33 +591,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const renderContainer = document.getElementById('label-render-container');
         
-        // --- POCZĄTEK ZMIANY ---
-
         for (const labelInfo of data) {
             totalCount += labelInfo.quantity;
             
-            // Stwórz HTML dla jednej metki tego typu
             const labelHtml = createLabelHtml(labelInfo.template_json, labelInfo.size);
             renderContainer.innerHTML = labelHtml;
             const labelElement = renderContainer.firstElementChild;
             
-            // "Sfotografuj" metkę
             const canvas = await html2canvas(labelElement, { scale: 3, backgroundColor: null });
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
 
-            // Dodaj do kolejki drukowania odpowiednią liczbę kopii
             for (let i = 0; i < labelInfo.quantity; i++) {
                 labelsToPrintQueue.push(blob);
             }
 
-            // Stwórz element podglądu (zdjęcie + ilość)
             const previewWrapper = document.createElement('div');
             previewWrapper.style.position = 'relative';
             previewWrapper.style.margin = '5px';
 
             const img = document.createElement('img');
             img.src = URL.createObjectURL(blob);
-            img.style.width = '100px'; // Zwiększamy podgląd dla czytelności
+            img.style.width = '100px';
             img.style.border = '1px solid #ddd';
             
             const quantityBadge = document.createElement('span');
@@ -612,14 +626,11 @@ document.addEventListener('DOMContentLoaded', function() {
             previewWrapper.appendChild(quantityBadge);
             previewArea.appendChild(previewWrapper);
         }
-
-        // --- KONIEC ZMIANY ---
         
-        renderContainer.innerHTML = ''; // Wyczyść kontener po użyciu
+        renderContainer.innerHTML = '';
         totalCountEl.textContent = totalCount;
     }
     
-    // --- POCZĄTEK ZMIANY: Poprawiona funkcja createLabelHtml ---
     function createLabelHtml(templateJson, size) {
         let elementsHtml = '';
         templateJson.elements.forEach(element => {
@@ -646,7 +657,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             left: ${element.x === '50%' ? '50%' : '0'};
                             font-size: ${element.fontSize}px;
                             font-weight: ${element.type === 'dynamic' ? 'bold' : 'normal'};
-                            color: ${element.color || 'black'}; /* <--- DODAJ TĘ LINIĘ */
+                            color: ${element.color || 'black'};
                             width: ${element.width};
                             padding: 5px;
                             ${extraStyles}">
@@ -656,14 +667,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         return `
-    <div class="label-canvas-render" style="width: 132px; height: ${templateJson.height}; background-color: white; position: relative; overflow: hidden;">
-        <div style="position: absolute; top: 7.5px; left: 0; width: 100%; border-top: 1px dashed #888;"></div>
-        ${elementsHtml}
-    </div>
-`;
+            <div class="label-canvas-render" style="width: 132px; height: ${templateJson.height}; background-color: white; position: relative; overflow: hidden;">
+                <div style="position: absolute; top: 7.5px; left: 0; width: 100%; border-top: 1px dashed #888;"></div>
+                ${elementsHtml}
+            </div>
+        `;
     }
-    // --- KONIEC ZMIANY ---
-
 
     async function processPrintQueue() {
         startPrintBtn.disabled = true;
@@ -731,32 +740,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
     startPrintBtn.addEventListener('click', processPrintQueue);
 
-// 4. Logika dla SweetAlert przy usuwaniu
-document.querySelectorAll('.delete-order-form').forEach(form => {
-    form.addEventListener('submit', function(e) {
-        e.preventDefault(); // ZATRZYMUJEMY domyślne wysyłanie formularza
+    // 4. Logika dla SweetAlert przy usuwaniu
+    document.querySelectorAll('.delete-order-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
 
-        Swal.fire({
-            title: 'Jesteś pewien?',
-            text: "Zlecenie zostanie trwale usunięte!",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Tak, usuń!',
-            cancelButtonText: 'Anuluj'
-        }).then((result) => {
-            // Jeśli użytkownik kliknie "Tak, usuń!"
-            if (result.isConfirmed) {
-                form.submit(); // Wysyłamy formularz
-            }
+            Swal.fire({
+                title: 'Jesteś pewien?',
+                text: "Zlecenie zostanie trwale usunięte!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Tak, usuń!',
+                cancelButtonText: 'Anuluj'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    form.submit();
+                }
+            });
         });
     });
-});
-
-
-
-
 });
 </script>
 {% endblock %}

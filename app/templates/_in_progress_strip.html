@@ -1,5 +1,4 @@
 <style>
-    /* Usunęliśmy style dla zewnętrznego kontenera, zostawiając tylko margines */
     .in-progress-strip {
         margin-bottom: 2rem;
     }
@@ -7,7 +6,8 @@
         margin: 0 0 1rem 0;
         font-weight: 600;
         font-size: 1.1rem;
-        color: #e0e0e0;
+        /* ### ZMIANA ### Użycie zmiennej CSS */
+        color: var(--text-color);
         display: flex;
         align-items: center;
     }
@@ -47,36 +47,48 @@
         margin: 0;
         font-weight: 600;
         font-size: 0.9rem;
-        color: #f0f0f0;
+        /* ### ZMIANA ### Użycie zmiennej CSS */
+        color: #f0f0f0; 
     }
     .in-progress-card-body {
         font-size: 0.8rem;
+        /* ### ZMIANA ### Użycie zmiennej CSS */
         color: #aaa;
         margin-top: 0.5rem;
     }
+    
+    /* ### NOWY KOD ### Poprawki dla motywu jasnego */
+    html:not(.dark-mode) .in-progress-card {
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+    }
+    html:not(.dark-mode) .in-progress-card-header h6 {
+        color: var(--text-color);
+    }
+     html:not(.dark-mode) .in-progress-card-body,
+     html:not(.dark-mode) .in-progress-card-header small {
+        color: var(--text-muted-color);
+    }
+    /* ### KONIEC NOWEGO KODU ### */
+
     .in-progress-card.krojownia-card {
         border-left: 5px solid var(--accent-color);
     }
     .in-progress-card.szwalnia-card {
         border-left: 5px solid #28a745;
     }
-
-    /* UPROSZCZONE STYLE SEKCJI */
     .in-progress-section {
-        background-color: var(--card-bg); /* Przeniesione tło */
+        background-color: var(--card-bg);
         border: 1px solid var(--border-color);
-        border-radius: 8px; /* Ujednolicony promień */
-        padding: 1.5rem; /* Ujednolicony padding */
+        border-radius: 8px;
+        padding: 1.5rem;
         height: 100%;
         display: flex;
         flex-direction: column;
     }
-
     .row.in-progress-sections {
         position: relative;
     }
-
-    /* Pionowy separator (bez zmian) */
     .row.in-progress-sections::after {
         content: '';
         position: absolute;
@@ -86,7 +98,9 @@
         width: 1px;
         background-color: var(--border-color);
         transform: translateX(-50%);
-        @media (max-width: 991.98px) {
+    }
+     @media (max-width: 991.98px) {
+        .row.in-progress-sections::after {
             display: none;
         }
     }

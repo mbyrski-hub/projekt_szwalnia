@@ -4,48 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Panel Szwalni{% endblock %}</title>
-
-    <script>
-        (function() {
-            try {
-                var theme = localStorage.getItem('theme');
-                if (theme === 'dark') {
-                    document.documentElement.classList.add('dark-mode');
-                }
-            } catch (e) {
-                console.error("Could not apply dark mode from localStorage", e);
-            }
-        })();
-    </script>
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
     /* === ZMIENNE DLA MOTYWU JASNNEGO (DOMYŚLNE) === */
-:root {
-    --sidebar-bg: #2c2c2c;
-    --sidebar-text-color: #f0f0f0;
-    --sidebar-accent-color: #ff9900;
-    
-    --bg-color: #f4f6f9; /* ZMIANA: Jaśniejsze, czystsze tło */
-    --card-bg: #ffffff;
-    --text-color: #212529; /* ZMIANA: Ciemniejszy, standardowy tekst */
-    --text-muted-color: #6c757d; /* ZMIANA: Znacznie ciemniejszy "wyciszony" tekst */
-    --primary-color: #007bff;
-    --border-color: #dee2e6;
-    --hover-bg-color: #f8f9fa;
-    --table-header-bg: #e9ecef;
-    --table-header-color: #495057;
-    --form-control-bg: #fff;
-    --form-control-border: #ced4da;
-    --primary-color: #007bff;
-    --accent-color: #ff9900;
-}
+    :root {
+        --sidebar-bg: #2c2c2c;
+        --sidebar-text-color: #f0f0f0;
+        --sidebar-accent-color: #ff9900;
+        
+        --bg-color: #f4f7fa;
+        --card-bg: #ffffff;
+        --text-color: #333333;
+        --text-muted-color: #888;
+        --primary-color: #007bff;
+        --border-color: #dee2e6;
+        --hover-bg-color: #f8f9fa;
+        --table-header-bg: #e9ecef;
+        --table-header-color: #495057;
+        --form-control-bg: #fff;
+        --form-control-border: #ced4da;
+    }
 
     /* === ZMIENNE DLA MOTYWU CIEMNEGO === */
-    /* ZMIANA: Klasa jest teraz na <html>, aby zadziałała wcześniej */
-    html.dark-mode {
+    body.dark-mode {
         --bg-color: #1a1a1a;
         --card-bg: #252525;
         --text-color: #f0f0f0;
@@ -56,10 +40,6 @@
         --table-header-color: #f0f0f0;
         --form-control-bg: #333;
         --form-control-border: #444;
-        --primary-color: #007bff;
-        --accent-color: #ff9900;
-
-
     }
 
     html {
@@ -82,29 +62,28 @@
     }
 
     .sidebar {
-    width: 240px; /* Było 250px */
-    background-color: var(--sidebar-bg);
-    padding: 1rem; /* Było 1.3rem */
-    height: 100vh;
-    position: fixed;
-    left: 0;
-    top: 0;
-    transition: width 0.3s;
-    display: flex;
-    flex-direction: column;
-}
+        width: 250px;
+        background-color: var(--sidebar-bg);
+        padding: 1.3rem;
+        height: 100vh;
+        position: fixed;
+        left: 0;
+        top: 0;
+        transition: width 0.3s;
+        display: flex;
+        flex-direction: column;
+    }
 
-    /* Zaktualizuj to */
-.sidebar .logo {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-bottom: 1.5rem; /* Było 2rem */
-    font-size: 1.4rem; /* Było 1.6rem */
-    font-weight: 600;
-    color: var(--sidebar-accent-color);
-    opacity: 0.9;
-}
+    .sidebar .logo {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 2rem;
+        font-size: 1.6rem;
+        font-weight: 600;
+        color: var(--sidebar-accent-color);
+        opacity: 0.9;
+    }
     
     .sidebar .logo img {
         max-width: 40%;
@@ -112,12 +91,12 @@
     }
     
     .sidebar .nav-link {
-    color: var(--sidebar-text-color);
-    padding: 0.5rem 0.8rem; /* Było 0.6rem 1rem */
-    border-radius: 5px;
-    margin-bottom: 0.2rem; /* Było 0.3rem */
-    transition: background-color 0.3s, color 0.3s;
-}
+        color: var(--sidebar-text-color);
+        padding: 0.6rem 1rem;
+        border-radius: 5px;
+        margin-bottom: 0.3rem;
+        transition: background-color 0.3s, color 0.3s;
+    }
 
     .sidebar .nav-link:hover, .sidebar .nav-link.active {
         background-color: var(--primary-color);
@@ -131,11 +110,11 @@
     }
     
     .main-content {
-    margin-left: 240px; /* Było 250px */
-    padding: 2.6rem;
-    width: calc(100% - 220px); /* Było calc(100% - 250px) */
-    transition: margin-left 0.3s, width 0.3s;
-}
+        margin-left: 250px;
+        padding: 2.6rem;
+        width: calc(100% - 250px);
+        transition: margin-left 0.3s, width 0.3s;
+    }
     
     h1, h2, h3, h4, h5 {
         color: var(--text-color);
@@ -167,7 +146,7 @@
     .table-striped tbody tr:nth-of-type(odd) {
          background-color: rgba(0, 0, 0, 0.02);
     }
-    html.dark-mode .table-striped tbody tr:nth-of-type(odd) {
+    body.dark-mode .table-striped tbody tr:nth-of-type(odd) {
         background-color: rgba(255, 255, 255, 0.02);
     }
     .table td, .table th {
@@ -202,13 +181,63 @@
         color: var(--text-color);
     }
 
-    
+    /* === PRZEŁĄCZNIK MOTYWU === */
+    .theme-switcher-container {
+        margin-top: auto;
+        padding: 1rem 0;
+        text-align: center;
+    }
+    .theme-switch {
+        display: inline-block;
+        height: 24px;
+        position: relative;
+        width: 50px;
+    }
+    .theme-switch input {
+        display:none;
+    }
+    .slider {
+        background-color: #555;
+        bottom: 0;
+        cursor: pointer;
+        left: 0;
+        position: absolute;
+        right: 0;
+        top: 0;
+        transition: .4s;
+        border-radius: 34px;
+    }
+    .slider:before {
+        background-color: #fff;
+        bottom: 4px;
+        content: "";
+        height: 16px;
+        left: 4px;
+        position: absolute;
+        transition: .4s;
+        width: 16px;
+        border-radius: 50%;
+    }
+    input:checked + .slider {
+        background-color: var(--primary-color);
+    }
+    input:checked + .slider:before {
+        transform: translateX(26px);
+    }
+    .theme-switcher-container .fa-sun, .theme-switcher-container .fa-moon {
+        color: var(--sidebar-text-color);
+        vertical-align: middle;
+        font-size: 1.1rem;
+    }
+    .theme-switcher-container .fa-sun { margin-right: 8px; }
+    .theme-switcher-container .fa-moon { margin-left: 8px; }
+
     .sidebar-image {
         padding: 1rem 0;
         text-align: center;
     }
     .sidebar-image img {
-        max-width: 80%;
+        max-width: 100%;
         height: auto;
         opacity: 0.6;
     }
@@ -281,7 +310,14 @@
             </ul>
         </div>
 
-       
+        <div class="theme-switcher-container">
+            <i class="fas fa-sun"></i>
+            <label class="theme-switch">
+                <input type="checkbox" id="theme-toggle">
+                <span class="slider"></span>
+            </label>
+            <i class="fas fa-moon"></i>
+        </div>
 
         <div class="sidebar-image">
             <img src="{{ url_for('static', filename='images/menu_bg.png') }}" alt="Dekoracja">
@@ -307,7 +343,34 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-           
+            // === LOGIKA PRZEŁĄCZNIKA MOTYWU ===
+            const themeToggle = document.getElementById('theme-toggle');
+            const body = document.body;
+
+            const applyTheme = (theme) => {
+                if (theme === 'dark') {
+                    body.classList.add('dark-mode');
+                    themeToggle.checked = true;
+                } else {
+                    body.classList.remove('dark-mode');
+                    themeToggle.checked = false;
+                }
+            };
+
+            themeToggle.addEventListener('change', () => {
+                if (themeToggle.checked) {
+                    localStorage.setItem('theme', 'dark');
+                    applyTheme('dark');
+                } else {
+                    localStorage.setItem('theme', 'light');
+                    applyTheme('light');
+                }
+            });
+
+            // Zastosuj motyw przy ładowaniu strony
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            applyTheme(savedTheme);
+
 
             // === POZOSTAŁY KOD JS ===
             const printStatusDot = document.getElementById('print-server-status');

@@ -3,14 +3,19 @@
 
 {% block head %}
 <style>
-    /* Twoje style CSS pozostają bez zmian - są poprawne */
+    /* ### ZMIANY ### - Dodana ogólna reguła zmniejszająca bazowy rozmiar czcionki dla całego kokpitu */
+    .compact-kokpit {
+        font-size: 0.9rem; /* Zmniejsza domyślną czcionkę, co wpłynie na większość tekstów */
+    }
     .info-card {
         background-color: var(--card-bg);
         border: none;
-        border-radius: 20px;
+        border-radius: 15px;
         color: var(--text-color);
         margin-bottom: 10px;
         transition: transform 0.2s, box-shadow 0.2s;
+        display: flex; /* <-- DODAJ TĘ LINIĘ */
+        align-items: center; /* <-- I TĘ LINIĘ */
     }
     .info-card:hover {
         transform: translateY(-5px);
@@ -19,11 +24,12 @@
     .info-card .card-body {
         display: flex;
         align-items: center;
+        padding: 0.8rem 1rem; /* ### ZMIANA ### - Mniejszy padding */
     }
     .info-card .icon {
-        font-size: 3rem;
-        margin-right: 20px;
-        width: 80px;
+        font-size: 2.2rem; /* ### ZMIANA ### - Mniejsza ikona */
+        margin-right: 15px; /* ### ZMIANA ### - Mniejszy margines */
+        width: 60px; /* ### ZMIANA ### - Mniejsza szerokość */
         text-align: center;
         animation: pulse-icon 2s infinite;
     }
@@ -32,11 +38,12 @@
     .info-card .icon-done { color: #28a745; }
     
     .info-card .stat-number {
-        font-size: 2.5rem;
+        font-size: 1.8rem; /* ### ZMIANA ### - Mniejsza liczba */
         font-weight: 600;
+        line-height: 1.1;
     }
     .info-card .stat-label {
-        font-size: 1rem;
+        font-size: 0.85rem; /* ### ZMIANA ### - Mniejsza etykieta */
         color: #aaa;
     }
     .timeline {
@@ -72,7 +79,7 @@
     }
 
     .production-value-card .stat-number {
-        font-size: 3.2rem;
+        font-size: 2.5rem; /* ### ZMIANA ### - Mniejsza liczba */
     }
 
     @keyframes pulse-border {
@@ -92,40 +99,40 @@
 
     .weather-widget {
         display: flex;
-        gap: 15px;
+        gap: 10px; /* ### ZMIANA ### - Mniejszy odstęp */
         align-items: center;
     }
     .weather-day {
         background-color: var(--card-bg);
         border-radius: 8px;
-        padding: 5px;
+        padding: 4px; /* ### ZMIANA ### - Mniejszy padding */
         text-align: center;
-        min-width: 80px;
+        min-width: 70px; /* ### ZMIANA ### - Mniejsza szerokość */
         border: 1px solid var(--border-color);
         transition: all 0.2s ease-in-out;
     }
     .weather-day.weather-today {
-        transform: scale(1.1);
+        transform: scale(1.05); /* ### ZMIANA ### - Mniejsze powiększenie */
         border: 2px solid var(--accent-color);
-        padding: 8px;
+        padding: 6px;
     }
     .weather-day .date-display {
-        font-size: 0.9rem;
+        font-size: 0.8rem; /* ### ZMIANA ### - Mniejsza data */
         font-weight: 600;
         color: var(--text-color);
     }
     .weather-day img {
-        width: 40px;
-        height: 40px;
+        width: 35px; /* ### ZMIANA ### - Mniejsza ikona pogody */
+        height: 35px;
         margin-top: -5px;
         margin-bottom: -5px;
     }
     .weather-day .temp {
-        font-size: 1.1rem;
+        font-size: 1rem; /* ### ZMIANA ### - Mniejsza temperatura */
         font-weight: 600;
     }
     .weather-day.weather-today .temp {
-        font-size: 1.3rem;
+        font-size: 1.1rem;
     }
     .status-indicator-kokpit {
         display: flex;
@@ -141,6 +148,13 @@
         border-left: 1px solid var(--border-color);
         padding-left: 15px;
     }
+    
+    #trigger-sync-btn {
+        color: var(--text-muted-color);
+    }
+    #trigger-sync-btn:hover {
+        color: var(--text-color);
+    }
 
     .status-dot {
         width: 12px;
@@ -153,233 +167,412 @@
     .status-dot.online {
         background-color: #28a745; /* Zielony - online */
     }
+    
+    .card-title {
+        font-size: 1.1rem;
+    }
+    .theme-switcher-container {
+        text-align: center;
+        display: flex; 
+        align-items: center; 
+    }
+    .theme-switch {
+        display: inline-block;
+        height: 24px;
+        position: relative;
+        width: 50px;
+        margin: 0 5px; 
+    }
+    .theme-switch input {
+        display:none;
+    }
+    .slider {
+        background-color: #555;
+        bottom: 0;
+        cursor: pointer;
+        left: 0;
+        position: absolute;
+        right: 0;
+        top: 0;
+        transition: .4s;
+        border-radius: 34px;
+    }
+    .slider:before {
+        background-color: #fff;
+        bottom: 4px;
+        content: "";
+        height: 16px;
+        left: 4px;
+        position: absolute;
+        transition: .4s;
+        width: 16px;
+        border-radius: 50%;
+    }
+    input:checked + .slider {
+        background-color: var(--primary-color);
+    }
+    input:checked + .slider:before {
+        transform: translateX(26px);
+    }
+    .theme-switcher-container .fa-sun, .theme-switcher-container .fa-moon {
+        color: var(--text-muted-color); 
+        vertical-align: middle;
+        font-size: 1.1rem;
+    }
+    
+    .card-list-scrollable {
+        max-height: 280px; 
+        overflow-y: auto;
+        padding-right: 10px; 
+    }
+    .card-list-scrollable::-webkit-scrollbar {
+      width: 6px;
+    }
+    .card-list-scrollable::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .card-list-scrollable::-webkit-scrollbar-thumb {
+      background-color: var(--border-color);
+      border-radius: 10px;
+    }
+    
+    .in-progress-card {
+        background-color: var(--card-bg) !important;
+        border: 1px solid var(--border-color);
+    }
+    
+    /* ### NOWY KOD - Poprawka koloru tekstu w "Aktualny stan produkcji" dla motywu jasnego ### */
+    .in-progress-card .text-white, 
+    .in-progress-card .text-light {
+        color: var(--text-color) !important;
+    }
+    .in-progress-card .text-muted {
+        color: var(--text-muted-color) !important;
+    }
 
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div class="status-indicator-kokpit">
-        <h4 id="current-datetime" class="text-muted mb-0"></h4>
-        <div class="status-indicator">
-            <div id="print-server-status" class="status-dot"></div>
-            <span>Serwer Druku</span>
-        </div>
-        <div class="status-indicator">
-            <div id="sync-server-status" class="status-dot"></div>
-            <span>Synchronizator</span>
-            <a href="#" id="trigger-sync-btn" class="ml-auto text-white-50" title="Uruchom pełną synchronizację cen">
-                <i class="fas fa-play-circle"></i>
-            </a>
-        </div>
-    </div>
+<div class="compact-kokpit"> 
     
-    {% if weather_forecast %}
-    <div>
-        <h6 class="text-muted text-center mb-2" style="font-weight: 600;">Pogoda: Bielsko-Biała</h6>
-        <div class="weather-widget">
-    {% for day in weather_forecast %}
-    <div class="weather-day {% if day.is_today %}weather-today{% endif %}">
-        <div class="date-display">{{ day.date }}</div>
-        <div class="day-name text-muted" style="font-size: 0.75rem; font-weight: 500;">{{ day.day_name }}</div>
-        <img src="{{ url_for('static', filename='images/weather/' + day.icon) }}" title="{{ day.description }}">
-        <div class="temp">{{ day.temp }}°C</div>
-    </div>
-    {% endfor %}
-</div>
-    </div>
-    {% endif %}
-</div>
-
-<div class="row">
-    <div class="col-md-4">
-        <div class="info-card">
-            <div class="card-body">
-                <div class="icon icon-new"><i class="fas fa-plus-circle"></i></div>
-                <div>
-                    <div class="stat-number">{{ stats.nowe }}</div>
-                    <div class="stat-label">Nowe zlecenia</div>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="status-indicator-kokpit">
+            <h4 id="current-datetime" class="text-muted mb-0" style="font-size: 1rem;"></h4>
+            <div class="status-indicator">
+                <div id="print-server-status" class="status-dot"></div>
+                <span>Serwer Druku</span>
+            </div>
+            <div class="status-indicator">
+                <div id="sync-server-status" class="status-dot"></div>
+                <span>Synchronizator</span>
+                <a href="#" id="trigger-sync-btn" class="ml-auto" title="Uruchom pełną synchronizację cen">
+                    <i class="fas fa-play-circle"></i>
+                </a>
+            </div>
+        </div>
+        
+        <div class="d-flex align-items-center">
+            <div class="theme-switcher-container mr-4">
+                <i class="fas fa-sun"></i>
+                <label class="theme-switch">
+                    <input type="checkbox" id="theme-toggle">
+                    <span class="slider"></span>
+                </label>
+                <i class="fas fa-moon"></i>
+            </div>
+            
+            {% if weather_forecast %}
+            <div>
+                <h6 class="text-muted text-center mb-2" style="font-weight: 600; font-size: 0.8rem;">Pogoda: Bielsko-Biała</h6>
+                <div class="weather-widget">
+                {% for day in weather_forecast %}
+                <div class="weather-day {% if day.is_today %}weather-today{% endif %}">
+                    <div class="date-display">{{ day.date }}</div>
+                    <div class="day-name text-muted" style="font-size: 0.7rem; font-weight: 500;">{{ day.day_name }}</div>
+                    <img src="{{ url_for('static', filename='images/weather/' + day.icon) }}" title="{{ day.description }}">
+                    <div class="temp">{{ day.temp }}°C</div>
+                </div>
+                {% endfor %}
                 </div>
             </div>
+            {% endif %}
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="info-card">
-            <div class="card-body">
-                <div class="icon icon-progress"><i class="fas fa-tasks"></i></div>
-                <div>
-                    <div class="stat-number">{{ stats.w_realizacji }}</div>
-                    <div class="stat-label">W realizacji</div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="info-card">
-            <div class="card-body">
-                <div class="icon icon-done"><i class="fas fa-check-circle"></i></div>
-                <div>
-                    <div class="stat-number">{{ stats.zrealizowane }}</div>
-                    <div class="stat-label">Zrealizowane</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
-<div class="row mt-4">
-     <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                 <h5 class="card-title">Aktualny stan produkcji</h5>
-                 {% include '_in_progress_strip.html' %}
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row mt-4">
-    <div class="col-lg-4 mb-4">
-        <div class="card h-100 production-value-card">
-            <div class="card-body d-flex flex-column justify-content-center">
-                <h5 class="card-title text-center">Wartość produkcji (zrealizowane w tym miesiącu)</h5>
-                <div class="text-center">
-                    <div class="stat-number" id="animated-value" data-value="{{ monthly_production_value }}">0,00 zł</div>
-                    <div class="production-history mt-2">
-                        <strong>Poprzednie miesiące:</strong><br>
-                        {% for month_data in last_months_production %}
-                            {{ month_data.year }}-{{ "%02d"|format(month_data.month) }}: <strong>{{ "%.2f zł"|format(month_data.value) }}</strong>
-                            {% if not loop.last %}<br>{% endif %}
-                        {% endfor %}
+    <div class="row">
+        <div class="col-lg-2">
+            <div class="h-100 d-flex flex-column">
+                <div class="info-card flex-fill mb-2">
+                    <div class="card-body">
+                        <div class="icon icon-new"><i class="fas fa-plus-circle"></i></div>
+                        <div>
+                            <div class="stat-number">{{ stats.nowe }}</div>
+                            <div class="stat-label">Nowe zlecenia</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="info-card flex-fill mb-2">
+                    <div class="card-body">
+                        <div class="icon icon-progress"><i class="fas fa-tasks"></i></div>
+                        <div>
+                            <div class="stat-number">{{ stats.w_realizacji }}</div>
+                            <div class="stat-label">W realizacji</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="info-card flex-fill">
+                    <div class="card-body">
+                        <div class="icon icon-done"><i class="fas fa-check-circle"></i></div>
+                        <div>
+                            <div class="stat-number">{{ stats.zrealizowane }}</div>
+                            <div class="stat-label">Zrealizowane</div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <div class="col-lg-4 mb-4">
-        <div class="card h-100">
-            <div class="card-header"><h5 class="card-title mb-0">Top 5 dochodowych produktów w bieżącym miesiącu</h5></div>
-            <div class="card-body" style="position: relative; height: 300px;">
-                <canvas id="mostProfitableChart"></canvas>
+        <div class="col-lg-10">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Aktualny stan produkcji</h5>
+                    {% include '_in_progress_strip.html' %}
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="col-lg-4 mb-4">
-        <div class="card h-100">
-            <div class="card-header"><h5 class="card-title mb-0">Zużycie tkanin w bieżącym miesiącu</h5></div>
-            <div class="card-body" style="position: relative; height: 300px;">
-                <canvas id="fabricUsageChart"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
 
-<div class="row mt-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Ostatnie aktywności</h5>
-                <ul class="list-group list-group-flush">
-                    {% for order in recent_activities %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        Zlecenie #{{ order.order_code }} dla {{ order.client.name }}
-                        <span class="badge badge-primary badge-pill">{{ order.status }}</span>
-                    </li>
-                    {% endfor %}
-                </ul>
+    <div class="row mt-4">
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100 production-value-card">
+                <div class="card-body d-flex flex-column justify-content-center">
+                    <h5 class="card-title text-center">Wartość produkcji (zrealizowane w tym miesiącu)</h5>
+                    <div class="text-center">
+                        <div class="stat-number" id="animated-value" data-value="{{ monthly_production_value }}">0,00 zł</div>
+                        <div class="production-history mt-2" style="font-size: 0.85rem;">
+                            <strong>Poprzednie miesiące:</strong><br>
+                            {% for month_data in last_months_production %}
+                                {{ month_data.year }}-{{ "%02d"|format(month_data.month) }}: <strong>{{ "%.2f zł"|format(month_data.value) }}</strong>
+                                {% if not loop.last %}<br>{% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header"><h5 class="card-title mb-0">Top 5 dochodowych produktów</h5></div>
+                <div class="card-body" style="position: relative; height: 250px;">
+                    <canvas id="mostProfitableChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header"><h5 class="card-title mb-0">Zużycie tkanin</h5></div>
+                <div class="card-body" style="position: relative; height: 250px;">
+                    <canvas id="fabricUsageChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Nadchodzące terminy (7 dni)</h5>
-                 <ul class="list-group list-group-flush">
-                    {% for order in upcoming_deadlines %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        {{ order.order_code }} - {{ order.client.name }}
-                        <span class="badge badge-danger">{{ order.deadline.strftime('%Y-%m-%d') }}</span>
-                    </li>
+
+    <div class="row mt-4">
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">Ostatnie aktywności</h5>
+                    <ul class="list-group list-group-flush card-list-scrollable flex-grow-1">
+                        {% for order in recent_activities %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Zlecenie #{{ order.order_code }} dla {{ order.client.name }}
+                            <span class="badge badge-primary badge-pill">{{ order.status }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">Nadchodzące terminy (7 dni)</h5>
+                     <ul class="list-group list-group-flush card-list-scrollable flex-grow-1">
+                        {% for order in upcoming_deadlines %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ order.order_code }} - {{ order.client.name }}
+                            <span class="badge badge-danger">{{ order.deadline.strftime('%Y-%m-%d') }}</span>
+                        </li>
+                        {% else %}
+                        <li class="list-group-item">Brak nadchodzących terminów.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-history mr-2"></i> Ostatnie aktualizacje cen</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_price_updates %}
+                        <ul class="list-group list-group-flush card-list-scrollable">
+                            {% for update in recent_price_updates %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ update.item_name }}</strong> ({{ update.item_type }})
+                                        <small class="d-block text-muted">
+                                            {{ update.changed_at.strftime('%Y-%m-%d %H:%M') }}
+                                        </small>
+                                    </div>
+                                    <div>
+                                        <span class="text-danger"><del>{{ "%.2f zł"|format(update.old_price) if update.old_price is not none else 'Brak' }}</del></span>
+                                        <i class="fas fa-long-arrow-alt-right mx-2"></i>
+                                        <span class="text-success font-weight-bold">{{ "%.2f zł"|format(update.new_price) }}</span>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
                     {% else %}
-                    <li class="list-group-item">Brak nadchodzących terminów.</li>
-                    {% endfor %}
-                </ul>
+                        <p class="text-muted">Brak zarejestrowanych aktualizacji cen.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-trophy mr-2"></i> Top Klienci</h5>
+                </div>
+                <div class="card-body">
+                    {% if top_clients %}
+                        <ul class="list-group list-group-flush card-list-scrollable">
+                            {% for client, count in top_clients %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="fas fa-user-tie mr-2 text-muted"></i>
+                                        <strong>{{ client }}</strong>
+                                    </div>
+                                    <span class="badge badge-primary badge-pill" style="font-size: 0.9rem;">{{ count }} zleceń</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted">Brak zrealizowanych zleceń do wygenerowania rankingu.</p>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
+
 </div>
-
-<div class="row mt-4">
-    <div class="col-lg-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-history mr-2"></i> Ostatnie aktualizacje cen</h5>
-            </div>
-            <div class="card-body">
-                {% if recent_price_updates %}
-                    <ul class="list-group list-group-flush">
-                        {% for update in recent_price_updates %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>{{ update.item_name }}</strong> ({{ update.item_type }})
-                                    <small class="d-block text-muted">
-                                        {{ update.changed_at.strftime('%Y-%m-%d %H:%M') }}
-                                    </small>
-                                </div>
-                                <div>
-                                    <span class="text-danger"><del>{{ "%.2f zł"|format(update.old_price) if update.old_price is not none else 'Brak' }}</del></span>
-                                    <i class="fas fa-long-arrow-alt-right mx-2"></i>
-                                    <span class="text-success font-weight-bold">{{ "%.2f zł"|format(update.new_price) }}</span>
-                                </div>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p class="text-muted">Brak zarejestrowanych aktualizacji cen.</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    <div class="col-lg-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-trophy mr-2"></i> Top Klienci</h5>
-            </div>
-            <div class="card-body">
-                {% if top_clients %}
-                    <ul class="list-group list-group-flush">
-                        {% for client, count in top_clients %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                <div>
-                                    <i class="fas fa-user-tie mr-2 text-muted"></i>
-                                    <strong>{{ client }}</strong>
-                                </div>
-                                <span class="badge badge-primary badge-pill" style="font-size: 0.9rem;">{{ count }} zleceń</span>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p class="text-muted">Brak zrealizowanych zleceń do wygenerowania rankingu.</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
-
 {% endblock %}
 
 
 {% block scripts %}
-{{ super() }} <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-{{ super() }} <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function() {
+    
+    let fabricChart = null;
+    let profitableChart = null;
 
-    // --- Sekcja statusów serwerów ---
+    const themeToggle = document.getElementById('theme-toggle');
+    const htmlEl = document.documentElement;
+
+    if (htmlEl.classList.contains('dark-mode')) {
+        themeToggle.checked = true;
+    }
+
+    themeToggle.addEventListener('change', () => {
+        if (themeToggle.checked) {
+            htmlEl.classList.add('dark-mode');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            htmlEl.classList.remove('dark-mode');
+            localStorage.setItem('theme', 'light');
+        }
+        setTimeout(renderAllCharts, 50);
+    });
+
+    function renderAllCharts() {
+        const chartTextColor = getComputedStyle(document.body).getPropertyValue('--text-color').trim();
+        const chartGridColor = getComputedStyle(document.body).getPropertyValue('--border-color').trim();
+
+        const fabricCtx = document.getElementById('fabricUsageChart');
+        const fabricData = {{ fabric_summary | tojson }};
+        if (fabricCtx && fabricData && Object.keys(fabricData).length > 0) {
+            if(fabricChart) fabricChart.destroy(); 
+            fabricChart = new Chart(fabricCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(fabricData),
+                    datasets: [{
+                        label: 'Zużycie w metrach',
+                        data: Object.values(fabricData),
+                        backgroundColor: ['#007bff', '#ff9900', '#28a745', '#dc3545', '#17a2b8', '#6f42c1'],
+                        borderColor: 'rgba(44, 44, 44, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { color: chartTextColor, padding: 10, boxWidth: 20, font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        } else if (fabricCtx) {
+            fabricCtx.parentElement.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><p>Brak danych o zużyciu tkanin.</p></div>';
+        }
+
+        const profitableCtx = document.getElementById('mostProfitableChart');
+        const profitableData = {{ most_profitable_products | tojson }};
+        if (profitableCtx && profitableData && profitableData.length > 0) {
+            if(profitableChart) profitableChart.destroy(); 
+            profitableChart = new Chart(profitableCtx, {
+                type: 'bar',
+                data: {
+                    labels: profitableData.map(item => item[0]),
+                    datasets: [{
+                        label: 'Wartość produkcji w zł',
+                        data: profitableData.map(item => item[1]),
+                        backgroundColor: 'rgba(255, 153, 0, 0.7)',
+                        borderColor: 'rgba(255, 153, 0, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { beginAtZero: true, ticks: { color: chartTextColor, font: { size: 10 } }, grid: { color: chartGridColor } },
+                        y: { ticks: { color: chartTextColor, font: { size: 10 } }, grid: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        } else if (profitableCtx) {
+            profitableCtx.parentElement.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><p>Brak danych o dochodowych produktach.</p></div>';
+        }
+    }
+
     const printStatusDot = document.getElementById('print-server-status');
     const syncStatusDot = document.getElementById('sync-server-status');
     function checkServerStatus(url, dotElement) {
@@ -397,29 +590,18 @@ document.addEventListener("DOMContentLoaded", function() {
     checkAllStatuses();
     setInterval(checkAllStatuses, 60000);
 
-    // --- ZEGAR Z SEKUNDNIKIEM ---
     const dateTimeElement = document.getElementById('current-datetime');
     function updateDateTime() {
         if (!dateTimeElement) return;
         const now = new Date();
-        const options = {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit' // <-- DODANA TA LINIA
-        };
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
         let formatted = now.toLocaleDateString('pl-PL', options);
-        // Zamieniamy "o" na "godz." dla lepszego formatowania
         formatted = formatted.replace(' o ', ', godz. '); 
         dateTimeElement.textContent = formatted.charAt(0).toUpperCase() + formatted.slice(1);
     }
     setInterval(updateDateTime, 1000);
     updateDateTime();
 
-    // --- Animowany licznik ---
     const animatedValue = document.getElementById('animated-value');
     if (animatedValue) {
         const targetValue = parseFloat(animatedValue.dataset.value);
@@ -439,71 +621,8 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
 
-    // --- Funkcja inicjalizująca wykresy ---
-    function initializeChart(ctx, type, data, options) {
-        if (ctx) new Chart(ctx, { type, data, options });
-    }
+    renderAllCharts(); 
 
-    // --- Wykres zużycia tkanin ---
-    const fabricCtx = document.getElementById('fabricUsageChart');
-    const fabricData = {{ fabric_summary | tojson }};
-    if (fabricCtx && fabricData && Object.keys(fabricData).length > 0) {
-        initializeChart(fabricCtx, 'doughnut', {
-            labels: Object.keys(fabricData),
-            datasets: [{
-                label: 'Zużycie w metrach',
-                data: Object.values(fabricData),
-                backgroundColor: ['#007bff', '#ff9900', '#28a745', '#dc3545', '#17a2b8', '#6f42c1'],
-                borderColor: 'rgba(44, 44, 44, 1)',
-                borderWidth: 2
-            }]
-        }, {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'right',
-                    labels: {
-                        color: '#f0f0f0',
-                        padding: 10,
-                        boxWidth: 20,
-                        fontSize: 12
-                    }
-                }
-            }
-        });
-    } else if (fabricCtx) {
-        fabricCtx.parentElement.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><p>Brak danych o zużyciu tkanin.</p></div>';
-    }
-
-    // --- Wykres najbardziej dochodowych produktów ---
-    const profitableCtx = document.getElementById('mostProfitableChart');
-    const profitableData = {{ most_profitable_products | tojson }};
-    if (profitableCtx && profitableData && profitableData.length > 0) {
-        initializeChart(profitableCtx, 'bar', {
-            labels: profitableData.map(item => item[0]),
-            datasets: [{
-                label: 'Wartość produkcji w zł',
-                data: profitableData.map(item => item[1]),
-                backgroundColor: 'rgba(255, 153, 0, 0.7)',
-                borderColor: 'rgba(255, 153, 0, 1)',
-                borderWidth: 1
-            }]
-        }, {
-            indexAxis: 'y',
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: { beginAtZero: true, ticks: { color: '#f0f0f0' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
-                y: { ticks: { color: '#f0f0f0' }, grid: { display: false } }
-            },
-            plugins: { legend: { display: false } }
-        });
-    } else if (profitableCtx) {
-        profitableCtx.parentElement.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><p>Brak danych o dochodowych produktach.</p></div>';
-    }
-
-    // --- NOWA, POPRAWIONA LOGIKA URUCHAMIANIA SYNCHRONIZACJI ---
     const triggerSyncBtn = document.getElementById('trigger-sync-btn');
     if (triggerSyncBtn) {
         triggerSyncBtn.addEventListener('click', async function(event) {
