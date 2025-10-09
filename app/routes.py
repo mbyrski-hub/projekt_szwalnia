@@ -28,12 +28,12 @@ from .drive_service import upload_image_to_drive, delete_image_from_drive
 from .ai_image_service import generate_ai_images
 from werkzeug.datastructures import FileStorage
 import threading
-from .models import AiImageTask
+from .models import AiImageTask, PushSubscription
 import requests
 import locale
 import pathlib
 import qrcode
-
+from pywebpush import webpush, WebPushException 
 
 if platform.system() == 'Windows':
     config_pdf = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
@@ -236,6 +236,18 @@ def new_order():
             db.session.commit()
             flash('Zlecenie zostało dodane.', 'success')
             
+# ### POCZĄTEK NOWEGO KODU - WYSYŁANIE POWIADOMIENIA PUSH ###
+            try:
+                send_push_notification(
+                    title="Nowe zlecenie!",
+                    body=f"Dodano zlecenie {order.order_code} dla klienta {client.name}"
+                )
+            except Exception as e:
+                # Logowanie błędu, ale nie przerywanie działania aplikacji
+                print(f"Nie udało się wysłać powiadomienia push: {e}")
+            # ### KONIEC NOWEGO KODU ###
+
+
             # --- POPRAWKA TUTAJ ---
             # Usunięto generowanie i wysyłanie pliku, zastąpiono je przekierowaniem.
             return redirect(url_for('orders_list'))
@@ -1528,9 +1540,19 @@ def api_assign_cutting_table(order_id):
     if new_table and not order.cutting_started_at:
         order.cutting_started_at = datetime.utcnow()
         
-    # Ustaw datę zakończenia krojenia
+   # ### POCZĄTEK NOWEGO KODU ###
+    # Jeśli zlecenie zostało oznaczone jako "skrojone"...
     if new_table == 'skrojone':
         order.cutting_finished_at = datetime.utcnow()
+        # ...wyślij powiadomienie specjalnie dla szwalni!
+        try:
+            send_push_notification(
+                title="Zlecenie gotowe dla szwalni!",
+                body=f"Zlecenie {order.order_code} zostało skrojone i czeka na przypisanie zespołu."
+            )
+        except Exception as e:
+            print(f"Nie udało się wysłać powiadomienia push (skrojone): {e}")
+    # ### KONIEC NOWEGO KODU ###
 
     if new_table in ['stol-1', 'stol-2', 'stol-3', 'skrojone']:
         order.cutting_table = new_table
@@ -2204,3 +2226,52 @@ def order_qr_code(order_id):
     img_buffer.seek(0)
 
     return send_file(img_buffer, mimetype='image/png')
+
+# Funkcja pomocnicza do wysyłania powiadomień
+def send_push_notification(title, body):
+    """Pobiera wszystkie subskrypcje z bazy i wysyła do nich powiadomienie."""
+    subscriptions = PushSubscription.query.all()
+
+    print(f"Próba wysłania powiadomienia do {len(subscriptions)} subskrybentów.")
+
+    for sub in subscriptions:
+        try:
+            subscription_data = json.loads(sub.subscription_json)
+            data = json.dumps({'title': title, 'body': body})
+
+            webpush(
+                subscription_info=subscription_data,
+                data=data,
+                vapid_private_key=current_app.config['VAPID_PRIVATE_KEY'],
+                vapid_claims=current_app.config['VAPID_CLAIMS']
+            )
+        except WebPushException as ex:
+            print(f"Błąd wysyłania powiadomienia: {ex}")
+            # Jeśli subskrypcja wygasła (kod 410), można ją usunąć z bazy
+            if ex.response and ex.response.status_code == 410:
+                db.session.delete(sub)
+                db.session.commit()
+
+    db.session.commit()
+
+
+# Nowa trasa API do zapisywania subskrypcji
+@app.route('/api/save-subscription', methods=['POST'])
+def save_subscription():
+    subscription_data = request.get_json()
+    if not subscription_data:
+        return jsonify({'error': 'Brak danych subskrypcji'}), 400
+
+    subscription_json = json.dumps(subscription_data)
+
+    # Sprawdź, czy subskrypcja już istnieje
+    existing_subscription = PushSubscription.query.filter_by(subscription_json=subscription_json).first()
+    if not existing_subscription:
+        new_subscription = PushSubscription(subscription_json=subscription_json)
+        db.session.add(new_subscription)
+        db.session.commit()
+        print("Zapisano nową subskrypcję.")
+    else:
+        print("Ta subskrypcja już istnieje.")
+
+    return jsonify({'success': True}), 201

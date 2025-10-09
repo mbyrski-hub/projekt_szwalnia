@@ -223,3 +223,10 @@ class PriceUpdateLog(db.Model):
 
     def __repr__(self):
         return f'<PriceUpdateLog {self.item_name} changed to {self.new_price}>'
+    
+class PushSubscription(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    subscription_json = db.Column(db.Text, nullable=False)
+
+    def __repr__(self):
+        return f'<PushSubscription {self.id}>'
