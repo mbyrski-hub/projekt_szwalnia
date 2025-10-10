@@ -249,29 +249,43 @@
     .in-progress-card .text-muted {
         color: var(--text-muted-color) !important;
     }
-.comment-indicator {
+    /* === POCZĄTEK NOWEGO KODU CSS legenda do uwag === */
+    .comment-legend {
         display: none; /* Domyślnie ukryta */
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        width: 20px;
-        height: 20px;
+        font-size: 0.8rem;
+        margin-left: 15px;
+        color: #007bff;
+        font-weight: 500;
+        /* === POCZĄTEK ZMIANY === */
+        animation: blink-animation 1.5s linear infinite; /* Dodajemy animację migotania */
+        /* === KONIEC ZMIANY === */
+    }
+    .comment-legend .blue-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
         background-color: #007bff;
-        color: white;
         border-radius: 50%;
-        text-align: center;
-        font-size: 12px;
-        line-height: 20px;
-        font-family: "Font Awesome 5 Free";
-        content: "\f4ad"; /* Ikona dymku czatu */
-        font-weight: 900;
-        cursor: pointer;
-        z-index: 10;
+        margin-right: 5px;
+        vertical-align: middle;
+    }
+    
+    /* === POCZĄTEK NOWEGO KODU CSS === */
+    @keyframes blink-animation {
+        50% {
+            opacity: 0.5;
+        }
+    }
+    /* === KONIEC NOWEGO KODU CSS === */
+
+    .comment-indicator {
+        display: none; position: absolute; top: 8px; right: 8px; width: 20px; height: 20px;
+        background-color: #007bff; color: white; border-radius: 50%; text-align: center;
+        font-size: 12px; line-height: 20px; font-family: "Font Awesome 5 Free";
+        content: "\f4ad"; font-weight: 900; cursor: pointer; z-index: 10;
         animation: pulse-blue 2s infinite;
     }
-    .in-progress-card.has-new-comment .comment-indicator {
-        display: block; /* Pokaż ikonkę, gdy jest nowa uwaga */
-    }
+    .in-progress-card.has-new-comment .comment-indicator { display: block; }
     @keyframes pulse-blue {
         0% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7); }
         70% { box-shadow: 0 0 0 10px rgba(0, 123, 255, 0); }
@@ -363,7 +377,12 @@
         <div class="col-lg-10">
             <div class="card h-100">
                 <div class="card-body">
-                    <h5 class="card-title">Aktualny stan produkcji</h5>
+                    <div class="d-flex align-items-center"> <h5 class="card-title mb-0">Aktualny stan produkcji</h5>
+                        
+                        <small id="comment-legend" class="comment-legend">
+                            <span class="blue-dot"></span> Nowa uwaga z krojowni
+                        </small>
+                        </div>
                     {% include '_in_progress_strip.html' %}
                 </div>
             </div>
@@ -778,6 +797,15 @@ document.addEventListener("DOMContentLoaded", function() {
     // =======================================================
     // === NOWY KOD DO OBSŁUGI POWIADOMIEŃ O UWAGACH =======
     // =======================================================
+    // --- NOWA FUNKCJA POMOCNICZA ---
+    function updateLegendVisibility() {
+        const legend = document.getElementById('comment-legend');
+        const hasNewComments = document.querySelector('.in-progress-card.has-new-comment');
+        if (legend) {
+            legend.style.display = hasNewComments ? 'inline-block' : 'none';
+        }
+    }
+
     function checkForNewNotes() {
         fetch('/api/recent_cutting_notes')
             .then(response => response.json())
@@ -785,15 +813,15 @@ document.addEventListener("DOMContentLoaded", function() {
                 data.forEach(note => {
                     const card = document.querySelector(`.in-progress-card[data-order-id="${note.order_id}"]`);
                     if (card && !card.classList.contains('has-new-comment')) {
-                        console.log(`Nowa uwaga dla zlecenia ${note.order_id}`);
                         card.classList.add('has-new-comment');
-                        
                         const indicator = card.querySelector('.comment-indicator');
                         if (indicator) {
                             indicator.dataset.comment = note.uwagi;
                         }
                     }
                 });
+                // --- ZMIANA: Zaktualizuj widoczność legendy po sprawdzeniu ---
+                updateLegendVisibility();
             });
     }
 
@@ -811,6 +839,9 @@ document.addEventListener("DOMContentLoaded", function() {
                 $('#uwagiModal').modal('show');
 
                 card.classList.remove('has-new-comment');
+
+                // --- ZMIANA: Zaktualizuj widoczność legendy po kliknięciu ---
+                updateLegendVisibility();
             }
         });
     }
@@ -818,5 +849,6 @@ document.addEventListener("DOMContentLoaded", function() {
     setInterval(checkForNewNotes, 30000);
     checkForNewNotes();
 });
+
 </script>
 {% endblock %}

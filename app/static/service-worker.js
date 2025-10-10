@@ -1,4 +1,12 @@
-// app/static/service-worker.js
+// Aplikacja: wersja 1.1
+
+// === NOWY KOD DO OBSŁUGI AKTUALIZACJI ===
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+});
+// === KONIEC NOWEGO KODU ===
 
 // === OBSŁUGA POWIADOMIEŃ PUSH ===
 self.addEventListener('push', function(event) {

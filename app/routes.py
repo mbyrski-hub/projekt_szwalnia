@@ -1631,8 +1631,14 @@ def complete_order_part(order_id):
 def get_order_details(order_id):
     order = Order.query.get_or_404(order_id)
     details = {
-        'id': order.id, 'order_code': order.order_code, 'client_name': order.client.name, 'description': order.description,
-        'uwagi': order.uwagi,'deadline': order.deadline.strftime('%Y-%m-%d'), 'fabrics': [of.fabric.name for of in order.fabrics],
+        'id': order.id,
+        'order_code': order.order_code,
+        'client_name': order.client.name,
+        'description': order.description,
+        'uwagi': order.uwagi,
+        'uwagi_krojowni': order.uwagi_krojowni, # <-- DODAJ TĘ LINIĘ
+        'deadline': order.deadline.strftime('%Y-%m-%d'),
+        'fabrics': [of.fabric.name for of in order.fabrics],
         'products': [ { 'name': item.product.name, 'size': item.size, 'quantity': item.quantity } for item in order.order_items ]
     }
     return jsonify(details)

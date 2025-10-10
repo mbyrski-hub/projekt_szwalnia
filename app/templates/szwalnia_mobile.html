@@ -82,6 +82,47 @@
             navigator.serviceWorker.addEventListener('message', event => { if (event.data && event.data.type === 'SHOW_ORDER') { const orderId = event.data.orderId; fetchOrders().then(() => { const cardToHighlight = document.querySelector(`.order-card[data-order-id='${orderId}']`); if (cardToHighlight) { document.querySelectorAll('.order-card.highlight').forEach(c => c.classList.remove('highlight')); cardToHighlight.classList.add('highlight'); cardToHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }); } });
             document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { console.log('Aplikacja szwalni stała się widoczna. Odświeżam zlecenia...'); fetchOrders(); } });
             
+// ### KONIEC KODU PUSH ###
+
+        // === POCZĄTEK NOWEGO KODU DO WYMUSZANIA AKTUALIZACJI ===
+        function handleAppUpdates() {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/static/service-worker.js').then(reg => {
+                    reg.addEventListener('updatefound', () => {
+                        const newWorker = reg.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                Swal.fire({
+                                    title: 'Dostępna jest nowa wersja!',
+                                    text: 'Aplikacja musi zostać zaktualizowana, aby kontynuować.',
+                                    icon: 'info',
+                                    allowOutsideClick: false,
+                                    allowEscapeKey: false,
+                                    showConfirmButton: true,
+                                    confirmButtonText: 'Zaktualizuj teraz'
+                                }).then((result) => {
+                                    if (result.isConfirmed) {
+                                        newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                    }
+                                });
+                            }
+                        });
+                    });
+                });
+
+                let refreshing;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (refreshing) return;
+                    window.location.reload();
+                    refreshing = true;
+                });
+            }
+        }
+        // Wywołaj funkcję sprawdzającą aktualizacje
+        handleAppUpdates();
+        // === KONIEC NOWEGO KODU DO AKTUALIZACJI ===
+
+
             // === GŁÓWNA LOGIKA APLIKACJI (ZMIANY PONIŻEJ) ===
             const lists = {
                 'new-orders-list': document.getElementById('new-orders-list'), // NOWA LISTA

@@ -13,7 +13,7 @@
         h2 { border-bottom: 2px solid #6c757d; padding-bottom: 10px; color: #333; font-size: 1.2em; margin-top: 20px; }
         .order-list { display: flex; flex-direction: column; gap: 15px; min-height: 100px; padding: 10px; border-radius: 8px; background-color: #e9ecef; }
         #unassigned-list { flex-direction: row; flex-wrap: wrap; gap: 2%; row-gap: 15px; align-content: flex-start; }
-        .order-card { background-color: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; border-left: 5px solid #6c757d; flex-basis: 49%; box-sizing: border-box; transition: transform 0.2s, box-shadow 0.2s; position: relative; }
+        .order-card { background-color: white; padding: 15px; padding-bottom: 45px; /* Dodajemy miejsce na przycisk edycji */ border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; border-left: 5px solid #6c757d; flex-basis: 49%; box-sizing: border-box; transition: transform 0.2s, box-shadow 0.2s; position: relative; }
         .order-card.draggable { cursor: grab; }
         .order-card.dragging { opacity: 0.5; }
         .order-card.highlight { transform: scale(1.05); box-shadow: 0 4px 15px rgba(0, 123, 255, 0.5); border-left-color: #007bff; }
@@ -29,12 +29,20 @@
         .loader { text-align: center; padding: 20px; font-size: 1.2em; }
         #refresh-btn { position: fixed; bottom: 20px; right: 20px; background-color: #007bff; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); cursor: pointer; z-index: 1001;}
         .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
-        .modal-content { background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 95%; max-width: 600px; border-radius: 8px; }
+        
+        /* POPRAWKA 2 i 3: Zmniejszamy szerokość modali */
+        .modal-content { background-color: #fefefe; margin: 25% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 8px; }
+        
         .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
-        .edit-button { position: absolute; top: 10px; right: 10px; background-color: #28a745; color: white; border: none; border-radius: 5px; padding: 5px 10px; font-size: 0.8em; cursor: pointer; }
-        .material-row { display: flex; gap: 10px; margin-bottom: 10px; }
-        .material-row input { flex-grow: 1; border: 1px solid #ccc; padding: 8px; border-radius: 4px; font-size: 1rem; }
-        .remove-material-btn { background-color: #dc3545; color: white; border: none; border-radius: 4px; padding: 0 10px; }
+        
+        /* POPRAWKA 1: Przycisk Edytuj w prawym dolnym rogu */
+        .edit-button { position: absolute; bottom: 10px; right: 10px; background-color: #28a745; color: white; border: none; border-radius: 5px; padding: 5px 10px; font-size: 0.8em; cursor: pointer; }
+        
+        /* POPRAWKA 3: Upewniamy się, że przycisk usuwania się mieści */
+        .material-row { display: flex; gap: 5px; margin-bottom: 10px; align-items: center; }
+        .material-row input { flex: 1; border: 1px solid #ccc; padding: 8px; border-radius: 4px; font-size: 1rem; min-width: 0; }
+        .remove-material-btn { background-color: #dc3545; color: white; border: none; border-radius: 4px; padding: 8px 12px; height: 100%; }
+        
         #cutting-notes { width: 100%; box-sizing: border-box; border: 1px solid #ccc; padding: 8px; border-radius: 4px; font-size: 1rem; }
         .modal-footer { text-align: right; }
         .btn { padding: 10px 15px; border-radius: 5px; border: none; cursor: pointer; }
@@ -85,73 +93,52 @@
         </div>
     </div>
 
+    <datalist id="materials-datalist"></datalist>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // ### POCZĄTEK KODU PUSH I SERVICE WORKER ###
+            // ### KOD PUSH, SERVICE WORKER I AKTUALIZACJI (BEZ ZMIAN) ###
             const enableNotificationsBtn = document.getElementById('enable-notifications-btn');
             const vapidPublicKey = '{{ config.VAPID_PUBLIC_KEY }}';
-
             function urlBase64ToUint8Array(base64String) { const padding = '='.repeat((4 - base64String.length % 4) % 4); const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/'); const rawData = window.atob(base64); const outputArray = new Uint8Array(rawData.length); for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); } return outputArray; }
+            async function subscribeUser(registration) { if (!vapidPublicKey || vapidPublicKey.includes('TWOJ')) { console.error("Klucz VAPID_PUBLIC_KEY nie jest poprawnie ustawiony w config.py!"); alert("Błąd konfiguracji: Brak klucza publicznego VAPID."); return; } try { const permission = await Notification.requestPermission(); if (permission !== 'granted') throw new Error('Zgoda na powiadomienia odrzucona.'); const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) }); await fetch('/api/save-subscription', { method: 'POST', body: JSON.stringify(subscription), headers: { 'Content-Type': 'application/json' } }); alert('Powiadomienia zostały włączone!'); enableNotificationsBtn.style.display = 'none'; } catch (error) { console.error('Błąd podczas subskrypcji:', error); if (Notification.permission === 'denied') { alert('Powiadomienia są zablokowane. Zmień ustawienia przeglądarki dla tej strony.'); } else { alert('Nie udało się włączyć powiadomień.'); } } }
+            if ('serviceWorker' in navigator && 'PushManager' in window) { navigator.serviceWorker.register('/static/service-worker.js').then(registration => { console.log('Service Worker zarejestrowany.'); enableNotificationsBtn.addEventListener('click', () => subscribeUser(registration)); return registration.pushManager.getSubscription(); }).then(subscription => { if (subscription === null && Notification.permission !== 'denied') { enableNotificationsBtn.style.display = 'block'; } }).catch(error => console.error('Błąd inicjalizacji Service Workera:', error)); }
+            navigator.serviceWorker.addEventListener('message', event => { if (event.data && event.data.type === 'SHOW_ORDER') { const orderId = event.data.orderId; const cardToHighlight = document.querySelector(`.order-card[data-order-id='${orderId}']`); if (cardToHighlight) { document.querySelectorAll('.order-card.highlight').forEach(c => c.classList.remove('highlight')); cardToHighlight.classList.add('highlight'); cardToHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' }); } } });
+            function handleAppUpdates() { if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/service-worker.js').then(reg => { reg.addEventListener('updatefound', () => { const newWorker = reg.installing; newWorker.addEventListener('statechange', () => { if (newWorker.state === 'installed' && navigator.serviceWorker.controller) { Swal.fire({ title: 'Dostępna jest nowa wersja!', text: 'Aplikacja musi zostać zaktualizowana, aby kontynuować.', icon: 'info', allowOutsideClick: false, allowEscapeKey: false, showConfirmButton: true, confirmButtonText: 'Zaktualizuj teraz' }).then((result) => { if (result.isConfirmed) { newWorker.postMessage({ type: 'SKIP_WAITING' }); } }); } }); }); }); let refreshing; navigator.serviceWorker.addEventListener('controllerchange', () => { if (refreshing) return; window.location.reload(); refreshing = true; }); } }
+            handleAppUpdates();
+            // ### KONIEC SEKCJI PUSH ###
 
-            async function subscribeUser(registration) {
-                if (!vapidPublicKey || vapidPublicKey.includes('TWOJ')) { console.error("Klucz VAPID_PUBLIC_KEY nie jest poprawnie ustawiony w config.py!"); alert("Błąd konfiguracji: Brak klucza publicznego VAPID."); return; }
-                try { const permission = await Notification.requestPermission(); if (permission !== 'granted') throw new Error('Zgoda na powiadomienia odrzucona.'); const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) }); await fetch('/api/save-subscription', { method: 'POST', body: JSON.stringify(subscription), headers: { 'Content-Type': 'application/json' } }); alert('Powiadomienia zostały włączone!'); enableNotificationsBtn.style.display = 'none'; } catch (error) { console.error('Błąd podczas subskrypcji:', error); if (Notification.permission === 'denied') { alert('Powiadomienia są zablokowane. Zmień ustawienia przeglądarki dla tej strony.'); } else { alert('Nie udało się włączyć powiadomień.'); } }
-            }
-
-            if ('serviceWorker' in navigator && 'PushManager' in window) {
-                navigator.serviceWorker.register('/static/service-worker.js')
-                    .then(registration => {
-                        console.log('Service Worker zarejestrowany.');
-                        enableNotificationsBtn.addEventListener('click', () => subscribeUser(registration));
-                        return registration.pushManager.getSubscription();
-                    })
-                    .then(subscription => {
-                        if (subscription === null && Notification.permission !== 'denied') {
-                            enableNotificationsBtn.style.display = 'block';
-                        }
-                    })
-                    .catch(error => console.error('Błąd inicjalizacji Service Workera:', error));
-            }
-
-            navigator.serviceWorker.addEventListener('message', event => {
-                if (event.data && event.data.type === 'SHOW_ORDER') {
-                    const orderId = event.data.orderId;
-                    const cardToHighlight = document.querySelector(`.order-card[data-order-id='${orderId}']`);
-                    if (cardToHighlight) {
-                        document.querySelectorAll('.order-card.highlight').forEach(c => c.classList.remove('highlight'));
-                        cardToHighlight.classList.add('highlight');
-                        cardToHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
-                }
-            });
-            // ### KONIEC KODU PUSH ###
-
-            // --- GŁÓWNA LOGIKA APLIKACJI ---
+            // --- GŁÓWNA LOGIKA APLIKACJI (Z POPRAWKAMI) ---
             const lists = { 'unassigned-list': document.getElementById('unassigned-list'), 'stol-1-list': document.getElementById('stol-1-list'), 'stol-2-list': document.getElementById('stol-2-list'), 'stol-3-list': document.getElementById('stol-3-list'), 'skrojone-list': document.getElementById('skrojone-list'), };
             const zones = { 'stol-1': document.getElementById('stol-1-zone'), 'stol-2': document.getElementById('stol-2-zone'), 'stol-3': document.getElementById('stol-3-zone'), 'skrojone': document.getElementById('skrojone-zone'), 'unassigned': document.getElementById('unassigned-list') };
             let draggedItem = null;
-
             const detailsModal = document.getElementById('details-modal');
             const editModal = document.getElementById('edit-modal'); 
             let currentEditingOrderId = null; 
 
-            // --- Logika zamykania modali ---
             detailsModal.querySelector('.close-btn').onclick = () => { detailsModal.style.display = 'none'; };
             editModal.querySelector('.close-btn').onclick = () => { editModal.style.display = 'none'; };
             window.onclick = (event) => { if (event.target == detailsModal) detailsModal.style.display = 'none'; if (event.target == editModal) editModal.style.display = 'none'; };
             
+            // POPRAWKA 2: Dodajemy obsługę obu uwag
             async function showOrderDetails(orderId) {
                 const modalDetails = document.getElementById('modal-details');
                 modalDetails.innerHTML = '<div class="loader">Ładowanie...</div>';
                 detailsModal.style.display = 'block';
                 const response = await fetch(`/api/order/${orderId}/details`);
                 const data = await response.json();
+                
                 let productsHtml = '<h4>Produkty:</h4><ul>';
                 data.products.forEach(p => { productsHtml += `<li><strong>${p.name}</strong> - ${p.size}: ${p.quantity} szt.</li>`; });
                 productsHtml += '</ul>';
                 
                 let uwagiHtml = '';
-                if (data.uwagi) { uwagiHtml = `<div style="background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: .25rem; padding: .75rem; margin-top: 1rem;"><h5 style="color: #856404; margin-top: 0; font-size: 1rem;"><i class="fas fa-exclamation-triangle"></i> Uwagi do zlecenia:</h5><p style="margin-bottom: 0;">${data.uwagi}</p></div>`; }
+                if (data.uwagi) {
+                    uwagiHtml += `<div style="background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 1rem;"><h5 style="color: #856404; margin-top: 0; font-size: 1rem;"><i class="fas fa-exclamation-triangle"></i> Uwagi do zlecenia:</h5><p style="margin-bottom: 0;">${data.uwagi}</p></div>`;
+                }
+                if (data.uwagi_krojowni) {
+                    uwagiHtml += `<div style="background-color: #d1ecf1; border-left: 5px solid #bee5eb; padding: 10px; margin-top: 1rem;"><h5 style="color: #0c5460; margin-top: 0; font-size: 1rem;"><i class="fas fa-cut"></i> Uwagi z Krojowni:</h5><p style="margin-bottom: 0;">${data.uwagi_krojowni}</p></div>`;
+                }
 
                 modalDetails.innerHTML = `<p><strong>Klient:</strong> ${data.client_name}</p><p><strong>Opis:</strong> ${data.description || 'Brak'}</p>${uwagiHtml}<hr>${productsHtml}`;
             }
@@ -164,36 +151,31 @@
             }
 
             function renderOrders(orders) {
-    Object.values(lists).forEach(list => list.innerHTML = '');
-    orders.forEach(order => {
-        const isSkrojone = order.cutting_table === 'skrojone';
-        const orderCard = document.createElement('div');
-        orderCard.className = 'order-card draggable';
-        
-        // ZMIANA: Karta jest przeciągalna ZAWSZE, CHYBA ŻE jest w "skrojone"
-        orderCard.draggable = !isSkrojone; 
-        if(isSkrojone) {
-            orderCard.style.cursor = 'default';
-        }
+                Object.values(lists).forEach(list => list.innerHTML = '');
+                orders.forEach(order => {
+                    const isSkrojone = order.cutting_table === 'skrojone';
+                    const orderCard = document.createElement('div');
+                    orderCard.className = 'order-card';
+                    orderCard.draggable = !isSkrojone; 
+                    if (!isSkrojone) { orderCard.classList.add('draggable'); } 
+                    else { orderCard.style.cursor = 'default'; }
+                    orderCard.dataset.orderId = order.id;
+                    
+                    let editButtonHtml = `<button class="edit-button" data-order-id="${order.id}"><i class="fas fa-edit"></i> Edytuj</button>`;
 
-        orderCard.dataset.orderId = order.id;
-        
-        // ZMIANA: Przycisk edycji jest teraz widoczny ZAWSZE
-        let editButtonHtml = `<button class="edit-button" data-order-id="${order.id}"><i class="fas fa-edit"></i> Edytuj</button>`;
-
-        orderCard.innerHTML = `
-            <div class="order-card-header">${order.order_code}</div>
-            <div class="order-card-client">${order.client_name}</div>
-            ${editButtonHtml}
-        `;
-        
-        const targetListId = order.cutting_table ? `${order.cutting_table}-list` : 'unassigned-list';
-        if (lists[targetListId]) {
-            lists[targetListId].appendChild(orderCard);
-        }
-    });
-    addEventListeners();
-}
+                    orderCard.innerHTML = `
+                        <div class="order-card-header">${order.order_code}</div>
+                        <div class="order-card-client">${order.client_name}</div>
+                        ${editButtonHtml}
+                    `;
+                    
+                    const targetListId = order.cutting_table ? `${order.cutting_table}-list` : 'unassigned-list';
+                    if (lists[targetListId]) {
+                        lists[targetListId].appendChild(orderCard);
+                    }
+                });
+                addEventListeners();
+            }
 
             function addEventListeners() {
                 document.querySelectorAll('.order-card').forEach(item => {
@@ -206,7 +188,6 @@
                         item.addEventListener('dragend', () => { if (draggedItem) draggedItem.classList.remove('dragging'); draggedItem = null; });
                     }
                 });
-
                 document.querySelectorAll('.edit-button').forEach(button => {
                     button.addEventListener('click', (e) => {
                         e.stopPropagation();
@@ -216,10 +197,8 @@
                 });
             }
 
-            // --- NOWA LOGIKA DLA MODALA EDYCJI ---
             const materialsEditor = document.getElementById('materials-editor');
             const cuttingNotesInput = document.getElementById('cutting-notes');
-            let allMaterialsDatalistOptions = '';
 
             async function openEditModal(orderId) {
                 currentEditingOrderId = orderId;
@@ -230,12 +209,12 @@
 
                 const response = await fetch(`/api/order/${orderId}/usage_details`);
                 const data = await response.json();
-
-                allMaterialsDatalistOptions = (data.all_materials || []).map(m => `<option value="${m}"></option>`).join('');
-                document.getElementById('materials-datalist').innerHTML = allMaterialsDatalistOptions;
+                
+                // POPRAWKA 4: Prawidłowe wypełnienie datalist
+                const datalist = document.getElementById('materials-datalist');
+                datalist.innerHTML = (data.all_materials || []).map(m => `<option value="${m}"></option>`).join('');
 
                 cuttingNotesInput.value = data.uwagi_krojowni;
-                
                 materialsEditor.innerHTML = '';
                 data.materials.forEach(mat => addMaterialRow(mat.name, mat.quantity));
             }
@@ -243,43 +222,30 @@
             function addMaterialRow(name = '', quantity = '') {
                 const row = document.createElement('div');
                 row.className = 'material-row';
-                
                 const nameInput = document.createElement('input');
                 nameInput.type = 'text'; nameInput.value = name; nameInput.placeholder = 'Nazwa materiału'; nameInput.setAttribute('list', 'materials-datalist');
                 const quantityInput = document.createElement('input');
                 quantityInput.type = 'text'; quantityInput.value = quantity; quantityInput.placeholder = 'Ilość i jednostka';
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'remove-material-btn'; removeBtn.innerHTML = '<i class="fas fa-trash"></i>'; removeBtn.onclick = () => row.remove();
-
                 row.appendChild(nameInput); row.appendChild(quantityInput); row.appendChild(removeBtn);
                 materialsEditor.appendChild(row);
             }
             
-            const datalist = document.createElement('datalist');
-            datalist.id = 'materials-datalist';
-            document.body.appendChild(datalist);
-
             document.getElementById('add-material-btn').addEventListener('click', () => addMaterialRow());
-
             document.getElementById('save-edit-btn').addEventListener('click', async () => {
                 const materials = [];
                 materialsEditor.querySelectorAll('.material-row').forEach(row => {
                     const inputs = row.querySelectorAll('input');
-                    if (inputs[0].value && inputs[1].value) {
-                        materials.push({ name: inputs[0].value, quantity: inputs[1].value });
-                    }
+                    if (inputs[0].value && inputs[1].value) { materials.push({ name: inputs[0].value, quantity: inputs[1].value }); }
                 });
-
                 const payload = { uwagi_krojowni: cuttingNotesInput.value, materials: materials };
-
                 await fetch(`/api/order/${currentEditingOrderId}/cutting_feedback`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
                 });
-                
                 editModal.style.display = 'none';
                 alert('Zmiany zostały zapisane!');
             });
-            // --- KONIEC NOWEJ LOGIKI ---
 
             Object.entries(zones).forEach(([zoneId, zone]) => {
                 zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
@@ -304,7 +270,6 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ table: table })
                 });
-                // Po przypisaniu, odświeżamy zlecenia, aby zaktualizować wygląd przycisków
                 await fetchOrders();
             }
             
