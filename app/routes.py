@@ -237,23 +237,29 @@ def new_order():
             db.session.commit()
             flash('Zlecenie zostało dodane.', 'success')
             
-# ### POCZĄTEK NOWEGO KODU - WYSYŁANIE POWIADOMIENIA PUSH ###
+            # ### POCZĄTEK POPRAWIONEGO KODU - WYSYŁANIE POWIADOMIENIA PUSH DO OBU APLIKACJI ###
             try:
+                # 1. Powiadomienie dla Krojowni
                 send_push_notification(
-                        title="Nowe zlecenie!",
-                        body=f"Dodano zlecenie {order.order_code} dla klienta {client.name}",
-                        target_url='/mobile/krojownia'  # <-- WSKAZUJEMY NA KROJOWNIĘ
-                    )
+                    title="Nowe zlecenie w systemie!",
+                    body=f"Dodano zlecenie {order.order_code} dla {client.name}. Sprawdź je w aplikacji.",
+                    target_url=url_for('show_order', order_id=order.id, _external=False),
+                    app_context='krojownia' # Kontekst dla krojowni
+                )
+                # 2. Powiadomienie dla Szwalni
+                send_push_notification(
+                    title="Nowe zlecenie w systemie!",
+                    body=f"Nowe zlecenie {order.order_code} czeka na obróbkę w krojowni.",
+                    target_url=url_for('show_order', order_id=order.id, _external=False),
+                    app_context='szwalnia' # Kontekst dla szwalni
+                )
             except Exception as e:
                 # Logowanie błędu, ale nie przerywanie działania aplikacji
                 print(f"Nie udało się wysłać powiadomienia push: {e}")
-            # ### KONIEC NOWEGO KODU ###
+            # ### KONIEC POPRAWIONEGO KODU ###
 
 
-            # --- POPRAWKA TUTAJ ---
-            # Usunięto generowanie i wysyłanie pliku, zastąpiono je przekierowaniem.
             return redirect(url_for('orders_list'))
-            # --- KONIEC POPRAWKI ---
 
         except Exception as e:
             db.session.rollback()
@@ -1509,6 +1515,19 @@ def calculator():
                            products=products, fabrics=fabrics, materials=materials,
                            categories=categories, products_json=json.dumps(products_data))
 
+# ### NOWY KOD - SERWOWANIE SERVICE WORKERA Z ZAKAZEM CACHOWANIA ###
+@app.route('/service-worker.js')
+def service_worker():
+    """
+    Serwuje plik service-worker.js z nagłówkami, które zapobiegają
+    jego cachowaniu przez przeglądarkę. To kluczowe dla mechanizmu aktualizacji.
+    """
+    response = make_response(send_from_directory('static', 'service-worker.js'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
 # =================================================
 # === API DLA APLIKACJI MOBILNEJ ==================
 # =================================================
@@ -1546,13 +1565,13 @@ def api_assign_cutting_table(order_id):
     # Jeśli zlecenie zostało oznaczone jako "skrojone"...
     if new_table == 'skrojone':
         order.cutting_finished_at = datetime.utcnow()
-        # ...wyślij powiadomienie specjalnie dla szwalni!
         try:
             send_push_notification(
-        title="Zlecenie gotowe dla szwalni!",
-        body=f"Zlecenie {order.order_code} zostało skrojone i czeka na przypisanie.",
-        target_url='/mobile/szwalnia'  # <-- WSKAZUJEMY NA SZWALNIĘ
-    )
+                title="Zlecenie gotowe dla szwalni!",
+                body=f"Zlecenie {order.order_code} zostało skrojone i czeka na przypisanie.",
+                target_url=url_for('show_order', order_id=order.id, _external=False), # Bardziej szczegółowy URL
+                app_context='szwalnia' # Dodajemy kontekst
+            )
         except Exception as e:
             print(f"Nie udało się wysłać powiadomienia push (skrojone): {e}")
     # ### KONIEC NOWEGO KODU ###
@@ -2237,26 +2256,27 @@ def order_qr_code(order_id):
     return send_file(img_buffer, mimetype='image/png')
 
 # Funkcja pomocnicza do wysyłania powiadomień
-def send_push_notification(title, body, target_url='/'): # Dodajemy nowy argument target_url
+def send_push_notification(title, body, target_url='/', app_context='szwalnia'): # Dodajemy app_context
     """Pobiera wszystkie subskrypcje z bazy i wysyła do nich powiadomienie."""
     subscriptions = PushSubscription.query.all()
 
-    print(f"Próba wysłania powiadomienia do {len(subscriptions)} subskrybentów.")
+    print(f"Próba wysłania powiadomienia do {len(subscriptions)} subskrybentów (kontekst: {app_context}).")
 
     for sub in subscriptions:
         try:
             subscription_data = json.loads(sub.subscription_json)
-            # DODAJEMY 'target_url' DO WYSYŁANYCH DANYCH
+            # DODAJEMY 'app_context' DO WYSYŁANYCH DANYCH
             data_to_send = json.dumps({
                 'title': title,
                 'body': body,
-                'target_url': target_url
+                'target_url': target_url,
+                'app_context': app_context  # Nowe, kluczowe pole!
             })
 
             vapid_claims = current_app.config.get('VAPID_CLAIMS')
             if not vapid_claims or 'sub' not in vapid_claims:
-                 print("KRYTYCZNY BŁĄD: VAPID_CLAIMS nie jest poprawnie ustawione...")
-                 return
+                print("KRYTYCZNY BŁĄD: VAPID_CLAIMS nie jest poprawnie ustawione...")
+                return
 
             webpush(
                 subscription_info=subscription_data,

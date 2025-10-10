@@ -49,9 +49,12 @@
         .btn-primary { background-color: #007bff; color: white; }
         .btn-secondary { background-color: #6c757d; color: white; }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
-    <div class="header">Krojownia</div>
+    <div class="header">
+    Krojownia <span id="app-version" style="font-size: 0.6em; opacity: 0.8; font-weight: normal;"></span>
+</div>
     <div class="container">
         <div class="text-center my-3">
             <button id="enable-notifications-btn" class="btn btn-primary" style="display: none; background-color: #28a745; border-color: #28a745;">
@@ -102,8 +105,48 @@
             const vapidPublicKey = '{{ config.VAPID_PUBLIC_KEY }}';
             function urlBase64ToUint8Array(base64String) { const padding = '='.repeat((4 - base64String.length % 4) % 4); const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/'); const rawData = window.atob(base64); const outputArray = new Uint8Array(rawData.length); for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); } return outputArray; }
             async function subscribeUser(registration) { if (!vapidPublicKey || vapidPublicKey.includes('TWOJ')) { console.error("Klucz VAPID_PUBLIC_KEY nie jest poprawnie ustawiony w config.py!"); alert("Błąd konfiguracji: Brak klucza publicznego VAPID."); return; } try { const permission = await Notification.requestPermission(); if (permission !== 'granted') throw new Error('Zgoda na powiadomienia odrzucona.'); const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) }); await fetch('/api/save-subscription', { method: 'POST', body: JSON.stringify(subscription), headers: { 'Content-Type': 'application/json' } }); alert('Powiadomienia zostały włączone!'); enableNotificationsBtn.style.display = 'none'; } catch (error) { console.error('Błąd podczas subskrypcji:', error); if (Notification.permission === 'denied') { alert('Powiadomienia są zablokowane. Zmień ustawienia przeglądarki dla tej strony.'); } else { alert('Nie udało się włączyć powiadomień.'); } } }
-            if ('serviceWorker' in navigator && 'PushManager' in window) { navigator.serviceWorker.register('/static/service-worker.js').then(registration => { console.log('Service Worker zarejestrowany.'); enableNotificationsBtn.addEventListener('click', () => subscribeUser(registration)); return registration.pushManager.getSubscription(); }).then(subscription => { if (subscription === null && Notification.permission !== 'denied') { enableNotificationsBtn.style.display = 'block'; } }).catch(error => console.error('Błąd inicjalizacji Service Workera:', error)); }
-            navigator.serviceWorker.addEventListener('message', event => { if (event.data && event.data.type === 'SHOW_ORDER') { const orderId = event.data.orderId; const cardToHighlight = document.querySelector(`.order-card[data-order-id='${orderId}']`); if (cardToHighlight) { document.querySelectorAll('.order-card.highlight').forEach(c => c.classList.remove('highlight')); cardToHighlight.classList.add('highlight'); cardToHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' }); } } });
+            // ### NOWA, ZAKTUALIZOWANA SEKCJA OBSŁUGI SERVICE WORKERA ###
+if ('serviceWorker' in navigator && 'PushManager' in window) {
+    navigator.serviceWorker.register('/service-worker.js').then(registration => {
+        console.log('Service Worker zarejestrowany.');
+        enableNotificationsBtn.addEventListener('click', () => subscribeUser(registration));
+
+        // Poproś o wersję, gdy SW będzie gotowy
+        navigator.serviceWorker.ready.then(readyReg => {
+            if (readyReg.active) {
+                readyReg.active.postMessage({ type: 'GET_VERSION' });
+            }
+        });
+
+        return registration.pushManager.getSubscription();
+    }).then(subscription => {
+        if (subscription === null && Notification.permission !== 'denied') {
+            enableNotificationsBtn.style.display = 'block';
+        }
+    }).catch(error => console.error('Błąd inicjalizacji Service Workera:', error));
+}
+
+// Nasłuchuj wiadomości od Service Workera (teraz obsługuje 2 typy wiadomości)
+navigator.serviceWorker.addEventListener('message', event => {
+    // Wiadomość z wersją aplikacji
+    if (event.data && event.data.type === 'VERSION_RESPONSE') {
+        const versionSpan = document.getElementById('app-version');
+        if (versionSpan) {
+            versionSpan.textContent = `v${event.data.version}`;
+        }
+    }
+
+    // Wiadomość o podświetleniu zlecenia
+    if (event.data && event.data.type === 'SHOW_ORDER') {
+        const orderId = event.data.orderId;
+        const cardToHighlight = document.querySelector(`.order-card[data-order-id='${orderId}']`);
+        if (cardToHighlight) {
+            document.querySelectorAll('.order-card.highlight').forEach(c => c.classList.remove('highlight'));
+            cardToHighlight.classList.add('highlight');
+            cardToHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+});
             function handleAppUpdates() { if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/service-worker.js').then(reg => { reg.addEventListener('updatefound', () => { const newWorker = reg.installing; newWorker.addEventListener('statechange', () => { if (newWorker.state === 'installed' && navigator.serviceWorker.controller) { Swal.fire({ title: 'Dostępna jest nowa wersja!', text: 'Aplikacja musi zostać zaktualizowana, aby kontynuować.', icon: 'info', allowOutsideClick: false, allowEscapeKey: false, showConfirmButton: true, confirmButtonText: 'Zaktualizuj teraz' }).then((result) => { if (result.isConfirmed) { newWorker.postMessage({ type: 'SKIP_WAITING' }); } }); } }); }); }); let refreshing; navigator.serviceWorker.addEventListener('controllerchange', () => { if (refreshing) return; window.location.reload(); refreshing = true; }); } }
             handleAppUpdates();
             // ### KONIEC SEKCJI PUSH ###
@@ -273,8 +316,36 @@
                 await fetchOrders();
             }
             
-            document.getElementById('refresh-btn').addEventListener('click', fetchOrders);
-            fetchOrders();
+            // ### POCZĄTEK NOWEGO KODU - OBSŁUGA LINKÓW Z POWIADOMIEŃ ###
+function handleUrlHash() {
+    if (window.location.hash.startsWith('#showOrder=')) {
+        const orderId = window.location.hash.split('=')[1];
+        if (orderId) {
+            // Funkcja, która poczeka aż karta zlecenia pojawi się w DOM i ją podświetli
+            const highlightCardWhenReady = (id) => {
+                const interval = setInterval(() => {
+                    const cardToHighlight = document.querySelector(`.order-card[data-order-id='${id}']`);
+                    if (cardToHighlight) {
+                        clearInterval(interval);
+                        setTimeout(() => { // Dajemy chwilę na wyrenderowanie wszystkiego
+                            document.querySelectorAll('.order-card.highlight').forEach(c => c.classList.remove('highlight'));
+                            cardToHighlight.classList.add('highlight');
+                            cardToHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 200);
+                    }
+                }, 100); // Sprawdzaj co 100ms
+            };
+            highlightCardWhenReady(orderId);
+            // Czyścimy hash z URL, żeby nie przeszkadzał
+            history.pushState("", document.title, window.location.pathname + window.location.search);
+        }
+    }
+}
+// ### KONIEC NOWEGO KODU ###
+
+document.getElementById('refresh-btn').addEventListener('click', fetchOrders);
+handleUrlHash(); // <-- Dodaj to wywołanie
+fetchOrders();
         });
     </script>
 </body>
