@@ -249,7 +249,34 @@
     .in-progress-card .text-muted {
         color: var(--text-muted-color) !important;
     }
-
+.comment-indicator {
+        display: none; /* Domyślnie ukryta */
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 20px;
+        height: 20px;
+        background-color: #007bff;
+        color: white;
+        border-radius: 50%;
+        text-align: center;
+        font-size: 12px;
+        line-height: 20px;
+        font-family: "Font Awesome 5 Free";
+        content: "\f4ad"; /* Ikona dymku czatu */
+        font-weight: 900;
+        cursor: pointer;
+        z-index: 10;
+        animation: pulse-blue 2s infinite;
+    }
+    .in-progress-card.has-new-comment .comment-indicator {
+        display: block; /* Pokaż ikonkę, gdy jest nowa uwaga */
+    }
+    @keyframes pulse-blue {
+        0% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(0, 123, 255, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0); }
+    }
 </style>
 {% endblock %}
 
@@ -475,6 +502,23 @@
     </div>
 
 </div>
+<div class="modal fade" id="uwagiModal" tabindex="-1" role="dialog" aria-labelledby="uwagiModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="uwagiModalLabel"><i class="fas fa-cut"></i> Uwagi z Krojowni</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body" id="uwagiModalBody">
+        </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Zamknij</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 
@@ -485,6 +529,9 @@
 <script>
 document.addEventListener("DOMContentLoaded", function() {
     
+    // =======================================================
+    // === TWÓJ ISTNIEJĄCY KOD DO OBSŁUGI WYKRESÓW I ZEGARA ===
+    // =======================================================
     let fabricChart = null;
     let profitableChart = null;
 
@@ -727,6 +774,49 @@ document.addEventListener("DOMContentLoaded", function() {
             });
         });
     }
+
+    // =======================================================
+    // === NOWY KOD DO OBSŁUGI POWIADOMIEŃ O UWAGACH =======
+    // =======================================================
+    function checkForNewNotes() {
+        fetch('/api/recent_cutting_notes')
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(note => {
+                    const card = document.querySelector(`.in-progress-card[data-order-id="${note.order_id}"]`);
+                    if (card && !card.classList.contains('has-new-comment')) {
+                        console.log(`Nowa uwaga dla zlecenia ${note.order_id}`);
+                        card.classList.add('has-new-comment');
+                        
+                        const indicator = card.querySelector('.comment-indicator');
+                        if (indicator) {
+                            indicator.dataset.comment = note.uwagi;
+                        }
+                    }
+                });
+            });
+    }
+
+    const inProgressStrip = document.querySelector('.in-progress-strip');
+    if (inProgressStrip) {
+        inProgressStrip.addEventListener('click', function(e) {
+            if (e.target.classList.contains('comment-indicator')) {
+                e.preventDefault(); 
+                e.stopPropagation();
+
+                const commentText = e.target.dataset.comment;
+                const card = e.target.closest('.in-progress-card');
+
+                document.getElementById('uwagiModalBody').textContent = commentText;
+                $('#uwagiModal').modal('show');
+
+                card.classList.remove('has-new-comment');
+            }
+        });
+    }
+
+    setInterval(checkForNewNotes, 30000);
+    checkForNewNotes();
 });
 </script>
 {% endblock %}

@@ -38,6 +38,7 @@ class OrderProductForm(Form):
 class OrderForm(FlaskForm):
     client_name = StringField('Nazwa klienta', validators=[DataRequired()])
     description = TextAreaField('Opis zlecenia', validators=[DataRequired()])
+    uwagi = TextAreaField('Uwagi do zlecenia (opcjonalnie)') # <-- DODAJ TĘ LINIĘ
     
     # --- ZMIANA: Z SelectField na FieldList ---
     fabrics = FieldList(FormField(FabricSelectionForm), min_entries=1)

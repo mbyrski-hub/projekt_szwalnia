@@ -10,52 +10,41 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; background-color: #f4f4f8; color: #333; }
         .container { padding: 10px; }
         .header { background-color: #28a745; color: white; padding: 15px; text-align: center; font-size: 1.5em; position: sticky; top: 0; z-index: 1000; }
-        h2 { border-bottom: 2px solid #28a745; padding-bottom: 10px; color: #28a745; margin-top: 20px; font-size: 1.2em;}
-        .order-list { display: flex; flex-direction: column; gap: 15px; min-height: 100px; padding: 10px; border-radius: 8px; background-color: #e9ecef; }
+        h2 { border-bottom: 2px solid #6c757d; padding-bottom: 10px; color: #333; margin-top: 20px; font-size: 1.2em;}
+        h2.sewing-title { border-color: #28a745; color: #28a745; }
+
+        .order-list { display: flex; flex-direction: row; flex-wrap: wrap; gap: 2%; row-gap: 15px; min-height: 100px; padding: 10px; border-radius: 8px; background-color: #e9ecef; align-content: flex-start; }
+        .order-card { background-color: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; border-left: 5px solid #6c757d; flex-basis: 49%; box-sizing: border-box; position: relative; transition: transform 0.2s, box-shadow 0.2s; }
         
-        #unassigned-list {
-            flex-direction: row; flex-wrap: wrap; gap: 2%; row-gap: 15px; align-content: flex-start;
-        }
-        .order-card {
-            background-color: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            cursor: pointer; border-left: 5px solid #6c757d; flex-basis: 49%; box-sizing: border-box; position: relative;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
+        /* Karty, których nie da się przeciągnąć */
+        .order-card.readonly { cursor: default; background-color: #f8f9fa; }
         .order-card.draggable { cursor: grab; }
         .order-card.dragging { opacity: 0.5; }
 
-        /* NOWY STYL: Styl dla podświetlonej karty */
-        .order-card.highlight {
-            transform: scale(1.05);
-            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.5);
-            border-left-color: #28a745;
-        }
-
+        .order-card.highlight { transform: scale(1.05); box-shadow: 0 4px 15px rgba(40, 167, 69, 0.5); border-left-color: #28a745; }
         .order-card-header { font-weight: bold; font-size: 1.1em; margin-bottom: 5px; }
         .order-card-client { font-size: 0.9em; color: #555; }
+        .order-card-status { font-size: 0.8em; color: #007bff; font-weight: bold; margin-top: 8px; }
+
         .drop-zone { border: 2px dashed #ccc; margin-top: 15px; border-radius: 8px;}
+        .drop-zone .order-list { flex-direction: column; flex-wrap: nowrap; } /* Listy w strefach zrzutu są kolumnowe */
+        .drop-zone .order-card { width: 100%; flex-basis: auto; }
         .drop-zone.drag-over { background-color: #d4edda; border-color: #28a745; }
+
         .team-title { background-color: #28a745; color: white; padding: 10px; border-radius: 5px 5px 0 0; margin: 0; font-size: 1.2em;}
-        .loader { text-align: center; padding: 20px; font-size: 1.2em; }
-        #refresh-btn { position: fixed; bottom: 20px; right: 20px; background-color: #28a745; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); cursor: pointer; z-index: 1001;}
-
-        .split-icon { position: absolute; top: 10px; right: 10px; font-size: 1.4em; color: #007bff; cursor: pointer; padding: 5px; }
-        .split-icon:hover { color: #0056b3; }
-
         #zrealizowane-zone .team-title { background-color: #343a40; }
 
+        .loader { text-align: center; padding: 20px; font-size: 1.2em; width: 100%; }
+        #refresh-btn { position: fixed; bottom: 20px; right: 20px; background-color: #28a745; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); cursor: pointer; z-index: 1001;}
+        .split-icon { position: absolute; top: 10px; right: 10px; font-size: 1.4em; color: #007bff; cursor: pointer; padding: 5px; }
         .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
         .modal-content { background-color: #fefefe; margin: 25% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 8px; }
         .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
         #modal-details ul { list-style-type: none; padding: 0; }
-        #modal-details li { background: #eee; padding: 5px; margin-bottom: 3px; border-radius: 3px; }
-        
         #confirm-modal .modal-content { text-align: center; }
-        #confirm-modal-text { font-size: 1.1em; margin-bottom: 20px; }
         .confirm-buttons { display: flex; justify-content: space-around; }
         .confirm-btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; color: white; min-width: 100px; }
-        #confirm-yes-btn { background-color: #28a745; }
-        #confirm-no-btn { background-color: #6c757d; }
+        #confirm-yes-btn { background-color: #28a745; } #confirm-no-btn { background-color: #6c757d; }
     </style>
 </head>
 <body>
@@ -63,334 +52,163 @@
     <div class="container">
         <div class="text-center my-3">
             <button id="enable-notifications-btn" class="btn btn-primary" style="display: none; background-color: #28a745; border-color: #28a745;">
-                <i class="fas fa-bell"></i> Włącz powiadomienia o zleceniach
+                <i class="fas fa-bell"></i> Włącz powiadomienia
             </button>
         </div>
 
-        <h2>Do przypisania</h2>
+        <h2>Nowe / W krojowni</h2>
+        <div class="order-list" id="new-orders-list"></div>
+
+        <h2 class="sewing-title">Do szycia (Skrojone)</h2>
         <div class="order-list" id="unassigned-list"></div>
 
-        <div class="drop-zone" id="zespol-1-zone">
-            <h2 class="team-title">Zespół 1</h2>
-            <div class="order-list" id="zespol-1-list"></div>
-        </div>
-        <div class="drop-zone" id="zespol-2-zone">
-            <h2 class="team-title">Zespół 2</h2>
-            <div class="order-list" id="zespol-2-list"></div>
-        </div>
-        <div class="drop-zone" id="zrealizowane-zone">
-            <h2 class="team-title">Zrealizowane</h2>
-            <div class="order-list" id="zrealizowane-list"></div>
-        </div>
+        <div class="drop-zone" id="zespol-1-zone"><h2 class="team-title">Zespół 1</h2><div class="order-list" id="zespol-1-list"></div></div>
+        <div class="drop-zone" id="zespol-2-zone"><h2 class="team-title">Zespół 2</h2><div class="order-list" id="zespol-2-list"></div></div>
+        <div class="drop-zone" id="zrealizowane-zone"><h2 class="team-title">Zrealizowane</h2><div class="order-list" id="zrealizowane-list"></div></div>
     </div>
     <button id="refresh-btn"><i class="fas fa-sync-alt"></i></button>
 
-    <div id="details-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-btn">&times;</span>
-            <h3 id="modal-title">Szczegóły zlecenia</h3>
-            <div id="modal-details"></div>
-        </div>
-    </div>
-
-    <div id="confirm-modal" class="modal">
-        <div class="modal-content">
-            <p id="confirm-modal-text"></p>
-            <div class="confirm-buttons">
-                <button id="confirm-yes-btn" class="confirm-btn">Tak</button>
-                <button id="confirm-no-btn" class="confirm-btn">Anuluj</button>
-            </div>
-        </div>
-    </div>
+    <div id="details-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Szczegóły zlecenia</h3><div id="modal-details"></div></div></div>
+    <div id="confirm-modal" class="modal"><div class="modal-content"><p id="confirm-modal-text"></p><div class="confirm-buttons"><button id="confirm-yes-btn" class="confirm-btn">Tak</button><button id="confirm-no-btn" class="confirm-btn">Anuluj</button></div></div></div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-
-            // ### NOWY KOD: Obsługa powiadomień i deep linking ###
+            // === KOD OBSŁUGI POWIADOMIEŃ (BEZ ZMIAN) ===
             const enableNotificationsBtn = document.getElementById('enable-notifications-btn');
             const vapidPublicKey = '{{ config.VAPID_PUBLIC_KEY }}';
-
-            function urlBase64ToUint8Array(base64String) {
-                const padding = '='.repeat((4 - base64String.length % 4) % 4);
-                const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-                const rawData = window.atob(base64);
-                const outputArray = new Uint8Array(rawData.length);
-                for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
-                return outputArray;
-            }
-
-            function initializePushNotifications() {
-                if (!('serviceWorker' in navigator && 'PushManager' in window)) {
-                    console.warn('Powiadomienia push nie są wspierane w tej przeglądarce.');
-                    return;
-                }
-                navigator.serviceWorker.register('/static/service-worker.js')
-                    .then(swReg => {
-                        console.log('Service Worker zarejestrowany.');
-                        swReg.pushManager.getSubscription().then(subscription => {
-                            if (subscription === null) {
-                                if (Notification.permission !== 'denied') {
-                                    enableNotificationsBtn.style.display = 'block';
-                                }
-                            } else {
-                                console.log('Użytkownik już zasubskrybowany.');
-                            }
-                        });
-                    }).catch(error => console.error('Błąd rejestracji Service Workera:', error));
-            }
-
-            async function subscribeUser() {
-                try {
-                    const permission = await Notification.requestPermission();
-                    if (permission !== 'granted') throw new Error('Zgoda na powiadomienia odrzucona.');
-                    
-                    const registration = await navigator.serviceWorker.ready;
-                    const subscription = await registration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-                    });
-                    
-                    const response = await fetch('/api/save-subscription', {
-                        method: 'POST', body: JSON.stringify(subscription),
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-
-                    if (response.ok) {
-                        alert('Powiadomienia zostały włączone!');
-                        enableNotificationsBtn.style.display = 'none';
-                    } else { throw new Error('Błąd zapisu subskrypcji na serwerze.'); }
-                } catch (error) {
-                    console.error('Błąd subskrypcji:', error);
-                    if (Notification.permission === 'denied') {
-                        alert('Powiadomienia są zablokowane. Zmień ustawienia przeglądarki dla tej strony.');
-                    } else {
-                        alert('Nie udało się włączyć powiadomień.');
-                    }
-                }
-            }
-
-            enableNotificationsBtn.addEventListener('click', subscribeUser);
-            initializePushNotifications();
-
-            navigator.serviceWorker.addEventListener('message', event => {
-                if (event.data && event.data.type === 'SHOW_ORDER') {
-                    const orderId = event.data.orderId;
-                    const cardToHighlight = document.querySelector(`.order-card[data-order-id='${orderId}']`);
-                    if (cardToHighlight) {
-                        document.querySelectorAll('.order-card.highlight').forEach(c => c.classList.remove('highlight'));
-                        cardToHighlight.classList.add('highlight');
-                        cardToHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
-                }
-            });
-            // ### KONIEC NOWEGO KODU ###
-
-
-            // PONIŻEJ TWÓJ ISTNIEJĄCY KOD (BEZ ZMIAN)
+            function urlBase64ToUint8Array(base64String) { const padding = '='.repeat((4 - base64String.length % 4) % 4); const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/'); const rawData = window.atob(base64); const outputArray = new Uint8Array(rawData.length); for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); } return outputArray; }
+            async function subscribeUser(registration) { try { const permission = await Notification.requestPermission(); if (permission !== 'granted') throw new Error('Zgoda na powiadomienia odrzucona.'); const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) }); await fetch('/api/save-subscription', { method: 'POST', body: JSON.stringify(subscription), headers: { 'Content-Type': 'application/json' } }); alert('Powiadomienia zostały włączone!'); enableNotificationsBtn.style.display = 'none'; } catch (error) { console.error('Błąd podczas subskrypcji:', error); if (Notification.permission === 'denied') { alert('Powiadomienia są zablokowane. Zmień ustawienia przeglądarki dla tej strony.'); } else { alert('Nie udało się włączyć powiadomień.'); } } }
+            if ('serviceWorker' in navigator && 'PushManager' in window) { navigator.serviceWorker.register('/static/service-worker.js').then(registration => { console.log('Service Worker zarejestrowany dla szwalni.'); enableNotificationsBtn.addEventListener('click', () => subscribeUser(registration)); return registration.pushManager.getSubscription(); }).then(subscription => { if (subscription === null && Notification.permission !== 'denied') { enableNotificationsBtn.style.display = 'block'; } }).catch(error => console.error('Błąd inicjalizacji Service Workera:', error)); }
+            navigator.serviceWorker.addEventListener('message', event => { if (event.data && event.data.type === 'SHOW_ORDER') { const orderId = event.data.orderId; fetchOrders().then(() => { const cardToHighlight = document.querySelector(`.order-card[data-order-id='${orderId}']`); if (cardToHighlight) { document.querySelectorAll('.order-card.highlight').forEach(c => c.classList.remove('highlight')); cardToHighlight.classList.add('highlight'); cardToHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }); } });
+            document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { console.log('Aplikacja szwalni stała się widoczna. Odświeżam zlecenia...'); fetchOrders(); } });
+            
+            // === GŁÓWNA LOGIKA APLIKACJI (ZMIANY PONIŻEJ) ===
             const lists = {
+                'new-orders-list': document.getElementById('new-orders-list'), // NOWA LISTA
                 'unassigned-list': document.getElementById('unassigned-list'),
                 'zespol-1-list': document.getElementById('zespol-1-list'),
                 'zespol-2-list': document.getElementById('zespol-2-list'),
                 'zrealizowane-list': document.getElementById('zrealizowane-list')
             };
-            const zones = {
-                'zespol-1': document.getElementById('zespol-1-zone'),
-                'zespol-2': document.getElementById('zespol-2-zone'),
-                'zrealizowane': document.getElementById('zrealizowane-zone'),
-                'unassigned': document.getElementById('unassigned-list')
-            };
-            let draggedItem = null;
-            let originalContainer = null;
-
-            const detailsModal = document.getElementById('details-modal');
-            const modalDetails = document.getElementById('modal-details');
-            const closeModalBtn = detailsModal.querySelector('.close-btn');
-            
-            const confirmModal = document.getElementById('confirm-modal');
-            const confirmModalText = document.getElementById('confirm-modal-text');
-            const confirmYesBtn = document.getElementById('confirm-yes-btn');
-            const confirmNoBtn = document.getElementById('confirm-no-btn');
-
-            closeModalBtn.onclick = () => { detailsModal.style.display = 'none'; };
-            confirmNoBtn.onclick = () => { confirmModal.style.display = 'none'; };
-            window.onclick = (event) => { 
-                if (event.target == detailsModal) { detailsModal.style.display = 'none'; }
-                if (event.target == confirmModal) { confirmModal.style.display = 'none'; }
-            };
+            const zones = { 'zespol-1': document.getElementById('zespol-1-zone'), 'zespol-2': document.getElementById('zespol-2-zone'), 'zrealizowane': document.getElementById('zrealizowane-zone'), 'unassigned': document.getElementById('unassigned-list') };
+            let draggedItem = null; let originalContainer = null;
+            const detailsModal = document.getElementById('details-modal'); const modalDetails = document.getElementById('modal-details'); const closeModalBtn = detailsModal.querySelector('.close-btn');
+            const confirmModal = document.getElementById('confirm-modal'); const confirmModalText = document.getElementById('confirm-modal-text'); const confirmYesBtn = document.getElementById('confirm-yes-btn'); const confirmNoBtn = document.getElementById('confirm-no-btn');
+            closeModalBtn.onclick = () => { detailsModal.style.display = 'none'; }; confirmNoBtn.onclick = () => { confirmModal.style.display = 'none'; }; window.onclick = (event) => { if (event.target == detailsModal) { detailsModal.style.display = 'none'; } if (event.target == confirmModal) { confirmModal.style.display = 'none'; } };
             
             async function showOrderDetails(orderId) {
-                modalDetails.innerHTML = '<div class="loader">Ładowanie...</div>';
-                detailsModal.style.display = 'block';
-                const response = await fetch(`/api/order/${orderId}/details`);
-                const data = await response.json();
-                let productsHtml = '<h4>Produkty:</h4><ul>';
-                data.products.forEach(p => {
-                    productsHtml += `<li><strong>${p.name}</strong> - ${p.size}: ${p.quantity} szt.</li>`;
-                });
-                productsHtml += '</ul>';
-                modalDetails.innerHTML = `
-                    <p><strong>Klient:</strong> ${data.client_name}</p>
-                    <p><strong>Opis:</strong> ${data.description || 'Brak'}</p>
-                    ${productsHtml}
-                `;
-            }
+    modalDetails.innerHTML = '<div class="loader">Ładowanie...</div>';
+    detailsModal.style.display = 'block';
 
+    const response = await fetch(`/api/order/${orderId}/details`);
+    const data = await response.json();
+
+    // 1. Przygotuj listę produktów (bez zmian)
+    let productsHtml = '<h4>Produkty:</h4><ul>';
+    data.products.forEach(p => {
+        productsHtml += `<li><strong>${p.name}</strong> - ${p.size}: ${p.quantity} szt.</li>`;
+    });
+    productsHtml += '</ul>';
+
+    // 2. Przygotuj sekcję "Uwagi" (tylko jeśli uwagi istnieją)
+    let uwagiHtml = '';
+    if (data.uwagi) {
+        // Używamy stylowanego bloku, aby uwagi rzucały się w oczy
+        uwagiHtml = `
+            <div style="background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: .25rem; padding: .75rem; margin-top: 1rem;">
+                <h5 style="color: #856404; margin-top: 0; font-size: 1rem;">
+                    <i class="fas fa-exclamation-triangle"></i> Uwagi do zlecenia:
+                </h5>
+                <p style="margin-bottom: 0;">${data.uwagi}</p>
+            </div>
+        `;
+    }
+
+    // 3. Połącz wszystkie elementy w całość
+    modalDetails.innerHTML = `
+        <p><strong>Klient:</strong> ${data.client_name}</p>
+        <p><strong>Opis:</strong> ${data.description || 'Brak'}</p>
+        ${uwagiHtml}
+        <hr>
+        ${productsHtml}
+    `;
+}
+
+            // ZMIANA: Wywołanie nowego API
             async function fetchOrders() {
-                lists['unassigned-list'].innerHTML = '<div class="loader">Ładowanie zleceń...</div>';
+                Object.values(lists).forEach(list => list.innerHTML = '<div class="loader">Ładowanie...</div>');
                 try {
-                    const response = await fetch('/api/szwalnia/orders');
+                    const response = await fetch('/api/szwalnia/orders_overview'); // <-- NOWE API
                     if (!response.ok) throw new Error('Network response was not ok');
                     const orders = await response.json();
                     renderOrders(orders);
                 } catch (error) {
                     console.error('Fetch error:', error);
                     lists['unassigned-list'].innerHTML = '<div class="loader" style="color: red;">Błąd ładowania</div>';
+                    lists['new-orders-list'].innerHTML = '';
                 }
             }
 
+            // ZMIANA: Nowa logika renderowania
             function renderOrders(orders) {
                 Object.values(lists).forEach(list => list.innerHTML = '');
 
                 orders.forEach(order => {
-                    const assignedTeam = order.assigned_team;
-                    
-                    if (assignedTeam === 'OBA') {
-                        if (!order.team1_completed) {
-                            const card1 = createCard(order, 'zespol-1', true);
-                            lists['zespol-1-list'].appendChild(card1);
+                    // Kategoria 1: Zlecenia do szycia (skrojone)
+                    if (order.cutting_table === 'skrojone') {
+                        const assignedTeam = order.assigned_team;
+                        if (assignedTeam === 'OBA') {
+                            if (!order.team1_completed) lists['zespol-1-list'].appendChild(createCard(order, 'zespol-1', true));
+                            if (!order.team2_completed) lists['zespol-2-list'].appendChild(createCard(order, 'zespol-2', true));
+                        } else if (assignedTeam) {
+                            lists[`${assignedTeam}-list`].appendChild(createCard(order, assignedTeam, true, true));
+                        } else {
+                            lists['unassigned-list'].appendChild(createCard(order, null, true, true));
                         }
-                        if (!order.team2_completed) {
-                            const card2 = createCard(order, 'zespol-2', true);
-                            lists['zespol-2-list'].appendChild(card2);
+                    } 
+                    // Kategoria 2: Zlecenia nowe lub w krojowni
+                    else {
+                        let statusText = "Nowe, czeka na krojownię";
+                        if(order.cutting_table) {
+                           statusText = `W krojowni (${order.cutting_table})`;
                         }
-                    } else if (assignedTeam) {
-                        const card = createCard(order, assignedTeam, true, true); 
-                        lists[`${assignedTeam}-list`].appendChild(card);
-                    } else {
-                        const card = createCard(order, null, true, true);
-                        lists['unassigned-list'].appendChild(card);
+                        lists['new-orders-list'].appendChild(createCard(order, null, false, false, statusText));
                     }
                 });
                 addEventListeners();
             }
 
-            function createCard(order, teamContext = null, draggable = false, addSplitIcon = false) {
+            // ZMIANA: createCard przyjmuje nowe argumenty
+            function createCard(order, teamContext = null, draggable = false, addSplitIcon = false, statusText = null) {
                 const card = document.createElement('div');
                 card.className = 'order-card';
-                if (draggable) card.classList.add('draggable');
+                if (draggable) {
+                    card.classList.add('draggable');
+                } else {
+                    card.classList.add('readonly'); // Dodajemy klasę dla kart tylko do odczytu
+                }
                 card.draggable = draggable;
                 card.dataset.orderId = order.id;
                 if (teamContext) card.dataset.teamContext = teamContext;
                 
+                let statusHtml = statusText ? `<div class="order-card-status">${statusText}</div>` : '';
+                let splitIconHtml = addSplitIcon ? `<i class="fas fa-arrows-alt-h split-icon" title="Przypisz do obu zespołów"></i>` : '';
+
                 card.innerHTML = `
                     <div class="order-card-header">${order.order_code}</div>
                     <div class="order-card-client">${order.client_name}</div>
-                    ${addSplitIcon ? `<i class="fas fa-arrows-alt-h split-icon" title="Przypisz do obu zespołów"></i>` : ''}
+                    ${statusHtml}
+                    ${splitIconHtml}
                 `;
                 return card;
             }
 
-            function addEventListeners() {
-                document.querySelectorAll('.order-card').forEach(item => {
-                    item.addEventListener('click', (e) => {
-                        if (e.target.classList.contains('split-icon')) return;
-                        showOrderDetails(item.dataset.orderId);
-                    });
+            function addEventListeners() { /* ... bez zmian ... */ document.querySelectorAll('.order-card').forEach(item => { item.addEventListener('click', (e) => { if (e.target.classList.contains('split-icon')) return; showOrderDetails(item.dataset.orderId); }); if (item.draggable) { item.addEventListener('dragstart', (e) => { if (e.target.classList.contains('split-icon')) { e.preventDefault(); return; } draggedItem = item; originalContainer = item.parentElement; setTimeout(() => item.classList.add('dragging'), 0); }); item.addEventListener('dragend', () => { if (draggedItem) draggedItem.classList.remove('dragging'); draggedItem = null; originalContainer = null; }); } }); document.querySelectorAll('.split-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const card = e.target.closest('.order-card'); const orderId = card.dataset.orderId; const orderCode = card.querySelector('.order-card-header').innerText; confirmModalText.innerHTML = `Czy na pewno chcesz przypisać zlecenie <br><strong>${orderCode}</strong> do OBU zespołów?`; confirmModal.style.display = 'block'; confirmYesBtn.onclick = async () => { await assignTeam(orderId, 'OBA'); confirmModal.style.display = 'none'; }; }); }); }
 
-                    if (item.draggable) {
-                        item.addEventListener('dragstart', (e) => {
-                            if (e.target.classList.contains('split-icon')) { e.preventDefault(); return; }
-                            draggedItem = item;
-                            originalContainer = item.parentElement;
-                            setTimeout(() => item.classList.add('dragging'), 0);
-                        });
-                        item.addEventListener('dragend', () => {
-                            if (draggedItem) draggedItem.classList.remove('dragging');
-                            draggedItem = null;
-                            originalContainer = null;
-                        });
-                    }
-                });
-
-                document.querySelectorAll('.split-icon').forEach(icon => {
-                    icon.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        const card = e.target.closest('.order-card');
-                        const orderId = card.dataset.orderId;
-                        const orderCode = card.querySelector('.order-card-header').innerText;
-                        
-                        confirmModalText.innerHTML = `Czy na pewno chcesz przypisać zlecenie <br><strong>${orderCode}</strong> do OBU zespołów?`;
-                        confirmModal.style.display = 'block';
-
-                        confirmYesBtn.onclick = async () => {
-                            await assignTeam(orderId, 'OBA');
-                            confirmModal.style.display = 'none';
-                        };
-                    });
-                });
-            }
-
-            Object.entries(zones).forEach(([zoneId, zone]) => {
-                zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
-                zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
-                zone.addEventListener('drop', async e => {
-                    e.preventDefault();
-                    zone.classList.remove('drag-over');
-                    if (!draggedItem) return;
-
-                    const orderId = draggedItem.dataset.orderId;
-                    const list = zone.querySelector('.order-list');
-                    
-                    if (zoneId === 'zrealizowane') {
-                        const teamContext = draggedItem.dataset.teamContext;
-                        const orderCode = draggedItem.querySelector('.order-card-header').innerText;
-                        
-                        confirmModalText.innerHTML = `Czy chcesz zakończyć pracę nad zleceniem <br><strong>${orderCode}</strong>?`;
-                        confirmModal.style.display = 'block';
-
-                        confirmYesBtn.onclick = async () => {
-                            confirmModal.style.display = 'none';
-                            await completeOrder(orderId, teamContext);
-                        };
-
-                        const handleCancel = () => {
-                           if (originalContainer && draggedItem) {
-                                originalContainer.appendChild(draggedItem);
-                           }
-                           confirmNoBtn.removeEventListener('click', handleCancel);
-                        };
-                        confirmNoBtn.addEventListener('click', handleCancel);
-                        confirmModal.addEventListener('click', (evt) => {
-                            if (evt.target === confirmModal) {
-                                handleCancel();
-                            }
-                        }, { once: true });
-
-                    } else {
-                        const team = zoneId === 'unassigned' ? null : zoneId;
-                        list.appendChild(draggedItem);
-                        await assignTeam(orderId, team);
-                    }
-                });
-            });
-
-            async function assignTeam(orderId, team) {
-                await fetch(`/api/order/${orderId}/assign_team`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ team: team })
-                });
-                await fetchOrders();
-            }
-
-            async function completeOrder(orderId, teamContext) {
-                await fetch(`/api/order/${orderId}/complete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ completed_by: teamContext })
-                });
-                await fetchOrders();
-            }
+            Object.entries(zones).forEach(([zoneId, zone]) => { /* ... bez zmian ... */ zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); }); zone.addEventListener('dragleave', () => zone.classList.remove('drag-over')); zone.addEventListener('drop', async e => { e.preventDefault(); zone.classList.remove('drag-over'); if (!draggedItem) return; const orderId = draggedItem.dataset.orderId; const list = zone.querySelector('.order-list'); if (zoneId === 'zrealizowane') { const teamContext = draggedItem.dataset.teamContext; const orderCode = draggedItem.querySelector('.order-card-header').innerText; confirmModalText.innerHTML = `Czy chcesz zakończyć pracę nad zleceniem <br><strong>${orderCode}</strong>?`; confirmModal.style.display = 'block'; confirmYesBtn.onclick = async () => { confirmModal.style.display = 'none'; await completeOrder(orderId, teamContext); }; const handleCancel = () => { if (originalContainer && draggedItem) { originalContainer.appendChild(draggedItem); } confirmNoBtn.removeEventListener('click', handleCancel); }; confirmNoBtn.addEventListener('click', handleCancel); confirmModal.addEventListener('click', (evt) => { if (evt.target === confirmModal) { handleCancel(); } }, { once: true }); } else { const team = zoneId === 'unassigned' ? null : zoneId; list.appendChild(draggedItem); await assignTeam(orderId, team); } }); });
+            
+            async function assignTeam(orderId, team) { /* ... bez zmian ... */ await fetch(`/api/order/${orderId}/assign_team`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ team: team }) }); await fetchOrders(); }
+            async function completeOrder(orderId, teamContext) { /* ... bez zmian ... */ await fetch(`/api/order/${orderId}/complete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ completed_by: teamContext }) }); await fetchOrders(); }
             
             document.getElementById('refresh-btn').addEventListener('click', fetchOrders);
             fetchOrders();

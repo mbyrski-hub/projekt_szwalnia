@@ -36,6 +36,11 @@
                         {{ form.description.label(class="form-label") }}
                         {{ form.description(class="form-control", rows=4) }}
                     </div>
+
+                    <div class="form-group">
+                            {{ form.uwagi.label(class="form-label") }}
+                            {{ form.uwagi(class="form-control", rows=2, placeholder="np. Użyć grubszej nici, zwrócić uwagę na szwy...") }}
+                        </div>
                     
                     <div class="form-group">
                         {{ form.login_info.label(class="form-label") }}
@@ -350,6 +355,65 @@
         }
 
         reindexAll();
+
+        const orderForm = document.querySelector('form'); // Znajdź główny formularz na stronie
+        if (!orderForm) return;
+
+        let isFormDirty = false; // Flaga śledząca, czy formularz został zmieniony
+
+        // 1. Ustaw flagę 'isFormDirty' na true, gdy użytkownik coś wpisze
+        orderForm.addEventListener('input', () => {
+            isFormDirty = true;
+        });
+
+        // 2. Zresetuj flagę po poprawnym wysłaniu formularza, aby alert się nie pokazał
+        orderForm.addEventListener('submit', () => {
+            isFormDirty = false;
+            // Usuwamy nasłuchiwanie, aby po zapisie można było normalnie opuścić stronę
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        });
+
+        // 3. Główny mechanizm: natywne okno przeglądarki
+        const handleBeforeUnload = (event) => {
+            if (isFormDirty) {
+                event.preventDefault();
+                // Standard wymagany przez przeglądarki
+                event.returnValue = 'Masz niezapisane zmiany. Czy na pewno chcesz opuścić stronę?';
+                return event.returnValue;
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        // 4. Ulepszenie: SweetAlert dla linków wewnętrznych
+        document.querySelectorAll('a').forEach(link => {
+            // Ignoruj linki, które nie prowadzą do innych stron (np. zakładki)
+            if (link.href && link.href.startsWith(window.location.origin) && !link.href.includes('#')) {
+                link.addEventListener('click', function(event) {
+                    if (isFormDirty) {
+                        event.preventDefault(); // Zatrzymaj domyślną akcję linku
+                        
+                        Swal.fire({
+                            title: 'Niezapisane zmiany',
+                            text: "Masz niezapisane zmiany w formularzu. Czy na pewno chcesz opuścić stronę?",
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonColor: '#3085d6',
+                            cancelButtonColor: '#d33',
+                            confirmButtonText: 'Tak, opuść stronę',
+                            cancelButtonText: 'Anuluj'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                // Jeśli użytkownik potwierdzi, wyłącz flagę i przejdź do linku
+                                isFormDirty = false;
+                                window.location.href = this.href;
+                            }
+                        });
+                    }
+                });
+            }
+        });
     });
+
+    ;
 </script>
 {% endblock %}

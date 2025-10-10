@@ -13,7 +13,7 @@
         h2 { border-bottom: 2px solid #6c757d; padding-bottom: 10px; color: #333; font-size: 1.2em; margin-top: 20px; }
         .order-list { display: flex; flex-direction: column; gap: 15px; min-height: 100px; padding: 10px; border-radius: 8px; background-color: #e9ecef; }
         #unassigned-list { flex-direction: row; flex-wrap: wrap; gap: 2%; row-gap: 15px; align-content: flex-start; }
-        .order-card { background-color: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; border-left: 5px solid #6c757d; flex-basis: 49%; box-sizing: border-box; transition: transform 0.2s, box-shadow 0.2s; }
+        .order-card { background-color: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; border-left: 5px solid #6c757d; flex-basis: 49%; box-sizing: border-box; transition: transform 0.2s, box-shadow 0.2s; position: relative; }
         .order-card.draggable { cursor: grab; }
         .order-card.dragging { opacity: 0.5; }
         .order-card.highlight { transform: scale(1.05); box-shadow: 0 4px 15px rgba(0, 123, 255, 0.5); border-left-color: #007bff; }
@@ -29,10 +29,17 @@
         .loader { text-align: center; padding: 20px; font-size: 1.2em; }
         #refresh-btn { position: fixed; bottom: 20px; right: 20px; background-color: #007bff; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); cursor: pointer; z-index: 1001;}
         .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
-        .modal-content { background-color: #fefefe; margin: 25% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 8px; }
+        .modal-content { background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 95%; max-width: 600px; border-radius: 8px; }
         .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
-        #modal-details ul { list-style-type: none; padding: 0; }
-        #modal-details li { background: #eee; padding: 5px; margin-bottom: 3px; border-radius: 3px; }
+        .edit-button { position: absolute; top: 10px; right: 10px; background-color: #28a745; color: white; border: none; border-radius: 5px; padding: 5px 10px; font-size: 0.8em; cursor: pointer; }
+        .material-row { display: flex; gap: 10px; margin-bottom: 10px; }
+        .material-row input { flex-grow: 1; border: 1px solid #ccc; padding: 8px; border-radius: 4px; font-size: 1rem; }
+        .remove-material-btn { background-color: #dc3545; color: white; border: none; border-radius: 4px; padding: 0 10px; }
+        #cutting-notes { width: 100%; box-sizing: border-box; border: 1px solid #ccc; padding: 8px; border-radius: 4px; font-size: 1rem; }
+        .modal-footer { text-align: right; }
+        .btn { padding: 10px 15px; border-radius: 5px; border: none; cursor: pointer; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-secondary { background-color: #6c757d; color: white; }
     </style>
 </head>
 <body>
@@ -51,53 +58,44 @@
         <div class="drop-zone" id="skrojone-zone"><h2 class="table-title">Skrojone</h2><div class="order-list" id="skrojone-list"></div></div>
     </div>
     <button id="refresh-btn"><i class="fas fa-sync-alt"></i></button>
-    <div id="details-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3 id="modal-title">Szczegóły zlecenia</h3><div id="modal-details"></div></div></div>
+
+    <div id="details-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h3>Szczegóły zlecenia</h3>
+            <div id="modal-details"></div>
+        </div>
+    </div>
+    
+    <div id="edit-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h3 id="edit-modal-title">Edytuj dane z krojowni</h3>
+            <div id="edit-modal-body">
+                <h4>Rzeczywiste zużycie materiałów</h4>
+                <div id="materials-editor"></div>
+                <button id="add-material-btn" class="btn btn-secondary btn-sm mt-2"><i class="fas fa-plus"></i> Dodaj materiał</button>
+                <hr>
+                <h4>Uwagi z krojowni</h4>
+                <textarea id="cutting-notes" rows="3" placeholder="Wpisz uwagi..."></textarea>
+            </div>
+            <div class="modal-footer mt-3">
+                <button id="save-edit-btn" class="btn btn-primary">Zapisz zmiany</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // ### POCZĄTEK NOWEGO, POPRAWIONEGO KODU PUSH ###
+            // ### POCZĄTEK KODU PUSH I SERVICE WORKER ###
             const enableNotificationsBtn = document.getElementById('enable-notifications-btn');
             const vapidPublicKey = '{{ config.VAPID_PUBLIC_KEY }}';
 
-            function urlBase64ToUint8Array(base64String) {
-                const padding = '='.repeat((4 - base64String.length % 4) % 4);
-                const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-                const rawData = window.atob(base64);
-                const outputArray = new Uint8Array(rawData.length);
-                for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
-                return outputArray;
-            }
+            function urlBase64ToUint8Array(base64String) { const padding = '='.repeat((4 - base64String.length % 4) % 4); const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/'); const rawData = window.atob(base64); const outputArray = new Uint8Array(rawData.length); for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); } return outputArray; }
 
             async function subscribeUser(registration) {
-                if (!vapidPublicKey || vapidPublicKey.includes('TWOJ')) {
-                    console.error("Klucz VAPID_PUBLIC_KEY nie jest poprawnie ustawiony w config.py!");
-                    alert("Błąd konfiguracji: Brak klucza publicznego VAPID.");
-                    return;
-                }
-                try {
-                    const permission = await Notification.requestPermission();
-                    if (permission !== 'granted') throw new Error('Zgoda na powiadomienia odrzucona.');
-                    
-                    const subscription = await registration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-                    });
-                    
-                    await fetch('/api/save-subscription', {
-                        method: 'POST', body: JSON.stringify(subscription),
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    
-                    alert('Powiadomienia zostały włączone!');
-                    enableNotificationsBtn.style.display = 'none';
-                } catch (error) {
-                    console.error('Błąd podczas subskrypcji:', error);
-                    if (Notification.permission === 'denied') {
-                        alert('Powiadomienia są zablokowane. Zmień ustawienia przeglądarki dla tej strony.');
-                    } else {
-                        alert('Nie udało się włączyć powiadomień.');
-                    }
-                }
+                if (!vapidPublicKey || vapidPublicKey.includes('TWOJ')) { console.error("Klucz VAPID_PUBLIC_KEY nie jest poprawnie ustawiony w config.py!"); alert("Błąd konfiguracji: Brak klucza publicznego VAPID."); return; }
+                try { const permission = await Notification.requestPermission(); if (permission !== 'granted') throw new Error('Zgoda na powiadomienia odrzucona.'); const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) }); await fetch('/api/save-subscription', { method: 'POST', body: JSON.stringify(subscription), headers: { 'Content-Type': 'application/json' } }); alert('Powiadomienia zostały włączone!'); enableNotificationsBtn.style.display = 'none'; } catch (error) { console.error('Błąd podczas subskrypcji:', error); if (Notification.permission === 'denied') { alert('Powiadomienia są zablokowane. Zmień ustawienia przeglądarki dla tej strony.'); } else { alert('Nie udało się włączyć powiadomień.'); } }
             }
 
             if ('serviceWorker' in navigator && 'PushManager' in window) {
@@ -105,7 +103,6 @@
                     .then(registration => {
                         console.log('Service Worker zarejestrowany.');
                         enableNotificationsBtn.addEventListener('click', () => subscribeUser(registration));
-
                         return registration.pushManager.getSubscription();
                     })
                     .then(subscription => {
@@ -127,46 +124,36 @@
                     }
                 }
             });
-            // ### KONIEC NOWEGO KODU PUSH ###
+            // ### KONIEC KODU PUSH ###
 
-            // --- POCZĄTEK TWOJEGO ORYGINALNEGO KODU ---
-            const lists = {
-                'unassigned-list': document.getElementById('unassigned-list'),
-                'stol-1-list': document.getElementById('stol-1-list'),
-                'stol-2-list': document.getElementById('stol-2-list'),
-                'stol-3-list': document.getElementById('stol-3-list'),
-                'skrojone-list': document.getElementById('skrojone-list'),
-            };
-            const zones = {
-                'stol-1': document.getElementById('stol-1-zone'),
-                'stol-2': document.getElementById('stol-2-zone'),
-                'stol-3': document.getElementById('stol-3-zone'),
-                'skrojone': document.getElementById('skrojone-zone'),
-                'unassigned': document.getElementById('unassigned-list')
-            };
+            // --- GŁÓWNA LOGIKA APLIKACJI ---
+            const lists = { 'unassigned-list': document.getElementById('unassigned-list'), 'stol-1-list': document.getElementById('stol-1-list'), 'stol-2-list': document.getElementById('stol-2-list'), 'stol-3-list': document.getElementById('stol-3-list'), 'skrojone-list': document.getElementById('skrojone-list'), };
+            const zones = { 'stol-1': document.getElementById('stol-1-zone'), 'stol-2': document.getElementById('stol-2-zone'), 'stol-3': document.getElementById('stol-3-zone'), 'skrojone': document.getElementById('skrojone-zone'), 'unassigned': document.getElementById('unassigned-list') };
             let draggedItem = null;
 
-            const modal = document.getElementById('details-modal');
-            const modalDetails = document.getElementById('modal-details');
-            const closeModal = modal.querySelector('.close-btn');
-            closeModal.onclick = () => { modal.style.display = 'none'; };
-            window.onclick = (event) => { if (event.target == modal) { modal.style.display = 'none'; } };
+            const detailsModal = document.getElementById('details-modal');
+            const editModal = document.getElementById('edit-modal'); 
+            let currentEditingOrderId = null; 
 
+            // --- Logika zamykania modali ---
+            detailsModal.querySelector('.close-btn').onclick = () => { detailsModal.style.display = 'none'; };
+            editModal.querySelector('.close-btn').onclick = () => { editModal.style.display = 'none'; };
+            window.onclick = (event) => { if (event.target == detailsModal) detailsModal.style.display = 'none'; if (event.target == editModal) editModal.style.display = 'none'; };
+            
             async function showOrderDetails(orderId) {
+                const modalDetails = document.getElementById('modal-details');
                 modalDetails.innerHTML = '<div class="loader">Ładowanie...</div>';
-                modal.style.display = 'block';
+                detailsModal.style.display = 'block';
                 const response = await fetch(`/api/order/${orderId}/details`);
                 const data = await response.json();
                 let productsHtml = '<h4>Produkty:</h4><ul>';
-                data.products.forEach(p => {
-                    productsHtml += `<li><strong>${p.name}</strong> - ${p.size}: ${p.quantity} szt.</li>`;
-                });
+                data.products.forEach(p => { productsHtml += `<li><strong>${p.name}</strong> - ${p.size}: ${p.quantity} szt.</li>`; });
                 productsHtml += '</ul>';
-                modalDetails.innerHTML = `
-                    <p><strong>Klient:</strong> ${data.client_name}</p>
-                    <p><strong>Opis:</strong> ${data.description || 'Brak'}</p>
-                    ${productsHtml}
-                `;
+                
+                let uwagiHtml = '';
+                if (data.uwagi) { uwagiHtml = `<div style="background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: .25rem; padding: .75rem; margin-top: 1rem;"><h5 style="color: #856404; margin-top: 0; font-size: 1rem;"><i class="fas fa-exclamation-triangle"></i> Uwagi do zlecenia:</h5><p style="margin-bottom: 0;">${data.uwagi}</p></div>`; }
+
+                modalDetails.innerHTML = `<p><strong>Klient:</strong> ${data.client_name}</p><p><strong>Opis:</strong> ${data.description || 'Brak'}</p>${uwagiHtml}<hr>${productsHtml}`;
             }
 
             async function fetchOrders() {
@@ -177,39 +164,122 @@
             }
 
             function renderOrders(orders) {
-                Object.values(lists).forEach(list => list.innerHTML = '');
-                orders.forEach(order => {
-                    const orderCard = document.createElement('div');
-                    orderCard.className = 'order-card draggable';
-                    orderCard.draggable = true;
-                    orderCard.dataset.orderId = order.id;
-                    orderCard.innerHTML = `
-                        <div class="order-card-header">${order.order_code}</div>
-                        <div class="order-card-client">${order.client_name}</div>
-                    `;
-                    const targetListId = order.cutting_table ? `${order.cutting_table}-list` : 'unassigned-list';
-                    if (lists[targetListId]) {
-                        lists[targetListId].appendChild(orderCard);
-                    }
-                });
-                addEventListeners();
-            }
+    Object.values(lists).forEach(list => list.innerHTML = '');
+    orders.forEach(order => {
+        const isSkrojone = order.cutting_table === 'skrojone';
+        const orderCard = document.createElement('div');
+        orderCard.className = 'order-card draggable';
+        
+        // ZMIANA: Karta jest przeciągalna ZAWSZE, CHYBA ŻE jest w "skrojone"
+        orderCard.draggable = !isSkrojone; 
+        if(isSkrojone) {
+            orderCard.style.cursor = 'default';
+        }
+
+        orderCard.dataset.orderId = order.id;
+        
+        // ZMIANA: Przycisk edycji jest teraz widoczny ZAWSZE
+        let editButtonHtml = `<button class="edit-button" data-order-id="${order.id}"><i class="fas fa-edit"></i> Edytuj</button>`;
+
+        orderCard.innerHTML = `
+            <div class="order-card-header">${order.order_code}</div>
+            <div class="order-card-client">${order.client_name}</div>
+            ${editButtonHtml}
+        `;
+        
+        const targetListId = order.cutting_table ? `${order.cutting_table}-list` : 'unassigned-list';
+        if (lists[targetListId]) {
+            lists[targetListId].appendChild(orderCard);
+        }
+    });
+    addEventListeners();
+}
 
             function addEventListeners() {
                 document.querySelectorAll('.order-card').forEach(item => {
                     item.addEventListener('click', (e) => {
+                        if (e.target.closest('.edit-button')) return;
                         showOrderDetails(item.dataset.orderId);
                     });
-                    item.addEventListener('dragstart', () => {
-                        draggedItem = item;
-                        setTimeout(() => item.classList.add('dragging'), 0);
-                    });
-                    item.addEventListener('dragend', () => {
-                        if (draggedItem) draggedItem.classList.remove('dragging');
-                        draggedItem = null;
+                    if (item.draggable) {
+                        item.addEventListener('dragstart', () => { draggedItem = item; setTimeout(() => item.classList.add('dragging'), 0); });
+                        item.addEventListener('dragend', () => { if (draggedItem) draggedItem.classList.remove('dragging'); draggedItem = null; });
+                    }
+                });
+
+                document.querySelectorAll('.edit-button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const orderId = e.target.closest('.edit-button').dataset.orderId;
+                        openEditModal(orderId);
                     });
                 });
             }
+
+            // --- NOWA LOGIKA DLA MODALA EDYCJI ---
+            const materialsEditor = document.getElementById('materials-editor');
+            const cuttingNotesInput = document.getElementById('cutting-notes');
+            let allMaterialsDatalistOptions = '';
+
+            async function openEditModal(orderId) {
+                currentEditingOrderId = orderId;
+                editModal.querySelector('#edit-modal-title').textContent = `Edytuj dane dla zlecenia`;
+                materialsEditor.innerHTML = '<div class="loader">Ładowanie...</div>';
+                cuttingNotesInput.value = '';
+                editModal.style.display = 'block';
+
+                const response = await fetch(`/api/order/${orderId}/usage_details`);
+                const data = await response.json();
+
+                allMaterialsDatalistOptions = (data.all_materials || []).map(m => `<option value="${m}"></option>`).join('');
+                document.getElementById('materials-datalist').innerHTML = allMaterialsDatalistOptions;
+
+                cuttingNotesInput.value = data.uwagi_krojowni;
+                
+                materialsEditor.innerHTML = '';
+                data.materials.forEach(mat => addMaterialRow(mat.name, mat.quantity));
+            }
+
+            function addMaterialRow(name = '', quantity = '') {
+                const row = document.createElement('div');
+                row.className = 'material-row';
+                
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text'; nameInput.value = name; nameInput.placeholder = 'Nazwa materiału'; nameInput.setAttribute('list', 'materials-datalist');
+                const quantityInput = document.createElement('input');
+                quantityInput.type = 'text'; quantityInput.value = quantity; quantityInput.placeholder = 'Ilość i jednostka';
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-material-btn'; removeBtn.innerHTML = '<i class="fas fa-trash"></i>'; removeBtn.onclick = () => row.remove();
+
+                row.appendChild(nameInput); row.appendChild(quantityInput); row.appendChild(removeBtn);
+                materialsEditor.appendChild(row);
+            }
+            
+            const datalist = document.createElement('datalist');
+            datalist.id = 'materials-datalist';
+            document.body.appendChild(datalist);
+
+            document.getElementById('add-material-btn').addEventListener('click', () => addMaterialRow());
+
+            document.getElementById('save-edit-btn').addEventListener('click', async () => {
+                const materials = [];
+                materialsEditor.querySelectorAll('.material-row').forEach(row => {
+                    const inputs = row.querySelectorAll('input');
+                    if (inputs[0].value && inputs[1].value) {
+                        materials.push({ name: inputs[0].value, quantity: inputs[1].value });
+                    }
+                });
+
+                const payload = { uwagi_krojowni: cuttingNotesInput.value, materials: materials };
+
+                await fetch(`/api/order/${currentEditingOrderId}/cutting_feedback`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                });
+                
+                editModal.style.display = 'none';
+                alert('Zmiany zostały zapisane!');
+            });
+            // --- KONIEC NOWEJ LOGIKI ---
 
             Object.entries(zones).forEach(([zoneId, zone]) => {
                 zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
@@ -234,11 +304,12 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ table: table })
                 });
+                // Po przypisaniu, odświeżamy zlecenia, aby zaktualizować wygląd przycisków
+                await fetchOrders();
             }
             
             document.getElementById('refresh-btn').addEventListener('click', fetchOrders);
             fetchOrders();
-            // --- KONIEC TWOJEGO ORYGINALNEGO KODU ---
         });
     </script>
 </body>

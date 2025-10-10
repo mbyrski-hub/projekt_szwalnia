@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Krojownia</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="manifest" href="{{ url_for('static', filename='mobile_assets/manifest_krojownia.json') }}">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; background-color: #f4f4f8; color: #333; }
+        .container { padding: 10px; }
+        .header { background-color: #343a40; color: white; padding: 15px; text-align: center; font-size: 1.5em; position: sticky; top: 0; z-index: 1000; }
+        h2 { border-bottom: 2px solid #6c757d; padding-bottom: 10px; color: #333; font-size: 1.2em; margin-top: 20px; }
+        .order-list { display: flex; flex-direction: column; gap: 15px; min-height: 100px; padding: 10px; border-radius: 8px; background-color: #e9ecef; }
+        #unassigned-list { flex-direction: row; flex-wrap: wrap; gap: 2%; row-gap: 15px; align-content: flex-start; }
+        .order-card { background-color: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; border-left: 5px solid #6c757d; flex-basis: 49%; box-sizing: border-box; transition: transform 0.2s, box-shadow 0.2s; }
+        .order-card.draggable { cursor: grab; }
+        .order-card.dragging { opacity: 0.5; }
+        .order-card.highlight { transform: scale(1.05); box-shadow: 0 4px 15px rgba(0, 123, 255, 0.5); border-left-color: #007bff; }
+        .order-card-header { font-weight: bold; font-size: 1.1em; margin-bottom: 5px; }
+        .order-card-client { font-size: 0.9em; color: #555; }
+        .drop-zone { border: 2px dashed #ccc; margin-top: 15px; border-radius: 8px; }
+        .drop-zone.drag-over { background-color: #d4edda; border-color: #28a745; }
+        .table-title { color: white; padding: 10px; border-radius: 5px 5px 0 0; font-size: 1.2em; margin: 0; }
+        #stol-1-zone .table-title { background-color: #007bff; }
+        #stol-2-zone .table-title { background-color: #ffc107; color: #333}
+        #stol-3-zone .table-title { background-color: #17a2b8; }
+        #skrojone-zone .table-title { background-color: #28a745; }
+        .loader { text-align: center; padding: 20px; font-size: 1.2em; }
+        #refresh-btn { position: fixed; bottom: 20px; right: 20px; background-color: #007bff; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); cursor: pointer; z-index: 1001;}
+        .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fefefe; margin: 25% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 8px; }
+        .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        #modal-details ul { list-style-type: none; padding: 0; }
+        #modal-details li { background: #eee; padding: 5px; margin-bottom: 3px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="header">Krojownia</div>
+    <div class="container">
+        <div class="text-center my-3">
+            <button id="enable-notifications-btn" class="btn btn-primary" style="display: none; background-color: #28a745; border-color: #28a745;">
+                <i class="fas fa-bell"></i> Włącz powiadomienia o zleceniach
+            </button>
+        </div>
+        <h2>Do przypisania</h2>
+        <div class="order-list" id="unassigned-list"></div>
+        <div class="drop-zone" id="stol-1-zone"><h2 class="table-title">Stół 1</h2><div class="order-list" id="stol-1-list"></div></div>
+        <div class="drop-zone" id="stol-2-zone"><h2 class="table-title">Stół 2</h2><div class="order-list" id="stol-2-list"></div></div>
+        <div class="drop-zone" id="stol-3-zone"><h2 class="table-title">Stół 3</h2><div class="order-list" id="stol-3-list"></div></div>
+        <div class="drop-zone" id="skrojone-zone"><h2 class="table-title">Skrojone</h2><div class="order-list" id="skrojone-list"></div></div>
+    </div>
+    <button id="refresh-btn"><i class="fas fa-sync-alt"></i></button>
+    <div id="details-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3 id="modal-title">Szczegóły zlecenia</h3><div id="modal-details"></div></div></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // ### POCZĄTEK NOWEGO, POPRAWIONEGO KODU PUSH ###
+            const enableNotificationsBtn = document.getElementById('enable-notifications-btn');
+            const vapidPublicKey = '{{ config.VAPID_PUBLIC_KEY }}';
+
+            function urlBase64ToUint8Array(base64String) {
+                const padding = '='.repeat((4 - base64String.length % 4) % 4);
+                const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+                const rawData = window.atob(base64);
+                const outputArray = new Uint8Array(rawData.length);
+                for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
+                return outputArray;
+            }
+
+            async function subscribeUser(registration) {
+                if (!vapidPublicKey || vapidPublicKey.includes('TWOJ')) {
+                    console.error("Klucz VAPID_PUBLIC_KEY nie jest poprawnie ustawiony w config.py!");
+                    alert("Błąd konfiguracji: Brak klucza publicznego VAPID.");
+                    return;
+                }
+                try {
+                    const permission = await Notification.requestPermission();
+                    if (permission !== 'granted') throw new Error('Zgoda na powiadomienia odrzucona.');
+                    
+                    const subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+                    });
+                    
+                    await fetch('/api/save-subscription', {
+                        method: 'POST', body: JSON.stringify(subscription),
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    
+                    alert('Powiadomienia zostały włączone!');
+                    enableNotificationsBtn.style.display = 'none';
+                } catch (error) {
+                    console.error('Błąd podczas subskrypcji:', error);
+                    if (Notification.permission === 'denied') {
+                        alert('Powiadomienia są zablokowane. Zmień ustawienia przeglądarki dla tej strony.');
+                    } else {
+                        alert('Nie udało się włączyć powiadomień.');
+                    }
+                }
+            }
+
+            if ('serviceWorker' in navigator && 'PushManager' in window) {
+                navigator.serviceWorker.register('/static/service-worker.js')
+                    .then(registration => {
+                        console.log('Service Worker zarejestrowany.');
+                        enableNotificationsBtn.addEventListener('click', () => subscribeUser(registration));
+
+                        return registration.pushManager.getSubscription();
+                    })
+                    .then(subscription => {
+                        if (subscription === null && Notification.permission !== 'denied') {
+                            enableNotificationsBtn.style.display = 'block';
+                        }
+                    })
+                    .catch(error => console.error('Błąd inicjalizacji Service Workera:', error));
+            }
+
+            navigator.serviceWorker.addEventListener('message', event => {
+                if (event.data && event.data.type === 'SHOW_ORDER') {
+                    const orderId = event.data.orderId;
+                    const cardToHighlight = document.querySelector(`.order-card[data-order-id='${orderId}']`);
+                    if (cardToHighlight) {
+                        document.querySelectorAll('.order-card.highlight').forEach(c => c.classList.remove('highlight'));
+                        cardToHighlight.classList.add('highlight');
+                        cardToHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+            });
+            // ### KONIEC NOWEGO KODU PUSH ###
+
+            // --- POCZĄTEK TWOJEGO ORYGINALNEGO KODU ---
+            const lists = {
+                'unassigned-list': document.getElementById('unassigned-list'),
+                'stol-1-list': document.getElementById('stol-1-list'),
+                'stol-2-list': document.getElementById('stol-2-list'),
+                'stol-3-list': document.getElementById('stol-3-list'),
+                'skrojone-list': document.getElementById('skrojone-list'),
+            };
+            const zones = {
+                'stol-1': document.getElementById('stol-1-zone'),
+                'stol-2': document.getElementById('stol-2-zone'),
+                'stol-3': document.getElementById('stol-3-zone'),
+                'skrojone': document.getElementById('skrojone-zone'),
+                'unassigned': document.getElementById('unassigned-list')
+            };
+            let draggedItem = null;
+
+            const modal = document.getElementById('details-modal');
+            const modalDetails = document.getElementById('modal-details');
+            const closeModal = modal.querySelector('.close-btn');
+            closeModal.onclick = () => { modal.style.display = 'none'; };
+            window.onclick = (event) => { if (event.target == modal) { modal.style.display = 'none'; } };
+
+            async function showOrderDetails(orderId) {
+                modalDetails.innerHTML = '<div class="loader">Ładowanie...</div>';
+                modal.style.display = 'block';
+                const response = await fetch(`/api/order/${orderId}/details`);
+                const data = await response.json();
+                let productsHtml = '<h4>Produkty:</h4><ul>';
+                data.products.forEach(p => {
+                    productsHtml += `<li><strong>${p.name}</strong> - ${p.size}: ${p.quantity} szt.</li>`;
+                });
+                productsHtml += '</ul>';
+                modalDetails.innerHTML = `
+                    <p><strong>Klient:</strong> ${data.client_name}</p>
+                    <p><strong>Opis:</strong> ${data.description || 'Brak'}</p>
+                    ${data.uwagi ? `<div class="alert alert-warning"><strong>Uwagi:</strong> ${data.uwagi}</div>` : ''}
+                    ${productsHtml}
+                `;
+            }
+
+            async function fetchOrders() {
+                lists['unassigned-list'].innerHTML = '<div class="loader">Ładowanie zleceń...</div>';
+                const response = await fetch('/api/krojownia/orders');
+                const orders = await response.json();
+                renderOrders(orders);
+            }
+
+            function renderOrders(orders) {
+                Object.values(lists).forEach(list => list.innerHTML = '');
+                orders.forEach(order => {
+                    const orderCard = document.createElement('div');
+                    orderCard.className = 'order-card draggable';
+                    orderCard.draggable = true;
+                    orderCard.dataset.orderId = order.id;
+                    orderCard.innerHTML = `
+                        <div class="order-card-header">${order.order_code}</div>
+                        <div class="order-card-client">${order.client_name}</div>
+                    `;
+                    const targetListId = order.cutting_table ? `${order.cutting_table}-list` : 'unassigned-list';
+                    if (lists[targetListId]) {
+                        lists[targetListId].appendChild(orderCard);
+                    }
+                });
+                addEventListeners();
+            }
+
+            function addEventListeners() {
+                document.querySelectorAll('.order-card').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        showOrderDetails(item.dataset.orderId);
+                    });
+                    item.addEventListener('dragstart', () => {
+                        draggedItem = item;
+                        setTimeout(() => item.classList.add('dragging'), 0);
+                    });
+                    item.addEventListener('dragend', () => {
+                        if (draggedItem) draggedItem.classList.remove('dragging');
+                        draggedItem = null;
+                    });
+                });
+            }
+
+            Object.entries(zones).forEach(([zoneId, zone]) => {
+                zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+                zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+                zone.addEventListener('drop', async e => {
+                    e.preventDefault();
+                    zone.classList.remove('drag-over');
+                    if (draggedItem) {
+                        const targetListId = zoneId === 'unassigned' ? 'unassigned-list' : `${zoneId}-list`;
+                        const table = zoneId === 'unassigned' ? null : zoneId;
+                        if(lists[targetListId]) {
+                            lists[targetListId].appendChild(draggedItem);
+                            await assignTable(draggedItem.dataset.orderId, table);
+                        }
+                    }
+                });
+            });
+
+            async function assignTable(orderId, table) {
+                await fetch(`/api/order/${orderId}/assign_table`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ table: table })
+                });
+            }
+            
+            document.getElementById('refresh-btn').addEventListener('click', fetchOrders);
+            fetchOrders();
+            // --- KONIEC TWOJEGO ORYGINALNEGO KODU ---
+        });
+    </script>
+</body>
+</html>

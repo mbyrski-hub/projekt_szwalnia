@@ -18,7 +18,20 @@
                 <p><strong>Klient:</strong> {{ order.client.name }}</p>
                 <p><strong>Termin:</strong> {{ order.deadline.strftime('%Y-%m-%d') }}</p>
                 <p><strong>Opis:</strong> {{ order.description }}</p>
-                
+
+                {% if order.uwagi %}
+                <div class="alert alert-warning">
+                    <h5 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> Uwagi do zlecenia:</h5>
+                    <p class="mb-0" style="white-space: pre-wrap;">{{ order.uwagi }}</p>
+                </div>
+                {% endif %}
+
+                {% if order.uwagi_krojowni %}
+                <div class="alert alert-info">
+                    <h5 class="alert-heading"><i class="fas fa-cut"></i> Uwagi z Krojowni:</h5>
+                    <p class="mb-0" style="white-space: pre-wrap;">{{ order.uwagi_krojowni }}</p>
+                </div>
+                {% endif %}
                 <h4>Tkaniny</h4>
                 <ul>
                     {% for order_fabric in order.fabrics %}

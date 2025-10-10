@@ -42,6 +42,9 @@ class Order(db.Model):
     client_id = db.Column(db.Integer, db.ForeignKey('client.id'), nullable=False)
     description = db.Column(db.Text, nullable=False)
     login_info = db.Column(db.Text, nullable=True)
+    uwagi = db.Column(db.Text, nullable=True)  # <-- DODAJ TĘ LINIĘ
+    uwagi_krojowni = db.Column(db.Text, nullable=True)
+    uwagi_krojowni_updated_at = db.Column(db.DateTime, nullable=True)
     deadline = db.Column(db.Date, nullable=False)
     status = db.Column(db.String(50), nullable=False, default='NOWE')
     zlecajacy = db.Column(db.String(50), nullable=False)

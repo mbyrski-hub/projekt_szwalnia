@@ -265,57 +265,64 @@
                 </td>
             </tr>
              <tr class="order-details" id="details-{{ order.id }}" style="display: none;">
-                <td colspan="7">
-                    <strong>Opis:</strong> {{ order.description }}<br>
-                    <strong>Zlecający:</strong> {{ order.zlecajacy }}<br>
-                    <strong>Logowanie:</strong> {{ order.login_info or 'Brak' }}<br>
-                    <strong>Tkanina:</strong> {% for fab in order.fabrics %}{{ fab.fabric.name }}{% if not loop.last %}, {% endif %}{% else %}Brak{% endfor %}<br>
-                    
-                    <strong>Produkty:</strong>
-                    <ul style="list-style-type: none; padding-left: 0;">
-                    {% for product_name, items in order.order_items|groupby('product.name') %}
-                        <li style="margin-top: 5px;">
-                            <strong>{{ product_name }}:</strong>
-                            <ul style="padding-left: 20px; list-style-type: circle;">
-                            {% for item in items %}
-                                <li>{{ item.size }} - {{ item.quantity }} szt.</li>
-                            {% endfor %}
-                            </ul>
-                        </li>
+    <td colspan="7">
+        <div class="p-3"> {% if order.uwagi %}
+            <div class="alert alert-warning mb-3">
+                <h6 class="alert-heading font-weight-bold"><i class="fas fa-exclamation-triangle"></i> Uwagi do zlecenia:</h6>
+                <p class="mb-0" style="white-space: pre-wrap;">{{ order.uwagi }}</p>
+            </div>
+            {% endif %}
+            <strong>Opis:</strong> {{ order.description }}<br>
+            <strong>Zlecający:</strong> {{ order.zlecajacy }}<br>
+            <strong>Logowanie:</strong> {{ order.login_info or 'Brak' }}<br>
+            <strong>Tkanina:</strong> {% for fab in order.fabrics %}{{ fab.fabric.name }}{% if not loop.last %}, {% endif %}{% else %}Brak{% endfor %}<br>
+            
+            <strong>Produkty:</strong>
+            <ul style="list-style-type: none; padding-left: 0;">
+            {% for product_name, items in order.order_items|groupby('product.name') %}
+                <li style="margin-top: 5px;">
+                    <strong>{{ product_name }}:</strong>
+                    <ul style="padding-left: 20px; list-style-type: circle;">
+                    {% for item in items %}
+                        <li>{{ item.size }} - {{ item.quantity }} szt.</li>
                     {% endfor %}
                     </ul>
+                </li>
+            {% endfor %}
+            </ul>
 
-                    {% if order.materials_used %}
-                        <br>
-                        <strong>Rzeczywiste zużycie materiałów:</strong>
-                        <ul>
-                            {% for material in order.materials_used %}
-                            <li>{{ material.material_name }} – {{ material.quantity }}</li>
-                            {% endfor %}
-                        </ul>
-                    {% else %}
-                        <br>
-                        <strong>Planowane zużycie materiałów:</strong>
-                        {% if order.planned_materials %}
-                        <ul>
-                            {% for item in order.planned_materials %}
-                                <li>{{ item.name }}: {{ item.quantity }}</li>
-                            {% endfor %}
-                        </ul>
-                        {% else %}
-                            <p style="margin-left: 20px;">Brak zdefiniowanych materiałów dla produktów w tym zleceniu.</p>
-                        {% endif %}
-                    {% endif %}
-                    
-                    <strong>Szacowany koszt zlecenia:</strong>
-                    <ul style="padding-left: 20px; list-style-type: circle;">
-                        <li>Koszt tkanin: {{ "%.2f"|format(order.cost_details.fabric_cost) }} zł</li>
-                        <li>Koszt materiałów: {{ "%.2f"|format(order.cost_details.material_cost) }} zł</li>
-                        <li>Koszt produkcji (przeliczony): {{ "%.2f"|format(order.cost_details.production_cost) }} zł</li>
-                        <li style="margin-top: 5px;"><strong>RAZEM: {{ "%.2f"|format(order.cost_details.total_cost) }} zł</strong></li>
-                    </ul>
-                    </td>
-            </tr>
+            {% if order.materials_used %}
+                <br>
+                <strong>Rzeczywiste zużycie materiałów:</strong>
+                <ul>
+                    {% for material in order.materials_used %}
+                    <li>{{ material.material_name }} – {{ material.quantity }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <br>
+                <strong>Planowane zużycie materiałów:</strong>
+                {% if order.planned_materials %}
+                <ul>
+                    {% for item in order.planned_materials %}
+                        <li>{{ item.name }}: {{ item.quantity }}</li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                    <p style="margin-left: 20px;">Brak zdefiniowanych materiałów dla produktów w tym zleceniu.</p>
+                {% endif %}
+            {% endif %}
+            
+            <strong>Szacowany koszt zlecenia:</strong>
+            <ul style="padding-left: 20px; list-style-type: circle;">
+                <li>Koszt tkanin: {{ "%.2f"|format(order.cost_details.fabric_cost) }} zł</li>
+                <li>Koszt materiałów: {{ "%.2f"|format(order.cost_details.material_cost) }} zł</li>
+                <li>Koszt produkcji (przeliczony): {{ "%.2f"|format(order.cost_details.production_cost) }} zł</li>
+                <li style="margin-top: 5px;"><strong>RAZEM: {{ "%.2f"|format(order.cost_details.total_cost) }} zł</strong></li>
+            </ul>
+        </div>
+    </td>
+</tr>
             {% endfor %}
         </tbody>
     </table>

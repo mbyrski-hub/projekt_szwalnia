@@ -45,6 +45,9 @@
             margin: 0 0 5px 0;
             color: #555;
         }
+        .uwagi-section{border: 2px solid red; 
+            padding: 10px; 
+            margin-top: 15px;}
         /* ### KONIEC NOWYCH STYLI ### */
     </style>
 </head>
@@ -82,6 +85,13 @@
     <h2>Informacje do logowania</h2>
     <p>{{ order.login_info | nl2br }}</p>
     {% endif %}
+
+    {% if order.uwagi %}
+<div class="uwagi-section">
+    <h3>Uwagi do zlecenia:</h3>
+    <p>{{ order.uwagi }}</p>
+</div>
+{% endif %}
 
     <h2>Zamówione produkty</h2>
     <table>

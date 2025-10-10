@@ -35,6 +35,7 @@ import pathlib
 import qrcode
 from pywebpush import webpush, WebPushException 
 
+
 if platform.system() == 'Windows':
     config_pdf = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
 else:
@@ -187,7 +188,7 @@ def new_order():
                 db.session.add(client)
                 db.session.flush()
             order = Order(
-                client_id=client.id, description=form.description.data.strip().upper(),
+                client_id=client.id, description=form.description.data.strip().upper(),uwagi=form.uwagi.data.strip() if form.uwagi.data else None,
                 login_info=form.login_info.data.strip().upper() if form.login_info.data else None,
                 deadline=form.deadline.data, status='NOWE', zlecajacy=form.zlecajacy.data.upper()
             )
@@ -239,9 +240,10 @@ def new_order():
 # ### POCZĄTEK NOWEGO KODU - WYSYŁANIE POWIADOMIENIA PUSH ###
             try:
                 send_push_notification(
-                    title="Nowe zlecenie!",
-                    body=f"Dodano zlecenie {order.order_code} dla klienta {client.name}"
-                )
+                        title="Nowe zlecenie!",
+                        body=f"Dodano zlecenie {order.order_code} dla klienta {client.name}",
+                        target_url='/mobile/krojownia'  # <-- WSKAZUJEMY NA KROJOWNIĘ
+                    )
             except Exception as e:
                 # Logowanie błędu, ale nie przerywanie działania aplikacji
                 print(f"Nie udało się wysłać powiadomienia push: {e}")
@@ -1547,9 +1549,10 @@ def api_assign_cutting_table(order_id):
         # ...wyślij powiadomienie specjalnie dla szwalni!
         try:
             send_push_notification(
-                title="Zlecenie gotowe dla szwalni!",
-                body=f"Zlecenie {order.order_code} zostało skrojone i czeka na przypisanie zespołu."
-            )
+        title="Zlecenie gotowe dla szwalni!",
+        body=f"Zlecenie {order.order_code} zostało skrojone i czeka na przypisanie.",
+        target_url='/mobile/szwalnia'  # <-- WSKAZUJEMY NA SZWALNIĘ
+    )
         except Exception as e:
             print(f"Nie udało się wysłać powiadomienia push (skrojone): {e}")
     # ### KONIEC NOWEGO KODU ###
@@ -1629,7 +1632,7 @@ def get_order_details(order_id):
     order = Order.query.get_or_404(order_id)
     details = {
         'id': order.id, 'order_code': order.order_code, 'client_name': order.client.name, 'description': order.description,
-        'deadline': order.deadline.strftime('%Y-%m-%d'), 'fabrics': [of.fabric.name for of in order.fabrics],
+        'uwagi': order.uwagi,'deadline': order.deadline.strftime('%Y-%m-%d'), 'fabrics': [of.fabric.name for of in order.fabrics],
         'products': [ { 'name': item.product.name, 'size': item.size, 'quantity': item.quantity } for item in order.order_items ]
     }
     return jsonify(details)
@@ -2228,7 +2231,7 @@ def order_qr_code(order_id):
     return send_file(img_buffer, mimetype='image/png')
 
 # Funkcja pomocnicza do wysyłania powiadomień
-def send_push_notification(title, body):
+def send_push_notification(title, body, target_url='/'): # Dodajemy nowy argument target_url
     """Pobiera wszystkie subskrypcje z bazy i wysyła do nich powiadomienie."""
     subscriptions = PushSubscription.query.all()
 
@@ -2237,20 +2240,33 @@ def send_push_notification(title, body):
     for sub in subscriptions:
         try:
             subscription_data = json.loads(sub.subscription_json)
-            data = json.dumps({'title': title, 'body': body})
+            # DODAJEMY 'target_url' DO WYSYŁANYCH DANYCH
+            data_to_send = json.dumps({
+                'title': title,
+                'body': body,
+                'target_url': target_url
+            })
+
+            vapid_claims = current_app.config.get('VAPID_CLAIMS')
+            if not vapid_claims or 'sub' not in vapid_claims:
+                 print("KRYTYCZNY BŁĄD: VAPID_CLAIMS nie jest poprawnie ustawione...")
+                 return
 
             webpush(
                 subscription_info=subscription_data,
-                data=data,
+                data=data_to_send,
                 vapid_private_key=current_app.config['VAPID_PRIVATE_KEY'],
-                vapid_claims=current_app.config['VAPID_CLAIMS']
+                vapid_claims=vapid_claims
             )
+            print(f"Powiadomienie do subskrypcji {sub.id} wysłane pomyślnie.")
+
         except WebPushException as ex:
-            print(f"Błąd wysyłania powiadomienia: {ex}")
-            # Jeśli subskrypcja wygasła (kod 410), można ją usunąć z bazy
-            if ex.response and ex.response.status_code == 410:
+            print(f"BŁĄD 'WebPushException' podczas wysyłania do subskrypcji {sub.id}: {ex}")
+            if ex.response and (ex.response.status_code == 410 or ex.response.status_code == 404):
+                print(f"Usuwanie nieprawidłowej/wygasłej subskrypcji: {sub.id}")
                 db.session.delete(sub)
-                db.session.commit()
+        except Exception as e:
+            print(f"WYSTĄPIŁ INNY, NIESPODZIEWANY BŁĄD: {e}")
 
     db.session.commit()
 
@@ -2275,3 +2291,102 @@ def save_subscription():
         print("Ta subskrypcja już istnieje.")
 
     return jsonify({'success': True}), 201
+
+@app.route('/api/szwalnia/orders_overview', methods=['GET'])
+def get_szwalnia_orders_overview():
+    """Zwraca zlecenia nowe, w trakcie krojenia i gotowe do szycia."""
+    orders = Order.query.filter(
+        Order.status.in_(['NOWE', 'W REALIZACJI'])
+    ).order_by(Order.created_at.desc()).all()
+
+    orders_list = []
+    for order in orders:
+        orders_list.append({
+            'id': order.id,
+            'order_code': order.order_code,
+            'client_name': order.client.name,
+            'status': order.status,
+            'cutting_table': order.cutting_table, # Kluczowe pole do kategoryzacji
+            'assigned_team': order.assigned_team,
+            'team1_completed': order.team1_completed,
+            'team2_completed': order.team2_completed
+        })
+    return jsonify(orders_list)
+
+# --- POCZĄTEK NOWEGO KODU ---
+
+@app.route('/api/order/<int:order_id>/cutting_feedback', methods=['POST'])
+def save_cutting_feedback(order_id):
+    """Zapisuje uwagi z krojowni i rzeczywiste zużycie materiałów."""
+    order = Order.query.get_or_404(order_id)
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Brak danych'}), 400
+
+    # Zapisywanie uwag z krojowni
+    if 'uwagi_krojowni' in data:
+        order.uwagi_krojowni = data['uwagi_krojowni'].strip()
+        order.uwagi_krojowni_updated_at = datetime.utcnow()
+
+    # Zapisywanie zużycia materiałów
+    if 'materials' in data:
+        # Usuń stare wpisy, aby zastąpić je nowymi
+        MaterialUsage.query.filter_by(order_id=order_id).delete()
+        for item in data['materials']:
+            if item.get('name') and item.get('quantity'):
+                usage = MaterialUsage(
+                    order_id=order_id,
+                    material_name=item['name'].strip().upper(),
+                    quantity=item['quantity'].strip()
+                )
+                db.session.add(usage)
+    
+    db.session.commit()
+    return jsonify({'success': True, 'message': 'Dane z krojowni zostały zapisane.'})
+
+
+@app.route('/api/order/<int:order_id>/usage_details', methods=['GET'])
+def get_usage_details(order_id):
+    """Pobiera dane do formularza edycji w krojowni."""
+    order = Order.query.get_or_404(order_id)
+    
+    # Jeśli jest już zapisane rzeczywiste zużycie, zwróć je
+    if order.materials_used:
+        materials = [{'name': m.material_name, 'quantity': m.quantity} for m in order.materials_used]
+    # W przeciwnym razie, zwróć planowane zużycie
+    else:
+        planned_summary = calculate_material_summary(order)
+        materials = [{'name': item['name'], 'quantity': item['quantity']} for item in planned_summary]
+
+    # Pobierz listę wszystkich zdefiniowanych materiałów do podpowiedzi
+    defined_materials = [m[0] for m in db.session.query(Material.name).distinct().order_by(Material.name).all()]
+    fabric_names = [f.name for f in Fabric.query.order_by(Fabric.name).all()]
+    all_possible_materials = sorted(list(set(defined_materials + fabric_names)))
+
+    return jsonify({
+        'uwagi_krojowni': order.uwagi_krojowni or '',
+        'materials': materials,
+        'all_materials': all_possible_materials
+    })
+
+@app.route('/api/recent_cutting_notes')
+def get_recent_cutting_notes():
+    """Zwraca zlecenia z nowymi uwagami od krojowni (np. z ostatnich 24 godzin)."""
+    # Sprawdzamy uwagi dodane w ciągu ostatniego dnia. Można ten czas dostosować.
+    time_threshold = datetime.utcnow() - timedelta(days=1)
+    
+    orders_with_new_notes = Order.query.filter(
+        Order.uwagi_krojowni_updated_at != None,
+        Order.uwagi_krojowni_updated_at > time_threshold
+    ).all()
+    
+    notes = [
+        {
+            'order_id': order.id,
+            'uwagi': order.uwagi_krojowni
+        } 
+        for order in orders_with_new_notes
+    ]
+    return jsonify(notes)
+
+# --- KONIEC NOWEGO KODU ---

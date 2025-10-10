@@ -1,109 +1,22 @@
 <style>
-    .in-progress-strip {
-        margin-bottom: 2rem;
-    }
-    .in-progress-header h5 {
-        margin: 0 0 1rem 0;
-        font-weight: 600;
-        font-size: 1.1rem;
-        /* ### ZMIANA ### Użycie zmiennej CSS */
-        color: var(--text-color);
-        display: flex;
-        align-items: center;
-    }
-    .in-progress-header .badge {
-        font-size: 0.9rem;
-        width: 28px;
-        height: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-left: 10px;
-    }
-    .in-progress-cards {
-        display: flex;
-        gap: 1rem;
-        overflow-x: auto;
-        padding-bottom: 1rem;
-        min-height: 100px;
-    }
-    .in-progress-card {
-        flex: 0 0 160px;
-        border: 2px solid #444;
-        border-radius: 8px;
-        padding: 0.75rem;
-        background-color: #1a1a1a;
-        box-shadow: none;
-        text-decoration: none;
-        color: inherit;
-        display: block;
-        transition: transform 0.2s, border-color 0.2s;
-    }
-    .in-progress-card:hover {
-        transform: translateY(-3px);
-        border-color: var(--accent-color);
-    }
-    .in-progress-card-header h6 {
-        margin: 0;
-        font-weight: 600;
-        font-size: 0.9rem;
-        /* ### ZMIANA ### Użycie zmiennej CSS */
-        color: #f0f0f0; 
-    }
-    .in-progress-card-body {
-        font-size: 0.8rem;
-        /* ### ZMIANA ### Użycie zmiennej CSS */
-        color: #aaa;
-        margin-top: 0.5rem;
-    }
-    
-    /* ### NOWY KOD ### Poprawki dla motywu jasnego */
-    html:not(.dark-mode) .in-progress-card {
-        background-color: var(--card-bg);
-        border: 1px solid var(--border-color);
-    }
-    html:not(.dark-mode) .in-progress-card-header h6 {
-        color: var(--text-color);
-    }
-     html:not(.dark-mode) .in-progress-card-body,
-     html:not(.dark-mode) .in-progress-card-header small {
-        color: var(--text-muted-color);
-    }
-    /* ### KONIEC NOWEGO KODU ### */
-
-    .in-progress-card.krojownia-card {
-        border-left: 5px solid var(--accent-color);
-    }
-    .in-progress-card.szwalnia-card {
-        border-left: 5px solid #28a745;
-    }
-    .in-progress-section {
-        background-color: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 1.5rem;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-    }
-    .row.in-progress-sections {
-        position: relative;
-    }
-    .row.in-progress-sections::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        left: 50%;
-        width: 1px;
-        background-color: var(--border-color);
-        transform: translateX(-50%);
-    }
-     @media (max-width: 991.98px) {
-        .row.in-progress-sections::after {
-            display: none;
-        }
-    }
+    /* ... (Cały twój blok stylów jest poprawny i pozostaje bez zmian) ... */
+    .in-progress-strip { margin-bottom: 2rem; }
+    .in-progress-header h5 { margin: 0 0 1rem 0; font-weight: 600; font-size: 1.1rem; color: var(--text-color); display: flex; align-items: center; }
+    .in-progress-header .badge { font-size: 0.9rem; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; margin-left: 10px; }
+    .in-progress-cards { display: flex; flex-wrap: wrap; gap: 0.35rem; padding-bottom: 0.75rem; min-height: 60px; }
+    .in-progress-card { flex-grow: 0; width: 105px; padding: 0.3rem; border: 2px solid #444; border-radius: 8px; background-color: #1a1a1a; box-shadow: none; text-decoration: none; color: inherit; display: block; transition: transform 0.2s, border-color 0.2s; position: relative; /* Dodano position: relative */ }
+    .in-progress-card-header h6 { margin: 0; font-weight: 600; font-size: 0.85rem; color: #f0f0f0; }
+    .in-progress-card-body { font-size: 0.75rem; color: #aaa; margin-top: 0.3rem; }
+    .in-progress-card:hover { transform: translateY(-3px); border-color: var(--accent-color); }
+    html:not(.dark-mode) .in-progress-card { background-color: var(--card-bg); border: 1px solid var(--border-color); }
+    html:not(.dark-mode) .in-progress-card-header h6 { color: var(--text-color); }
+    html:not(.dark-mode) .in-progress-card-body, html:not(.dark-mode) .in-progress-card-header small { color: var(--text-muted-color); }
+    .in-progress-card.krojownia-card { border-left: 5px solid var(--accent-color); }
+    .in-progress-card.szwalnia-card { border-left: 5px solid #28a745; }
+    .in-progress-section { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem; height: 100%; display: flex; flex-direction: column; }
+    .row.in-progress-sections { position: relative; }
+    .row.in-progress-sections::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background-color: var(--border-color); transform: translateX(-50%); }
+    @media (max-width: 991.98px) { .row.in-progress-sections::after { display: none; } }
 </style>
 
 <div class="in-progress-strip">
@@ -115,17 +28,18 @@
             </div>
             <div class="in-progress-cards">
                 {% for order in krojownia_in_progress %}
-                <a href="{{ url_for('order_detail', order_id=order.id) }}" class="in-progress-card krojownia-card">
-                    <div class="in-progress-card-header">
-                        <h6>{{ order.client.name }}</h6>
-                        <small>{{ order.cutting_table }}</small>
-                    </div>
-                    <div class="in-progress-card-body">
-                        {{ order.order_code }}
-                    </div>
-                </a>
+                    <a href="{{ url_for('order_detail', order_id=order.id) }}" class="in-progress-card krojownia-card" data-order-id="{{ order.id }}">
+                        <span class="comment-indicator"></span>
+                        <div class="in-progress-card-header">
+                            <h6>{{ order.client.name }}</h6>
+                            <small>{{ order.cutting_table }}</small>
+                        </div>
+                        <div class="in-progress-card-body">
+                            {{ order.order_code }}
+                        </div>
+                    </a>
                 {% else %}
-                <p class="text-muted w-100 text-center align-self-center">Brak zleceń w krojowni.</p>
+                    <p class="text-muted w-100 text-center align-self-center">Brak zleceń w krojowni.</p>
                 {% endfor %}
             </div>
         </div>
@@ -137,17 +51,18 @@
             </div>
             <div class="in-progress-cards">
                 {% for order in szwalnia_in_progress %}
-                <a href="{{ url_for('order_detail', order_id=order.id) }}" class="in-progress-card szwalnia-card">
-                    <div class="in-progress-card-header">
-                        <h6>{{ order.client.name }}</h6>
-                        <small>{{ order.assigned_team }}</small>
-                    </div>
-                    <div class="in-progress-card-body">
-                       {{ order.order_code }}
-                    </div>
-                </a>
+                    <a href="{{ url_for('order_detail', order_id=order.id) }}" class="in-progress-card szwalnia-card" data-order-id="{{ order.id }}">
+                        <span class="comment-indicator"></span>
+                        <div class="in-progress-card-header">
+                            <h6>{{ order.client.name }}</h6>
+                            <small>{{ order.assigned_team }}</small>
+                        </div>
+                        <div class="in-progress-card-body">
+                           {{ order.order_code }}
+                        </div>
+                    </a>
                 {% else %}
-                <p class="text-muted w-100 text-center align-self-center">Brak zleceń w szwalni.</p>
+                    <p class="text-muted w-100 text-center align-self-center">Brak zleceń w szwalni.</p>
                 {% endfor %}
             </div>
         </div>
