@@ -463,58 +463,90 @@ def orders_list():
                            current_year_filter=year_filter,
                            current_month_filter=month_filter)
 
+# W app/routes.py
 @app.route('/orders/history')
 def orders_history():
     client_filter = request.args.get('client', '').strip().upper()
     year_filter = request.args.get('year', type=int)
     month_filter = request.args.get('month', type=int)
 
-    # --- POCZĄTEK ZMIANY ---
+    # ### OSTATECZNA WERSJA LOGIKI PODSUMOWANIA ###
+    
+    # Używamy SQL CASE, aby wybrać właściwą datę do grupowania:
+    # 1. Jeśli 'production_month' jest ustawiony, użyj go (np. '2025-10-01').
+    # 2. W przeciwnym razie, użyj 'sewing_finished_at'.
+    grouping_date = db.case(
+        (Order.production_month != None, func.date(Order.production_month + '-01')),
+        else_=func.date(Order.sewing_finished_at)
+    )
 
     # Zapytanie do podsumowania miesięcznego
     summary_query = db.session.query(
-        extract('year', Order.created_at).label('year'),
-        extract('month', Order.created_at).label('month'),
+        extract('year', grouping_date).label('year'),
+        extract('month', grouping_date).label('month'),
         func.sum(OrderItem.quantity * Product.production_price).label('total_production_value'),
         func.count(distinct(Order.id)).label('order_count')
-    ).join(OrderItem).join(Product).filter(Order.status == 'ZREALIZOWANE')
+    ).join(OrderItem).join(Product).filter(
+        Order.status == 'ZREALIZOWANE',
+        Order.sewing_finished_at.isnot(None)
+    )
 
-    # Zapytanie do pełnej listy zleceń
-    orders_query = Order.query.join(Client).filter(Order.status == 'ZREALIZOWANE')
+    # Zapytanie do pełnej listy zleceń (pozostaje bez zmian - zawsze pokazuje wg daty zakończenia)
+    orders_query = Order.query.join(Client).filter(
+        Order.status == 'ZREALIZOWANE',
+        Order.sewing_finished_at.isnot(None)
+    )
 
-    # Aplikowanie filtrów do obu zapytań
+    # Aplikowanie filtrów (teraz filtrujemy po 'grouping_date')
     if client_filter:
         summary_query = summary_query.join(Client).filter(Client.name == client_filter)
         orders_query = orders_query.filter(Client.name == client_filter)
     if year_filter:
-        summary_query = summary_query.filter(extract('year', Order.created_at) == year_filter)
-        orders_query = orders_query.filter(extract('year', Order.created_at) == year_filter)
+        summary_query = summary_query.filter(extract('year', grouping_date) == year_filter)
+        orders_query = orders_query.filter(extract('year', Order.sewing_finished_at) == year_filter)
     if month_filter:
-        summary_query = summary_query.filter(extract('month', Order.created_at) == month_filter)
-        orders_query = orders_query.filter(extract('month', Order.created_at) == month_filter)
+        summary_query = summary_query.filter(extract('month', grouping_date) == month_filter)
+        orders_query = orders_query.filter(extract('month', Order.sewing_finished_at) == month_filter)
 
-    monthly_summary = summary_query.group_by('year', 'month').order_by(extract('year', Order.created_at).desc(), extract('month', Order.created_at).desc()).all()
-    all_orders = orders_query.order_by(Order.created_at.desc()).all()
+    monthly_summary = summary_query.group_by('year', 'month').order_by(
+        db.literal_column('year').desc(),
+        db.literal_column('month').desc()
+    ).all()
     
-    # --- KONIEC ZMIANY ---
-
+    all_orders = orders_query.order_by(Order.sewing_finished_at.desc()).all()
+    
+    # Lata do filtra pobieramy z obu możliwych dat, aby niczego nie pominąć
+    years_q1 = db.session.query(extract('year', Order.sewing_finished_at)).distinct()
+    years_q2 = db.session.query(func.substr(Order.production_month, 1, 4)).distinct()
+    all_years = {int(y[0]) for y in years_q1.union(years_q2) if y[0]}
+    years = sorted(list(all_years), reverse=True)
+    
     clients = Client.query.order_by(Client.name).all()
-    years_query = db.session.query(extract('year', Order.created_at)).distinct().all()
-    years = sorted([y[0] for y in years_query], reverse=True)
     
     return render_template('orders_history.html', 
                            monthly_summary=monthly_summary, 
-                           orders=all_orders, # Przekazanie pełnej listy zleceń
+                           orders=all_orders,
                            clients=clients, 
                            years=years)
 
+# W app/routes.py
 @app.route('/api/monthly_production_details/<int:year>/<int:month>')
 def monthly_production_details(year, month):
+    # ### POCZĄTEK POPRAWIONEJ LOGIKI ###
+    
+    # Używamy tej samej logiki grupowania, co w orders_history
+    grouping_date = db.case(
+        (Order.production_month != None, func.date(Order.production_month + '-01')),
+        else_=func.date(Order.sewing_finished_at)
+    )
+
     orders_in_month = Order.query.filter(
-        extract('year', Order.created_at) == year,
-        extract('month', Order.created_at) == month,
-        Order.status == 'ZREALIZOWANE'
+        extract('year', grouping_date) == year,
+        extract('month', grouping_date) == month,
+        Order.status == 'ZREALIZOWANE',
+        Order.sewing_finished_at.isnot(None)
     ).all()
+    # ### KONIEC POPRAWIONEJ LOGIKI ###
 
     product_details = defaultdict(lambda: {'quantity': 0, 'total_value': 0.0})
 
@@ -528,7 +560,6 @@ def monthly_production_details(year, month):
             product_details[product_name]['total_value'] += quantity * price
             product_details[product_name]['price'] = price
 
-
     details_list = [
         {
             'name': name,
@@ -541,7 +572,6 @@ def monthly_production_details(year, month):
 
     return jsonify(sorted(details_list, key=lambda x: x['name']))
 
-
 @app.route('/orders/<int:order_id>')
 def order_detail(order_id):
     order = Order.query.get_or_404(order_id)
@@ -552,26 +582,24 @@ def order_detail(order_id):
     return render_template('order_detail.html', order=order, material_summary=material_summary, cost_details=cost_details)
     # ### KONIEC ZMIANY ###
 
+# W app/routes.py
 @app.route('/orders/<int:order_id>/status', methods=['POST'])
 def update_order_status(order_id):
     order = Order.query.get_or_404(order_id)
     new_status = request.form.get('status')
     if new_status:
         order.status = new_status
+        # ### NOWY KOD: Ustaw datę zakończenia, jeśli jej brakuje ###
+        if new_status == 'ZREALIZOWANE' and not order.sewing_finished_at:
+            order.sewing_finished_at = datetime.utcnow()
+        # ### KONIEC NOWEGO KODU ###
         db.session.commit()
         flash('Status zlecenia został zaktualizowany.', 'success')
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify(success=True, order_id=order.id, status=order.status)
     return redirect(url_for('order_detail', order_id=order.id))
 
-# app/routes.py
 
-# Upewnij się, że te importy są na górze pliku
-import qrcode
-import os
-import io
-
-# ... (reszta Twoich tras i importów) ...
 
 # ZNAJDŹ I ZASTĄP CAŁĄ FUNKCJĘ 'order_pdf' PONIŻSZYM KODEM
 @app.route('/orders/<int:order_id>/pdf')
@@ -2416,3 +2444,96 @@ def get_recent_cutting_notes():
     return jsonify(notes)
 
 # --- KONIEC NOWEGO KODU ---
+
+# W app/routes.py, wklej na końcu pliku
+
+# ### NOWE API DO ZARZĄDZANIA OKRESEM PRODUKCYJNYM ###
+
+@app.route('/api/production_period/<int:year>/<int:month>')
+def get_production_period_orders(year, month):
+    """
+    Zwraca listę zleceń do zarządzania dla danego okresu rozliczeniowego.
+    Obejmuje zlecenia ZAKOŃCZONE w danym miesiącu ORAZ te, które zostały
+    do niego ręcznie przypisane z innych miesięcy.
+    """
+    # Format miesiąca dla zapytań (np. '2025-10')
+    period_str = f"{year}-{month:02d}"
+    
+    # Określ poprzedni i następny miesiąc
+    current_date = date(year, month, 1)
+    prev_month_date = current_date - timedelta(days=1)
+    next_month_date = (current_date.replace(day=28) + timedelta(days=4)).replace(day=1)
+    
+    prev_period_str = prev_month_date.strftime('%Y-%m')
+    next_period_str = next_month_date.strftime('%Y-%m')
+
+    # 1. Znajdź zlecenia zakończone w danym miesiącu kalendarzowym
+    orders_finished_in_month = Order.query.filter(
+        extract('year', Order.sewing_finished_at) == year,
+        extract('month', Order.sewing_finished_at) == month,
+        Order.status == 'ZREALIZOWANE'
+    ).all()
+
+    # 2. Znajdź zlecenia ręcznie przypisane do tego miesiąca (ale zakończone w innym)
+    orders_assigned_to_month = Order.query.filter(
+        Order.production_month == period_str,
+        db.or_(
+            extract('year', Order.sewing_finished_at) != year,
+            extract('month', Order.sewing_finished_at) != month
+        )
+    ).all()
+
+    # Połącz obie listy, usuwając duplikaty
+    all_relevant_orders = sorted(
+        list(set(orders_finished_in_month + orders_assigned_to_month)),
+        key=lambda o: o.sewing_finished_at,
+        reverse=True
+    )
+    
+    orders_list = []
+    for order in all_relevant_orders:
+        # Określ domyślne przypisanie
+        assigned_period = order.production_month
+        if not assigned_period:
+            assigned_period = order.sewing_finished_at.strftime('%Y-%m')
+
+        orders_list.append({
+            'id': order.id,
+            'order_code': order.order_code,
+            'client_name': order.client.name,
+            'finished_date': order.sewing_finished_at.strftime('%d.%m.%Y'),
+            'production_value': calculate_order_total_cost(order).get('production_cost', 0),
+            'assigned_period': assigned_period, # Do którego miesiąca jest aktualnie przypisane
+            # Opcje do wyboru na froncie
+            'assignment_options': [
+                {'value': prev_period_str, 'label': f'Poprzedni ({prev_month_date.strftime("%B %Y")})'},
+                {'value': period_str, 'label': f'Bieżący ({current_date.strftime("%B %Y")})'},
+                {'value': next_period_str, 'label': f'Następny ({next_month_date.strftime("%B %Y")})'},
+            ]
+        })
+        
+    return jsonify(orders_list)
+
+@app.route('/api/assign_production_month', methods=['POST'])
+def assign_production_month():
+    """Zapisuje ręczne przypisanie zleceń do okresów produkcyjnych."""
+    data = request.get_json()
+    assignments = data.get('assignments', [])
+    
+    if not assignments:
+        return jsonify({'error': 'Brak danych do zapisu'}), 400
+        
+    try:
+        for item in assignments:
+            order_id = item.get('order_id')
+            period = item.get('period')
+            
+            order = Order.query.get(order_id)
+            if order:
+                order.production_month = period
+                
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Zapisano zmiany w okresach produkcyjnych.'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500

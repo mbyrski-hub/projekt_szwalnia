@@ -63,7 +63,8 @@ class Order(db.Model):
     sewing_started_at = db.Column(db.DateTime, nullable=True)
     sewing_finished_at = db.Column(db.DateTime, nullable=True)
     # ---------------------------------------------
-    
+    # Przechowuje ręcznie przypisany miesiąc produkcji w formacie 'YYYY-MM'
+    production_month = db.Column(db.String(7), nullable=True, index=True)
     order_items = db.relationship('OrderItem', backref='order', lazy=True, cascade="all, delete-orphan")
     attachments = db.relationship('Attachment', backref='order', lazy=True, cascade="all, delete-orphan")
     materials_used = db.relationship('MaterialUsage', backref='order', cascade="all, delete-orphan")

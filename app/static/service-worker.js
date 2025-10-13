@@ -1,5 +1,5 @@
-// Aplikacja: wersja 1.2 (z poprawioną obsługą powiadomień)
-const SW_VERSION = '1.2';
+// Aplikacja: wersja 1.2.4 (z poprawioną obsługą powiadomień)
+const SW_VERSION = '1.2.4';
 
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SKIP_WAITING') {

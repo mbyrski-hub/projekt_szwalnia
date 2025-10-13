@@ -34,8 +34,8 @@
             <tr>
                 <th>Miesiąc</th>
                 <th>Liczba Zleceń</th>
-                <th>Wartość Produkcji</th>
-                <th>Akcje</th>
+                <th class="text-end">Wartość Produkcji</th>
+                <th class="text-center">Akcje</th>
             </tr>
         </thead>
         <tbody>
@@ -43,9 +43,15 @@
             <tr>
                 <td>{{ summary.year }}-{{ "%02d"|format(summary.month) }}</td>
                 <td>{{ summary.order_count }}</td>
-                <td>{{ "%.2f zł"|format(summary.total_production_value or 0) }}</td>
-                <td>
+                <td class="text-end"><strong>{{ "%.2f zł"|format(summary.total_production_value or 0) }}</strong></td>
+                <td class="text-center">
                     <button class="btn btn-sm btn-info btn-show-details" data-year="{{ summary.year }}" data-month="{{ summary.month }}">Pokaż szczegóły</button>
+                    <button class="btn btn-sm btn-outline-secondary manage-period-btn ms-2"
+                            data-year="{{ summary.year }}"
+                            data-month="{{ summary.month }}"
+                            title="Zarządzaj okresem rozliczeniowym">
+                        <i class="fas fa-edit"></i>
+                    </button>
                 </td>
             </tr>
             {% else %}
@@ -65,6 +71,7 @@
                 <th>Nr zlecenia</th>
                 <th>Klient</th>
                 <th>Data utworzenia</th>
+                <th>Data zakończenia</th>
                 <th>Status</th>
                 <th>Akcje</th>
             </tr>
@@ -75,6 +82,7 @@
                 <td>{{ order.order_code }}</td>
                 <td>{{ order.client.name }}</td>
                 <td>{{ order.created_at.strftime('%Y-%m-%d') }}</td>
+                <td>{{ order.sewing_finished_at.strftime('%Y-%m-%d') if order.sewing_finished_at else 'Brak' }}</td>
                 <td>{{ order.status }}</td>
                 <td>
                     <a href="{{ url_for('order_detail', order_id=order.id) }}" class="btn btn-sm btn-info">Szczegóły</a>
@@ -82,7 +90,7 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="5" class="text-center">Brak zleceń do wyświetlenia.</td>
+                <td colspan="6" class="text-center">Brak zleceń do wyświetlenia.</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -94,9 +102,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="detailsModalLabel">Szczegóły Produkcji</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
         <table class="table">
@@ -105,18 +111,36 @@
                     <th>Produkt</th>
                     <th>Ilość</th>
                     <th>Cena Produkcji</th>
-                    <th>Wartość</th>
+                    <th class="text-end">Wartość</th>
                 </tr>
             </thead>
             <tbody id="modal-table-body">
-                </tbody>
+            </tbody>
         </table>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">Zamknij</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zamknij</button>
       </div>
     </div>
   </div>
+</div>
+
+<div class="modal fade" id="managePeriodModal" tabindex="-1" aria-labelledby="managePeriodModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="managePeriodModalLabel">Zarządzaj produkcją</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="modal-body-content">
+                <div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Ładowanie...</span></div></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+                <button type="button" class="btn btn-primary" id="save-period-changes-btn">Zapisz zmiany</button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -124,6 +148,11 @@
 {{ super() }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Inicjalizacja obu modali za pomocą standardowego API Bootstrap 5
+    const detailsModal = new bootstrap.Modal(document.getElementById('detailsModal'));
+    const managePeriodModal = new bootstrap.Modal(document.getElementById('managePeriodModal'));
+
+    // Logika dla modala SZCZEGÓŁÓW
     const detailsButtons = document.querySelectorAll('.btn-show-details');
     const modalTableBody = document.getElementById('modal-table-body');
     const modalTitle = document.getElementById('detailsModalLabel');
@@ -133,32 +162,144 @@ document.addEventListener('DOMContentLoaded', function() {
             const year = this.dataset.year;
             const month = this.dataset.month;
 
-            modalTitle.textContent = `Szczegóły Produkcji dla ${year}-${month.padStart(2, '0')}`;
+            modalTitle.textContent = `Szczegóły Produkcji dla ${year}-${String(month).padStart(2, '0')}`;
             modalTableBody.innerHTML = '<tr><td colspan="4" class="text-center">Ładowanie...</td></tr>';
 
             fetch(`/api/monthly_production_details/${year}/${month}`)
                 .then(response => response.json())
                 .then(data => {
                     let tableContent = '';
+                    let totalValue = 0;
                     data.forEach(item => {
                         tableContent += `
                             <tr>
                                 <td>${item.name}</td>
                                 <td>${item.quantity}</td>
                                 <td>${item.price.toFixed(2)} zł</td>
-                                <td>${item.total_value.toFixed(2)} zł</td>
+                                <td class="text-end">${item.total_value.toFixed(2)} zł</td>
                             </tr>
                         `;
+                        totalValue += item.total_value;
                     });
+                    tableContent += `
+                        <tr class="table-group-divider">
+                            <td colspan="3" class="text-end"><strong>Suma:</strong></td>
+                            <td class="text-end"><strong>${totalValue.toFixed(2)} zł</strong></td>
+                        </tr>
+                    `;
                     modalTableBody.innerHTML = tableContent;
-                    $('#detailsModal').modal('show');
+                    detailsModal.show();
                 })
                 .catch(error => {
                     console.error('Błąd:', error);
                     modalTableBody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Błąd ładowania danych.</td></tr>';
-                    $('#detailsModal').modal('show');
+                    detailsModal.show();
                 });
         });
+    });
+
+    // Logika dla modala ZARZĄDZANIA OKRESEM
+    const manageModalBody = document.getElementById('modal-body-content');
+    const manageModalTitle = document.getElementById('managePeriodModalLabel');
+    let currentYear, currentMonth;
+
+    document.querySelectorAll('.manage-period-btn').forEach(button => {
+        button.addEventListener('click', async function() {
+            currentYear = this.dataset.year;
+            currentMonth = this.dataset.month;
+            
+            manageModalTitle.textContent = `Zarządzaj produkcją za ${String(currentMonth).padStart(2, '0')}/${currentYear}`;
+            manageModalBody.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Ładowanie...</span></div></div>';
+            managePeriodModal.show();
+
+            try {
+                const response = await fetch(`/api/production_period/${currentYear}/${currentMonth}`);
+                if (!response.ok) throw new Error('Błąd sieci');
+                const orders = await response.json();
+                renderModalContent(orders);
+            } catch (error) {
+                console.error("Błąd ładowania danych okresu:", error);
+                manageModalBody.innerHTML = '<p class="text-center text-danger">Nie udało się załadować danych. Spróbuj ponownie.</p>';
+            }
+        });
+    });
+
+    function renderModalContent(orders) {
+        if (orders.length === 0) {
+            manageModalBody.innerHTML = '<p class="text-center">Brak zleceń zakończonych lub przypisanych do tego okresu.</p>';
+            return;
+        }
+
+        const monthNames = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
+
+        let tableHtml = `
+            <p class="small text-muted">Wybierz, do którego miesiąca rozliczeniowego ma być przypisane każde zlecenie.</p>
+            <table class="table table-sm table-hover">
+                <thead>
+                    <tr>
+                        <th>Zlecenie</th>
+                        <th>Klient</th>
+                        <th class="text-end">Wartość prod.</th>
+                        <th class="text-center">Data Zakończenia</th>
+                        <th style="width: 250px;">Przypisz do miesiąca</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        orders.forEach(order => {
+            tableHtml += `
+                <tr data-order-id="${order.id}">
+                    <td>${order.order_code}</td>
+                    <td>${order.client_name}</td>
+                    <td class="text-end">${order.production_value.toFixed(2)} zł</td>
+                    <td class="text-center">${order.finished_date}</td>
+                    <td>
+                        <select class="form-select form-select-sm period-assignment-select">
+                            ${order.assignment_options.map(opt => {
+                                const [year, month] = opt.value.split('-');
+                                const label = `${monthNames[parseInt(month)-1]} ${year}`;
+                                return `
+                                <option value="${opt.value}" ${opt.value === order.assigned_period ? 'selected' : ''}>
+                                    ${label}
+                                </option>
+                            `}).join('')}
+                        </select>
+                    </td>
+                </tr>
+            `;
+        });
+        tableHtml += '</tbody></table>';
+        manageModalBody.innerHTML = tableHtml;
+    }
+
+    document.getElementById('save-period-changes-btn').addEventListener('click', async function() {
+        const assignments = [];
+        document.querySelectorAll('#modal-body-content tr[data-order-id]').forEach(row => {
+            assignments.push({
+                order_id: row.dataset.orderId,
+                period: row.querySelector('.period-assignment-select').value
+            });
+        });
+        
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Zapisywanie...';
+
+        try {
+            const response = await fetch('/api/assign_production_month', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ assignments: assignments })
+            });
+            if (!response.ok) throw new Error('Błąd zapisu');
+            
+            managePeriodModal.hide();
+            location.reload();
+        } catch (error) {
+            console.error("Błąd zapisu:", error);
+            alert("Nie udało się zapisać zmian. Spróbuj ponownie.");
+            this.disabled = false;
+            this.innerHTML = 'Zapisz zmiany';
+        }
     });
 });
 </script>
