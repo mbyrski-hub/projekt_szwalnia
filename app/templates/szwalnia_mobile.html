@@ -6,46 +6,83 @@
     <title>Szwalnia</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
     <link rel="manifest" href="{{ url_for('static', filename='mobile_assets/manifest_szwalnia.json') }}">
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; background-color: #f4f4f8; color: #333; }
-        .container { padding: 10px; }
-        .header { background-color: #28a745; color: white; padding: 15px; text-align: center; font-size: 1.5em; position: sticky; top: 0; z-index: 1000; }
-        h2 { border-bottom: 2px solid #6c757d; padding-bottom: 10px; color: #333; margin-top: 20px; font-size: 1.2em;}
-        h2.sewing-title { border-color: #28a745; color: #28a745; }
+   <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; background-color: #f4f4f8; color: #333; }
+    .container { padding: 10px; }
+    .header { background-color: #28a745; color: white; padding: 15px; text-align: center; font-size: 1.5em; position: sticky; top: 0; z-index: 1000; }
+    h2 { border-bottom: 2px solid #6c757d; padding-bottom: 10px; color: #333; margin-top: 20px; font-size: 1.2em;}
+    h2.sewing-title { border-color: #28a745; color: #28a745; }
 
-        .order-list { display: flex; flex-direction: row; flex-wrap: wrap; gap: 2%; row-gap: 15px; min-height: 100px; padding: 10px; border-radius: 8px; background-color: #e9ecef; align-content: flex-start; }
-        .order-card { background-color: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; border-left: 5px solid #6c757d; flex-basis: 49%; box-sizing: border-box; position: relative; transition: transform 0.2s, box-shadow 0.2s; }
-        
-        /* Karty, których nie da się przeciągnąć */
-        .order-card.readonly { cursor: default; background-color: #f8f9fa; }
-        .order-card.draggable { cursor: grab; }
-        .order-card.dragging { opacity: 0.5; }
+    .order-list {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 2%;
+        row-gap: 10px;
+        min-height: 80px;
+        padding: 10px;
+        border-radius: 8px;
+        background-color: #e9ecef;
+        align-content: flex-start;
+    }
 
-        .order-card.highlight { transform: scale(1.05); box-shadow: 0 4px 15px rgba(40, 167, 69, 0.5); border-left-color: #28a745; }
-        .order-card-header { font-weight: bold; font-size: 1.1em; margin-bottom: 5px; }
-        .order-card-client { font-size: 0.9em; color: #555; }
-        .order-card-status { font-size: 0.8em; color: #007bff; font-weight: bold; margin-top: 8px; }
+    .order-card {
+        background-color: white;
+        padding: 8px 12px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        cursor: pointer;
+        border-left: 4px solid #6c757d;
+        box-sizing: border-box;
+        position: relative;
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-height: 50px;
+    }
+    
+    /* ZMIANA #1: Karty w zespołach (drop-zone) też mają 3 kolumny */
+    .drop-zone .order-card,
+    #unassigned-list .order-card {
+        flex-basis: 32%;
+    }
+    
+    #new-orders-list .order-card {
+        flex-basis: 49%;
+    }
 
-        .drop-zone { border: 2px dashed #ccc; margin-top: 15px; border-radius: 8px;}
-        .drop-zone .order-list { flex-direction: column; flex-wrap: nowrap; } /* Listy w strefach zrzutu są kolumnowe */
-        .drop-zone .order-card { width: 100%; flex-basis: auto; }
-        .drop-zone.drag-over { background-color: #d4edda; border-color: #28a745; }
+    .order-card.readonly { cursor: default; background-color: #f8f9fa; }
+    .order-card.draggable { cursor: grab; }
+    .order-card.dragging { opacity: 0.5; }
 
-        .team-title { background-color: #28a745; color: white; padding: 10px; border-radius: 5px 5px 0 0; margin: 0; font-size: 1.2em;}
-        #zrealizowane-zone .team-title { background-color: #343a40; }
+    .order-card.highlight { transform: scale(1.05); box-shadow: 0 4px 15px rgba(40, 167, 69, 0.5); border-left-color: #28a745; }
+    
+    .order-card-header { font-weight: bold; font-size: 0.9em; margin-bottom: 2px; }
+    .order-card-client { font-size: 0.75em; color: #555; }
+    .order-card-status { font-size: 0.7em; color: #007bff; font-weight: bold; margin-top: 4px; }
 
-        .loader { text-align: center; padding: 20px; font-size: 1.2em; width: 100%; }
-        #refresh-btn { position: fixed; bottom: 20px; right: 20px; background-color: #28a745; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); cursor: pointer; z-index: 1001;}
-        .split-icon { position: absolute; top: 10px; right: 10px; font-size: 1.4em; color: #007bff; cursor: pointer; padding: 5px; }
-        .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
-        .modal-content { background-color: #fefefe; margin: 25% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 8px; }
-        .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
-        #modal-details ul { list-style-type: none; padding: 0; }
-        #confirm-modal .modal-content { text-align: center; }
-        .confirm-buttons { display: flex; justify-content: space-around; }
-        .confirm-btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; color: white; min-width: 100px; }
-        #confirm-yes-btn { background-color: #28a745; } #confirm-no-btn { background-color: #6c757d; }
-    </style>
+    .drop-zone { border: 2px dashed #ccc; margin-top: 15px; border-radius: 8px;}
+    
+    /* Usunęliśmy nadpisywanie stylów dla .drop-zone .order-list, aby zachować układ siatki */
+
+    .drop-zone.drag-over { background-color: #d4edda; border-color: #28a745; }
+
+    .team-title { background-color: #28a745; color: white; padding: 10px; border-radius: 5px 5px 0 0; margin: 0; font-size: 1.2em;}
+    #zrealizowane-zone .team-title { background-color: #343a40; }
+
+    .loader { text-align: center; padding: 20px; font-size: 1.2em; width: 100%; }
+    #refresh-btn { position: fixed; bottom: 20px; right: 20px; background-color: #28a745; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); cursor: pointer; z-index: 1001;}
+    .split-icon { position: absolute; top: 5px; right: 5px; font-size: 1.4em; color: #007bff; cursor: pointer; padding: 5px; }
+    .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+    .modal-content { background-color: #fefefe; margin: 25% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 8px; }
+    .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+    #modal-details ul { list-style-type: none; padding: 0; }
+    #confirm-modal .modal-content { text-align: center; }
+    .confirm-buttons { display: flex; justify-content: space-around; }
+    .confirm-btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; color: white; min-width: 100px; }
+    #confirm-yes-btn { background-color: #28a745; } #confirm-no-btn { background-color: #6c757d; }
+</style>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
@@ -177,39 +214,55 @@ navigator.serviceWorker.addEventListener('message', event => {
             };
             const zones = { 'zespol-1': document.getElementById('zespol-1-zone'), 'zespol-2': document.getElementById('zespol-2-zone'), 'zrealizowane': document.getElementById('zrealizowane-zone'), 'unassigned': document.getElementById('unassigned-list') };
             let draggedItem = null; let originalContainer = null;
+            // ### NOWY KOD - AUTOMATYCZNE PRZEWIJANIE PRZY PRZECIĄGANIU ###
+const scrollSpeed = 20; // Szybkość przewijania w pikselach
+const scrollZoneRatio = 0.15; // 15% ekranu (góra/dół) aktywuje przewijanie
+
+document.addEventListener('dragover', function(e) {
+    // Sprawdzamy, czy jakikolwiek element jest aktualnie przeciągany
+    if (draggedItem) {
+        const scrollZone = window.innerHeight * scrollZoneRatio;
+
+        // Jeśli kursor jest w dolnej strefie przewijania
+        if (e.clientY > window.innerHeight - scrollZone) {
+            window.scrollBy(0, scrollSpeed); // Przewiń w dół
+        }
+        // Jeśli kursor jest w górnej strefie przewijania
+        else if (e.clientY < scrollZone) {
+            window.scrollBy(0, -scrollSpeed); // Przewiń w górę
+        }
+    }
+});
+// ### KONIEC NOWEGO KODU ###
             const detailsModal = document.getElementById('details-modal'); const modalDetails = document.getElementById('modal-details'); const closeModalBtn = detailsModal.querySelector('.close-btn');
             const confirmModal = document.getElementById('confirm-modal'); const confirmModalText = document.getElementById('confirm-modal-text'); const confirmYesBtn = document.getElementById('confirm-yes-btn'); const confirmNoBtn = document.getElementById('confirm-no-btn');
             closeModalBtn.onclick = () => { detailsModal.style.display = 'none'; }; confirmNoBtn.onclick = () => { confirmModal.style.display = 'none'; }; window.onclick = (event) => { if (event.target == detailsModal) { detailsModal.style.display = 'none'; } if (event.target == confirmModal) { confirmModal.style.display = 'none'; } };
             
-            async function showOrderDetails(orderId) {
+            // W app/templates/szwalnia_mobile.html, wewnątrz <script>
+async function showOrderDetails(orderId) {
     modalDetails.innerHTML = '<div class="loader">Ładowanie...</div>';
     detailsModal.style.display = 'block';
 
     const response = await fetch(`/api/order/${orderId}/details`);
     const data = await response.json();
 
-    // 1. Przygotuj listę produktów (bez zmian)
     let productsHtml = '<h4>Produkty:</h4><ul>';
     data.products.forEach(p => {
         productsHtml += `<li><strong>${p.name}</strong> - ${p.size}: ${p.quantity} szt.</li>`;
     });
     productsHtml += '</ul>';
 
-    // 2. Przygotuj sekcję "Uwagi" (tylko jeśli uwagi istnieją)
+    // ### ZMIANA #2: Logika do wyświetlania OBU rodzajów uwag ###
     let uwagiHtml = '';
+    // Uwagi ogólne do zlecenia
     if (data.uwagi) {
-        // Używamy stylowanego bloku, aby uwagi rzucały się w oczy
-        uwagiHtml = `
-            <div style="background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: .25rem; padding: .75rem; margin-top: 1rem;">
-                <h5 style="color: #856404; margin-top: 0; font-size: 1rem;">
-                    <i class="fas fa-exclamation-triangle"></i> Uwagi do zlecenia:
-                </h5>
-                <p style="margin-bottom: 0;">${data.uwagi}</p>
-            </div>
-        `;
+        uwagiHtml += `<div style="background-color: #fff3cd; border-left: 5px solid #ffeeba; padding: 10px; margin-top: 1rem; margin-bottom: 0.5rem;"><h5 style="color: #856404; margin-top: 0; font-size: 1rem;"><i class="fas fa-exclamation-triangle"></i> Uwagi do zlecenia:</h5><p style="margin-bottom: 0;">${data.uwagi}</p></div>`;
+    }
+    // Uwagi z krojowni
+    if (data.uwagi_krojowni) {
+        uwagiHtml += `<div style="background-color: #d1ecf1; border-left: 5px solid #bee5eb; padding: 10px; margin-top: 1rem; margin-bottom: 0.5rem;"><h5 style="color: #0c5460; margin-top: 0; font-size: 1rem;"><i class="fas fa-cut"></i> Uwagi z Krojowni:</h5><p style="margin-bottom: 0;">${data.uwagi_krojowni}</p></div>`;
     }
 
-    // 3. Połącz wszystkie elementy w całość
     modalDetails.innerHTML = `
         <p><strong>Klient:</strong> ${data.client_name}</p>
         <p><strong>Opis:</strong> ${data.description || 'Brak'}</p>

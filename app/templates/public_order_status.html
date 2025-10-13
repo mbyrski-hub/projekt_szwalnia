@@ -34,7 +34,7 @@
                 <h5 class="text-center mb-4">Klient: <strong>{{ order.client.name }}</strong></h5>
                 <p><strong>Opis:</strong> {{ order.description }}</p>
                 <hr>
-                <h6 class="text-center mb-4">Aktualna lokalizacja: <strong>{{ status_info.location }}</strong></h6>
+                <h6 class="text-center mb-4">Aktualna status: <strong>{{ status_info.location }}</strong></h6>
 
                 <ul class="progress-timeline">
                     <li class="{{ 'active' if status_info.current_step >= 1 else '' }}">
