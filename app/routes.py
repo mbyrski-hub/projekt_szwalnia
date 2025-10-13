@@ -1566,6 +1566,8 @@ def skip_subiekt_product():
 
 # W app/routes.py
 
+# W app/routes.py
+
 @app.route('/calculator')
 def calculator():
     # Pobierz wszystkie potrzebne dane z bazy
@@ -1577,7 +1579,7 @@ def calculator():
 
     # --- Przygotowanie danych dla JavaScript ---
     
-    # Konwertujemy obiekty Supplier na prostą listę słowników, którą można bezpiecznie przekazać do JSON
+    # Konwertujemy obiekty Supplier na prostą listę słowników
     all_suppliers_list = [{'id': s.id, 'name': s.name} for s in all_suppliers_query]
 
     # Dane o produktach
@@ -1587,29 +1589,67 @@ def calculator():
         'materials_needed': [{'id': pm.material_id, 'quantity': pm.quantity} for pm in p.materials_needed]
     } for p in all_products }
 
-    # Dane o tkaninach z cenami od dostawców
-    fabrics_data = { f.id: {
-        'name': f.name, 'default_price': f.price or 0.0,
-        'prices': [{'supplier_id': sp.supplier_id, 'supplier_name': sp.supplier.name, 'price': sp.price} for sp in f.supplier_prices]
-    } for f in all_fabrics }
-    
-    # Dane o materiałach z cenami od dostawców
-    materials_data = { m.id: {
-        'name': m.name, 'default_price': m.price or 0.0,
-        'prices': [{'supplier_id': sp.supplier_id, 'supplier_name': sp.supplier.name, 'price': sp.price} for sp in m.supplier_prices]
-    } for m in all_materials }
+    # ### POCZĄTEK POPRAWIONEJ LOGIKI SORTOWANIA I OZNACZANIA CEN ###
+    from datetime import date
+
+    fabrics_data = {}
+    for f in all_fabrics:
+        # Sortuj ceny od najnowszej do najstarszej (daty None traktuj jako najstarsze)
+        sorted_prices = sorted(
+            f.supplier_prices,
+            key=lambda sp: sp.price_date or date.min,
+            reverse=True
+        )
+        
+        fabrics_data[f.id] = {
+            'name': f.name,
+            'default_price': f.price or 0.0,
+            'prices': [
+                {
+                    'supplier_id': sp.supplier_id,
+                    'supplier_name': sp.supplier.name,
+                    'price': sp.price,
+                    # Oznacz pierwszą pozycję po posortowaniu jako domyślną
+                    'is_default': i == 0 
+                } for i, sp in enumerate(sorted_prices)
+            ]
+        }
+
+    materials_data = {}
+    for m in all_materials:
+        # Sortuj ceny od najnowszej do najstarszej
+        sorted_prices = sorted(
+            m.supplier_prices,
+            key=lambda sp: sp.price_date or date.min,
+            reverse=True
+        )
+        
+        materials_data[m.id] = {
+            'name': m.name,
+            'default_price': m.price or 0.0,
+            'prices': [
+                {
+                    'supplier_id': sp.supplier_id,
+                    'supplier_name': sp.supplier.name,
+                    'price': sp.price,
+                    # Oznacz pierwszą pozycję po posortowaniu jako domyślną
+                    'is_default': i == 0
+                } for i, sp in enumerate(sorted_prices)
+            ]
+        }
+    # ### KONIEC POPRAWIONEJ LOGIKI ###
 
     return render_template('calculator.html',
                            products=all_products, 
-                           fabrics=all_fabrics,        # Przekazujemy dla pętli w szablonie
-                           materials=all_materials,    # Przekazujemy dla pętli w szablonie
+                           fabrics=all_fabrics,
+                           materials=all_materials,
                            categories=all_categories,
-                           suppliers=all_suppliers_query,  # Przekazujemy dla pętli w szablonie
-                           # Zmienna suppliers_json jest teraz poprawnie sformatowana
-                           suppliers_json=json.dumps(all_suppliers_list), 
-                           products_json=json.dumps(products_data),
-                           fabrics_json=json.dumps(fabrics_data),
-                           materials_json=json.dumps(materials_data))
+                           suppliers=all_suppliers_query,
+                           # Przekazuj dane jako słowniki Pythona, BEZ json.dumps()
+                           suppliers_json=all_suppliers_list, 
+                           products_json=products_data,
+                           fabrics_json=fabrics_data,
+                           materials_json=materials_data)
 
 # ### NOWY KOD - SERWOWANIE SERVICE WORKERA Z ZAKAZEM CACHOWANIA ###
 @app.route('/service-worker.js')

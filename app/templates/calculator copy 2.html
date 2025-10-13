@@ -111,12 +111,12 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // 1. DATA
+    // 1. WCZYTANIE DANYCH
     const productsData = {{ products_json|tojson|safe }};
     const fabricsData = {{ fabrics_json|tojson|safe }};
     const materialsData = {{ materials_json|tojson|safe }};
 
-    // 2. DOM ELEMENTS
+    // 2. ELEMENTY DOM
     const categoryFilter = document.getElementById('categoryFilter');
     const productSelector = document.getElementById('productSelector');
     const productOptions = Array.from(productSelector.options);
@@ -133,7 +133,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const prodCostEl = document.getElementById('prodCost');
     const totalCostEl = document.getElementById('totalCost');
 
-    // 3. CORE FUNCTIONS
+    // 3. GŁÓWNE FUNKCJE
     function calculate() {
         let totalFabricCost = 0;
         document.querySelectorAll('.fabric-row').forEach(row => {
@@ -159,13 +159,32 @@ document.addEventListener('DOMContentLoaded', function() {
         finalPriceEl.textContent = `${finalPrice.toFixed(2)} zł`;
     }
 
-    function updatePrice(row) {
+    function updateRow(row) {
         const itemSelect = row.querySelector('.item-select');
         const supplierSelect = row.querySelector('.supplier-select');
         const itemId = itemSelect.value;
+
+        if (!itemId || itemId === '0') {
+            row.dataset.price = '0.0';
+            supplierSelect.innerHTML = '<option value="default">-- Dostawca --</option>';
+            supplierSelect.disabled = true;
+            calculate();
+            return;
+        }
+
         const itemType = row.classList.contains('fabric-row') ? 'fabric' : 'material';
         const itemsData = itemType === 'fabric' ? fabricsData : materialsData;
         const item = itemsData[itemId];
+
+        supplierSelect.innerHTML = '<option value="default">-- Domyślna --</option>';
+        if (item && item.prices && item.prices.length > 0) {
+            item.prices.forEach(p => {
+                supplierSelect.innerHTML += `<option value="${p.supplier_id}">${p.supplier_name} (${p.price.toFixed(2)})</option>`;
+            });
+            supplierSelect.disabled = false;
+        } else {
+            supplierSelect.disabled = true;
+        }
 
         let price = item ? (item.default_price || 0.0) : 0.0;
         if (supplierSelect.value !== "default") {
@@ -174,43 +193,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         row.dataset.price = price;
         calculate();
-    }
-
-    function populateSuppliers(row) {
-        const itemSelect = row.querySelector('.item-select');
-        const supplierSelect = row.querySelector('.supplier-select');
-        const itemId = itemSelect.value;
-        
-        if (!itemId || itemId === '0') {
-            supplierSelect.innerHTML = '<option value="default">-- Dostawca --</option>';
-            supplierSelect.disabled = true;
-            updatePrice(row);
-            return;
-        }
-
-        const itemType = row.classList.contains('fabric-row') ? 'fabric' : 'material';
-        const itemsData = itemType === 'fabric' ? fabricsData : materialsData;
-        const item = itemsData[itemId];
-        
-        // ### POCZĄTEK ZMIANY ###
-        // Ustaw domyślną opcję i od razu ją stylizuj
-        supplierSelect.innerHTML = '<option value="default" style="font-weight: bold; color: #007bff;">-- Domyślna (Ostatnia) --</option>';
-        
-        if (item && item.prices && item.prices.length > 0) {
-            item.prices.forEach(p => {
-                // Dodaj styl, jeśli dostawca jest domyślny
-                const style = p.is_default ? 'style="font-weight: bold; color: #007bff;"' : '';
-                const defaultIndicator = p.is_default ? ' (Ostatnia)' : '';
-                
-                supplierSelect.innerHTML += `<option value="${p.supplier_id}" ${style}>${p.supplier_name}${defaultIndicator} (${p.price.toFixed(2)})</option>`;
-            });
-            supplierSelect.disabled = false;
-        } else {
-            supplierSelect.disabled = true;
-        }
-        // ### KONIEC ZMIANY ###
-        
-        updatePrice(row);
     }
 
     function createRow(type, itemId = null, usage = null) {
@@ -222,7 +204,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (usage) newRow.querySelector('.item-usage').value = usage;
         
         list.appendChild(newRow);
-        if (itemId) populateSuppliers(newRow);
+        if (itemId) updateRow(newRow);
     }
     
     function loadProductData(productId) {
@@ -244,34 +226,40 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function filterProducts() {
         const selectedCategoryId = categoryFilter.value;
-        let isSelectedVisible = false;
+        let isSelectedProductVisible = false;
 
         productOptions.forEach(option => {
             const isCustom = option.value === 'custom';
             const isMatch = selectedCategoryId === 'all' || option.dataset.categoryId === String(selectedCategoryId);
             
-            if (!isCustom) option.classList.toggle('hidden', !isMatch);
-            if(option.selected && (isMatch || isCustom)) isSelectedVisible = true;
+            if (!isCustom) {
+                option.classList.toggle('hidden', !isMatch);
+            }
+            if(option.selected && (isMatch || isCustom)) {
+                isSelectedProductVisible = true;
+            }
         });
 
-        if (!isSelectedVisible) productSelector.value = 'custom';
+        if (!isSelectedProductVisible) {
+            productSelector.value = 'custom';
+        }
         loadProductData(productSelector.value);
     }
 
-    // 4. EVENT LISTENERS
-    categoryFilter.addEventListener('change', filterProducts);
-    productSelector.addEventListener('change', () => loadProductData(productSelector.value));
-    addFabricBtn.addEventListener('click', () => createRow('fabric'));
-    addMaterialBtn.addEventListener('click', () => createRow('material'));
-
+    // 4. ZDARZENIA
     document.body.addEventListener('change', e => {
-        if (e.target.matches('.item-select')) populateSuppliers(e.target.closest('.form-row'));
-        if (e.target.matches('.supplier-select')) updatePrice(e.target.closest('.form-row'));
+        if (e.target.matches('#categoryFilter')) filterProducts();
+        if (e.target.matches('#productSelector')) loadProductData(e.target.value);
+        if (e.target.matches('.item-select, .supplier-select')) updateRow(e.target.closest('.form-row'));
     });
+
     document.body.addEventListener('input', e => {
         if (e.target.matches('.calc-input')) calculate();
     });
+
     document.body.addEventListener('click', e => {
+        if (e.target.matches('#add-fabric-btn')) createRow('fabric');
+        if (e.target.matches('#add-material-btn')) createRow('material');
         const removeBtn = e.target.closest('.remove-btn');
         if (removeBtn) {
             removeBtn.closest('.form-row').remove();
@@ -279,7 +267,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // 5. INITIALIZATION
+    // 5. INICJALIZACJA
     filterProducts();
 });
 </script>
