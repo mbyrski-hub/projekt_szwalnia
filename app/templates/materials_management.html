@@ -2,29 +2,48 @@
 
 {% block head %}
 <style>
-    /* 1. Zmiana koloru nagłówków tabel */
-    .table thead.thead-dark th {
-        background-color: #f1f3f5; /* Jasny, neutralny szary */
-        color: #495057;           /* Ciemny tekst dla kontrastu */
-        border-color: #dee2e6;
+    /* Styl dla nagłówka karty w akordeonie */
+    .card-header-flex {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        padding: 0.75rem 1.25rem;
     }
-
-    /* 2. Zmniejszenie odstępów między wierszami */
-    .table td, .table th {
-        padding-top: 0.6rem;
-        padding-bottom: 0.6rem;
-        vertical-align: middle; /* Lepsze wyrównanie tekstu i przycisków w pionie */
+    /* Przycisk rozwijający zajmuje dostępną przestrzeń */
+    .card-header .btn-link {
+        color: var(--text-color);
+        text-decoration: none;
+        padding: 0;
+        text-align: left;
+        white-space: normal; /* Pozwala na zawijanie tekstu w nazwie */
     }
-
-    /* 3. Rozszerzenie kolumn (całej sekcji) na szerokich ekranach */
-    /* Ta reguła sprawi, że na monitorach >1200px główny kontener będzie szerszy */
-    @media (min-width: 1200px) {
-        .container {
-            max-width: 1400px; 
-        }
+    .card-header .btn-link:hover {
+        text-decoration: none;
+    }
+    /* Kontener na przyciski i ceny po prawej stronie */
+    .header-actions {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0; /* Zapobiega kurczeniu się tego kontenera */
+        margin-left: 1rem;
+    }
+    /* Styl dla rozwijanego ciała karty */
+    .card-body-details {
+        background-color: var(--hover-bg-color);
+    }
+    /* Strzałka wskazująca stan rozwinięcia */
+    .arrow-icon {
+        transition: transform 0.2s ease-in-out;
+        margin-right: 10px;
+    }
+    /* Obrót strzałki po kliknięciu */
+    .btn-link[aria-expanded="true"] .arrow-icon {
+        transform: rotate(90deg);
     }
 </style>
 {% endblock %}
+
 {% block title %}Zarządzanie Materiałami{% endblock %}
 
 {% block content %}
@@ -32,73 +51,136 @@
 
 <div class="row mt-4">
     <div class="col-lg-6">
-        <h4><i class="fas fa-scroll"></i> Tkaniny</h4>
-        <div class="mb-3">
-            <a href="{{ url_for('add_fabric') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Dodaj nową tkaninę</a>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4><i class="fas fa-scroll"></i> Tkaniny</h4>
+            <a href="{{ url_for('add_fabric') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Dodaj nową</a>
         </div>
-        <div class="table-responsive">
-            <table class="table table-striped table-hover">
-                <thead class="thead-dark">
-                    <tr>
-                        <th>Nazwa</th>
-                        <th>Cena Netto</th>
-                        <th>Akcje</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for fabric in fabrics %}
-                    <tr>
-                        <td>{{ fabric.name }}<br><small class="text-muted">{{ fabric.subiekt_symbol or '' }}</small></td>
-                        <td>{{ "%.2f zł"|format(fabric.price) if fabric.price is not none else 'Brak' }}</td>
-                        <td>
-    <div class="d-flex">
-        <a href="{{ url_for('edit_mapped_item', item_type='fabric', item_id=fabric.id) }}" class="btn btn-sm btn-warning"><i class="fas fa-edit"></i></a>
-        <form method="POST" action="{{ url_for('delete_fabric', fabric_id=fabric.id) }}" class="d-inline ml-1" onsubmit="return confirm('Czy na pewno usunąć?');">
-            <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
-        </form>
-    </div>
-</td>
-                    </tr>
-                {% else %}
-                    <tr><td colspan="3" class="text-center">Brak tkanin.</td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
+        <div class="accordion" id="fabricsAccordion">
+            {% for fabric in fabrics %}
+            <div class="card">
+                <div class="card-header p-0" id="heading-fabric-{{ fabric.id }}">
+                    <div class="card-header-flex">
+                        <button class="btn btn-link btn-block" type="button" data-toggle="collapse" data-target="#collapse-fabric-{{ fabric.id }}" aria-expanded="false" aria-controls="collapse-fabric-{{ fabric.id }}">
+                            <i class="fas fa-chevron-right arrow-icon"></i>
+                            <span>
+                                <strong>{{ fabric.name }}</strong>
+                                <small class="text-muted d-block">{{ fabric.subiekt_symbol or 'Brak symbolu' }}</small>
+                            </span>
+                        </button>
+                        <div class="header-actions">
+                            <div class="text-right mr-3">
+                                {% if fabric.price is not none %}
+                                    <span class="font-weight-bold">{{ "%.2f zł"|format(fabric.price) }}</span>
+                                {% else %}
+                                    <span class="text-muted">Brak</span>
+                                {% endif %}
+                                <small class="text-muted d-block">Najnowsza</small>
+                            </div>
+                            <span class="badge badge-info mr-3" title="Liczba dostawców">{{ fabric.supplier_prices.count() }}</span>
+                            <div>
+                                <a href="{{ url_for('edit_mapped_item', item_type='fabric', item_id=fabric.id) }}" class="btn btn-sm btn-warning" title="Edytuj"><i class="fas fa-edit"></i></a>
+                                <form method="POST" action="{{ url_for('delete_fabric', fabric_id=fabric.id) }}" class="d-inline" onsubmit="return confirm('Czy na pewno usunąć?');">
+                                    <button type="submit" class="btn btn-sm btn-danger" title="Usuń"><i class="fas fa-trash"></i></button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="collapse-fabric-{{ fabric.id }}" class="collapse" data-parent="#fabricsAccordion">
+                    <div class="card-body card-body-details">
+                        <h6>Historia cen dla: <strong>{{ fabric.name }}</strong></h6>
+                        {% if fabric.supplier_prices.count() > 0 %}
+                            <table class="table table-sm table-borderless bg-transparent">
+                                <thead><tr><th>Dostawca</th><th>Cena Netto</th><th>Data Ceny</th></tr></thead>
+                                <tbody>
+                                {% for sp in fabric.supplier_prices.order_by(desc(FabricPrice.price_date)) %}
+                                    <tr>
+                                        <td>{{ sp.supplier.name }}</td>
+                                        <td>{{ "%.2f zł"|format(sp.price) }}</td>
+                                        <td>{{ sp.price_date.strftime('%Y-%m-%d') if sp.price_date else 'Brak' }}</td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        {% else %}
+                            <p class="text-muted mb-0">Brak zapisanej historii cen dla tej tkaniny.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <p class="text-muted">Brak zdefiniowanych tkanin.</p>
+            {% endfor %}
         </div>
     </div>
 
     <div class="col-lg-6">
-        <h4><i class="fas fa-cogs"></i> Materiały Dodatkowe</h4>
-        <div class="mb-3">
-            <a href="{{ url_for('add_material') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Dodaj nowy materiał</a>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4><i class="fas fa-cogs"></i> Materiały Dodatkowe</h4>
+            <a href="{{ url_for('add_material') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Dodaj nowy</a>
         </div>
-        <div class="table-responsive">
-            <table class="table table-striped table-hover">
-                <thead class="thead-dark">
-                    <tr>
-                        <th>Nazwa</th>
-                        <th>Cena Netto</th>
-                        <th>Akcje</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for material in materials %}
-                    <tr>
-                        <td>{{ material.name }}<br><small class="text-muted">{{ material.subiekt_symbol or '' }}</small></td>
-                        <td>{{ "%.2f zł"|format(material.price) if material.price is not none else 'Brak' }}</td>
-                        <td>
-                            <a href="{{ url_for('edit_mapped_item', item_type='material', item_id=material.id) }}" class="btn btn-sm btn-warning"><i class="fas fa-edit"></i></a>
-                            <form method="POST" action="{{ url_for('delete_material', material_id=material.id) }}" class="d-inline" onsubmit="return confirm('Czy na pewno usunąć?');">
-                                <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
-                            </form>
-                        </td>
-                    </tr>
-                {% else %}
-                    <tr><td colspan="3" class="text-center">Brak materiałów.</td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
+        <div class="accordion" id="materialsAccordion">
+            {% for material in materials %}
+            <div class="card">
+                <div class="card-header p-0" id="heading-material-{{ material.id }}">
+                    <div class="card-header-flex">
+                        <button class="btn btn-link btn-block" type="button" data-toggle="collapse" data-target="#collapse-material-{{ material.id }}" aria-expanded="false" aria-controls="collapse-material-{{ material.id }}">
+                            <i class="fas fa-chevron-right arrow-icon"></i>
+                            <span>
+                                <strong>{{ material.name }}</strong>
+                                <small class="text-muted d-block">{{ material.subiekt_symbol or 'Brak symbolu' }}</small>
+                            </span>
+                        </button>
+                        <div class="header-actions">
+                            <div class="text-right mr-3">
+                                {% if material.price is not none %}
+                                    <span class="font-weight-bold">{{ "%.2f zł"|format(material.price) }}</span>
+                                {% else %}
+                                    <span class="text-muted">Brak</span>
+                                {% endif %}
+                                <small class="text-muted d-block">Najnowsza</small>
+                            </div>
+                            <span class="badge badge-info mr-3" title="Liczba dostawców">{{ material.supplier_prices.count() }}</span>
+                            <div>
+                                <a href="{{ url_for('edit_mapped_item', item_type='material', item_id=material.id) }}" class="btn btn-sm btn-warning" title="Edytuj"><i class="fas fa-edit"></i></a>
+                                <form method="POST" action="{{ url_for('delete_material', material_id=material.id) }}" class="d-inline" onsubmit="return confirm('Czy na pewno usunąć?');">
+                                    <button type="submit" class="btn btn-sm btn-danger" title="Usuń"><i class="fas fa-trash"></i></button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="collapse-material-{{ material.id }}" class="collapse" data-parent="#materialsAccordion">
+                    <div class="card-body card-body-details">
+                        <h6>Historia cen dla: <strong>{{ material.name }}</strong></h6>
+                        {% if material.supplier_prices.count() > 0 %}
+                            <table class="table table-sm table-borderless bg-transparent">
+                                <thead><tr><th>Dostawca</th><th>Cena Netto</th><th>Data Ceny</th></tr></thead>
+                                <tbody>
+                                {% for sp in material.supplier_prices.order_by(desc(MaterialPrice.price_date)) %}
+                                    <tr>
+                                        <td>{{ sp.supplier.name }}</td>
+                                        <td>{{ "%.2f zł"|format(sp.price) }}</td>
+                                        <td>{{ sp.price_date.strftime('%Y-%m-%d') if sp.price_date else 'Brak' }}</td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        {% else %}
+                            <p class="text-muted mb-0">Brak zapisanej historii cen dla tego materiału.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <p class="text-muted">Brak zdefiniowanych materiałów dodatkowych.</p>
+            {% endfor %}
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+{# Żaden dodatkowy skrypt nie jest potrzebny! Bootstrap sam obsłuży logikę akordeonu. #}
 {% endblock %}

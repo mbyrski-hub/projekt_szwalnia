@@ -20,18 +20,20 @@ class OrderFabric(db.Model):
 
 class Fabric(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False, unique=True)
+    name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Float, nullable=True)
     subiekt_symbol = db.Column(db.String(50), nullable=True, unique=True, index=True)
+    supplier_prices = db.relationship('FabricPrice', backref='fabric', lazy='dynamic', cascade="all, delete-orphan")
     
     def __repr__(self):
         return f'<Fabric {self.name}>'
 
 class Material(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False, unique=True)
+    name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Float, nullable=True)
     subiekt_symbol = db.Column(db.String(50), nullable=True, unique=True, index=True)
+    supplier_prices = db.relationship('MaterialPrice', backref='material', lazy='dynamic', cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<Material {self.name}>'
@@ -42,7 +44,7 @@ class Order(db.Model):
     client_id = db.Column(db.Integer, db.ForeignKey('client.id'), nullable=False)
     description = db.Column(db.Text, nullable=False)
     login_info = db.Column(db.Text, nullable=True)
-    uwagi = db.Column(db.Text, nullable=True)  # <-- DODAJ TĘ LINIĘ
+    uwagi = db.Column(db.Text, nullable=True)
     uwagi_krojowni = db.Column(db.Text, nullable=True)
     uwagi_krojowni_updated_at = db.Column(db.DateTime, nullable=True)
     deadline = db.Column(db.Date, nullable=False)
@@ -57,13 +59,11 @@ class Order(db.Model):
     team1_completed = db.Column(db.Boolean, default=False, nullable=False)
     team2_completed = db.Column(db.Boolean, default=False, nullable=False)
     
-    # --- NOWE POLA DO ŚLEDZENIA CZASU PRODUKCJI ---
     cutting_started_at = db.Column(db.DateTime, nullable=True)
     cutting_finished_at = db.Column(db.DateTime, nullable=True)
     sewing_started_at = db.Column(db.DateTime, nullable=True)
     sewing_finished_at = db.Column(db.DateTime, nullable=True)
-    # ---------------------------------------------
-    # Przechowuje ręcznie przypisany miesiąc produkcji w formacie 'YYYY-MM'
+    
     production_month = db.Column(db.String(7), nullable=True, index=True)
     order_items = db.relationship('OrderItem', backref='order', lazy=True, cascade="all, delete-orphan")
     attachments = db.relationship('Attachment', backref='order', lazy=True, cascade="all, delete-orphan")
@@ -94,13 +94,10 @@ class Product(db.Model):
     description = db.Column(db.Text, nullable=True) 
 
     production_price = db.Column(db.Float, nullable=False, default=0.0)
-    # USUŃ TĘ LINIĘ:
-    # image_id = db.Column(db.String(100), nullable=True) 
-
+    
     category_id = db.Column(db.Integer, db.ForeignKey('product_category.id'), nullable=True)
     category = db.relationship('ProductCategory', backref='products')
 
-    # DODAJ TĘ LINIĘ:
     images = db.relationship('ProductImage', backref='product', lazy=True, cascade="all, delete-orphan")
 
     fabrics_needed = db.relationship('ProductFabric', backref='product', lazy=True, cascade="all, delete-orphan")
@@ -202,7 +199,6 @@ class SystemInfo(db.Model):
 class LabelTemplate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
-    # W tej kolumnie będziemy przechowywać całą strukturę metki w formacie JSON
     content_json = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -213,13 +209,13 @@ class LabelTemplate(db.Model):
 class AiImageTask(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     product_id = db.Column(db.Integer, nullable=False)
-    original_image_id = db.Column(db.String(100), nullable=False) # ID obrazu z Google Drive
-    status = db.Column(db.String(20), nullable=False, default='pending') # Statusy: pending, processing, complete, error
+    original_image_id = db.Column(db.String(100), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class PriceUpdateLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    item_type = db.Column(db.String(50), nullable=False)  # np. 'Tkanina', 'Materiał'
+    item_type = db.Column(db.String(50), nullable=False)
     item_name = db.Column(db.String(100), nullable=False)
     old_price = db.Column(db.Float, nullable=True)
     new_price = db.Column(db.Float, nullable=False)
@@ -234,3 +230,42 @@ class PushSubscription(db.Model):
 
     def __repr__(self):
         return f'<PushSubscription {self.id}>'
+
+class Supplier(db.Model):
+    __tablename__ = 'supplier'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False, unique=True, index=True)
+    
+    fabric_prices = db.relationship('FabricPrice', backref='supplier', lazy='dynamic', cascade="all, delete-orphan")
+    material_prices = db.relationship('MaterialPrice', backref='supplier', lazy='dynamic', cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f'<Supplier {self.name}>'
+
+class FabricPrice(db.Model):
+    __tablename__ = 'fabric_price'
+    id = db.Column(db.Integer, primary_key=True)
+    price = db.Column(db.Float, nullable=False)
+    price_date = db.Column(db.Date, nullable=True)
+    
+    fabric_id = db.Column(db.Integer, db.ForeignKey('fabric.id'), nullable=False)
+    supplier_id = db.Column(db.Integer, db.ForeignKey('supplier.id'), nullable=False)
+
+    __table_args__ = (db.UniqueConstraint('fabric_id', 'supplier_id', name='_fabric_supplier_uc'),)
+
+    def __repr__(self):
+        return f'<FabricPrice {self.fabric.name} at {self.supplier.name}: {self.price}>'
+
+class MaterialPrice(db.Model):
+    __tablename__ = 'material_price'
+    id = db.Column(db.Integer, primary_key=True)
+    price = db.Column(db.Float, nullable=False)
+    price_date = db.Column(db.Date, nullable=True)
+    
+    material_id = db.Column(db.Integer, db.ForeignKey('material.id'), nullable=False)
+    supplier_id = db.Column(db.Integer, db.ForeignKey('supplier.id'), nullable=False)
+    
+    __table_args__ = (db.UniqueConstraint('material_id', 'supplier_id', name='_material_supplier_uc'),)
+
+    def __repr__(self):
+        return f'<MaterialPrice {self.material.name} at {self.supplier.name}: {self.price}>'

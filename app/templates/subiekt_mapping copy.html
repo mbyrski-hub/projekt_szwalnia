@@ -8,12 +8,12 @@
 
 {% if last_update_timestamp %}
     <div class="alert alert-info">
-        <i class="fas fa-info-circle"></i> Ostatnia synchronizacja cen z Subiektem: <strong>{{ last_update_timestamp | to_local_time }}</strong>. 
+        <i class="fas fa-info-circle"></i> Ostatnia aktualizacja cen: <strong>{{ last_update_timestamp | to_local_time }}</strong>. 
         {% if last_update_count %}
-            Przetworzono <strong>{{ last_update_count }}</strong> wpisów cenowych od dostawców.
+            Zaktualizowano <strong>{{ last_update_count }}</strong> pozycji.
         {% endif %}
     </div>
-{% endif %}
+    {% endif %}
 
 <div class="row">
     <div class="col-lg-6">
@@ -26,15 +26,15 @@
             </div>
             <div class="collapse" id="downloadCollapse">
                 <div class="card-body">
-                    <p>Pobierz i uruchom program, aby zaktualizować listę towarów i ceny od dostawców.</p>
+                    <p>Pobierz i uruchom program, aby zaktualizować listę towarów i ceny.</p>
                     <a href="{{ url_for('download_synchronizator') }}" class="btn btn-success">
-                        <i class="fas fa-robot"></i> Pobierz Synchronizator
+                        <i class="fas fa-robot"></i> Pobierz Synchronizator 3.0.exe
                     </a>
                     <a href="{{ url_for('download_config') }}" class="btn btn-info">
                         <i class="fas fa-cog"></i> Pobierz config.json
                     </a>
                     <a href="{{ url_for('download_print_server') }}" class="btn btn-warning">
-                        <i class="fas fa-print"></i> Pobierz Serwer Druku
+                        <i class="fas fa-print"></i> Pobierz SerwerDrukuSzwalnia.exe
                     </a>
                 </div>
             </div>

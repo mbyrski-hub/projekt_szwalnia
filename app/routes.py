@@ -5,7 +5,7 @@ from app import app, db
 from app.models import (Order, Client, Product, OrderItem, Attachment,
                         OrderTemplate, Fabric, MaterialUsage, ProductMaterial,
                         SubiektProductCache, Material, ProductCategory,
-                        OrderFabric, TemplateFabric, ProductFabric, SystemInfo, ProductImage, LabelTemplate, PriceUpdateLog)
+                        OrderFabric, TemplateFabric, ProductFabric, SystemInfo, ProductImage, LabelTemplate, PriceUpdateLog, Supplier, FabricPrice, MaterialPrice)
 from app.forms import (OrderForm, OrderTemplateForm, ProductForm, FabricForm,
                        MaterialForm, ProductCategoryForm, MaterialEditForm, )
 from werkzeug.utils import secure_filename
@@ -14,7 +14,7 @@ import re
 from datetime import datetime, date, timedelta
 import pdfkit
 import imgkit
-from sqlalchemy import extract, func, distinct
+from sqlalchemy import extract, func, distinct, desc
 from app.doc_generator import save_order_as_word
 import platform
 from PIL import Image
@@ -28,7 +28,7 @@ from .drive_service import upload_image_to_drive, delete_image_from_drive
 from .ai_image_service import generate_ai_images
 from werkzeug.datastructures import FileStorage
 import threading
-from .models import AiImageTask, PushSubscription
+from .models import AiImageTask, PushSubscription, Fabric, Material, FabricPrice, MaterialPrice
 import requests
 import locale
 import pathlib
@@ -278,6 +278,114 @@ def new_order():
     ]
     return render_template('order_form.html', form=form, clients=existing_clients, categories=all_categories,
                            templates=all_templates, products_json=json.dumps(products_for_js), fabric_choices=fabric_choices)
+
+# W app/routes.py
+
+# W app/routes.py
+
+@app.route('/order/edit/<int:order_id>', methods=['GET', 'POST'])
+def edit_order(order_id):
+    order = Order.query.get_or_404(order_id)
+    
+    # --- POCZĄTEK KLUCZOWEJ ZMIANY ---
+    # Najpierw pobieramy opcje wyboru dla tkanin
+    all_fabrics = Fabric.query.order_by('name').all()
+    fabric_choices = [(f.id, f.name) for f in all_fabrics]
+
+    # Tworzymy formularz i OD RAZU przekazujemy mu opcje wyboru
+    form = OrderForm(obj=order)
+    for fabric_form in form.fabrics:
+        fabric_form.fabric_id.choices = fabric_choices
+    # --- KONIEC KLUCZOWEJ ZMIANY ---
+
+    if form.validate_on_submit():
+        try:
+            # Ta sekcja pozostaje bez zmian
+            client_name = form.client_name.data.strip().upper()
+            client = Client.query.filter_by(name=client_name).first()
+            if not client:
+                client = Client(name=client_name)
+                db.session.add(client)
+                db.session.flush()
+            order.client_id = client.id
+
+            order.description = form.description.data.strip().upper()
+            order.uwagi = form.uwagi.data.strip() if form.uwagi.data else None
+            order.login_info = form.login_info.data.strip().upper() if form.login_info.data else None
+            order.deadline = form.deadline.data
+            order.zlecajacy = form.zlecajacy.data.upper()
+
+            OrderFabric.query.filter_by(order_id=order.id).delete()
+            for fabric_data in form.fabrics.data:
+                if fabric_data.get('fabric_id'):
+                    db.session.add(OrderFabric(order_id=order.id, fabric_id=fabric_data['fabric_id']))
+
+            OrderItem.query.filter_by(order_id=order.id).delete()
+            for prod_data in form.products.data:
+                product_name = prod_data['product_name'].strip().upper()
+                if not product_name: continue
+                
+                product = Product.query.filter_by(name=product_name).first()
+                if not product:
+                    product = Product(name=product_name)
+                    db.session.add(product)
+                    db.session.flush()
+                
+                for variant in prod_data['variants']:
+                    size = variant['size'].strip().upper()
+                    try: quantity = int(variant['quantity'])
+                    except (ValueError, TypeError): quantity = 0
+                    
+                    if quantity > 0 and size:
+                        db.session.add(OrderItem(order_id=order.id, product_id=product.id, size=size, quantity=quantity))
+
+            if 'attachments' in request.files:
+                files = request.files.getlist('attachments')
+                for file in files:
+                    if file and allowed_file(file.filename):
+                        filename = secure_filename(file.filename)
+                        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+                        filename = f"{timestamp}_{order.id}_{filename}"
+                        file.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
+                        db.session.add(Attachment(order_id=order.id, filename=filename))
+            
+            db.session.commit()
+            flash('Zlecenie zostało zaktualizowane.', 'success')
+            return redirect(url_for('orders_list'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Wystąpił nieoczekiwany błąd podczas aktualizacji: {e}', 'danger')
+
+    if request.method == 'GET':
+        form.client_name.data = order.client.name
+        form.zlecajacy.data = order.zlecajacy
+        
+        form.fabrics.entries = []
+        for fabric_link in order.fabrics:
+            # Ponownie przypisujemy opcje po dynamicznym dodaniu wierszy
+            new_entry = form.fabrics.append_entry({'fabric_id': fabric_link.fabric_id})
+            new_entry.fabric_id.choices = fabric_choices
+
+        form.products.entries = []
+        products_in_order = db.session.query(Product, func.group_concat(OrderItem.size + ':' + OrderItem.quantity.cast(db.String))).join(OrderItem).filter(OrderItem.order_id == order.id).group_by(Product.id).all()
+        for product, variants_str in products_in_order:
+            product_entry = form.products.append_entry({'product_name': product.name})
+            product_entry.variants.entries = []
+            if variants_str:
+                for variant_pair in variants_str.split(','):
+                    size, qty = variant_pair.split(':')
+                    product_entry.variants.append_entry({'size': size, 'quantity': qty})
+
+    existing_clients = Client.query.all()
+    all_categories = ProductCategory.query.order_by(ProductCategory.name).all()
+    products_for_js = [{'id': p.id, 'name': p.name, 'category_id': p.category_id, 'fabrics': [pf.fabric_id for pf in p.fabrics_needed]} for p in Product.query.order_by(Product.name).all()]
+
+    return render_template('order_form.html', form=form, title=f"Edytuj Zlecenie {order.order_code}",
+                           order=order, clients=existing_clients, categories=all_categories,
+                           products_json=json.dumps(products_for_js), fabric_choices=fabric_choices)
+
+
 
 @app.route('/order_templates')
 def order_templates():
@@ -1019,11 +1127,7 @@ def order_labels_debug(order_id):
                                     page_height=page_height)
     return rendered_html
 
-@app.route('/materials-management')
-def materials_management():
-    fabrics = Fabric.query.order_by(Fabric.name).all()
-    materials = Material.query.order_by(Material.name).all()
-    return render_template('materials_management.html', fabrics=fabrics, materials=materials)
+
 
 @app.route('/fabrics/new', methods=['GET', 'POST'])
 def add_fabric():
@@ -1180,65 +1284,7 @@ from app.models import (Order, Client, Product, OrderItem, Attachment,
                         OrderFabric, TemplateFabric, ProductFabric, SystemInfo, ProductImage, LabelTemplate, PriceUpdateLog) # Dodano PriceUpdateLog
 # ...
 
-@app.route('/api/v1/update-prices', methods=['POST'])
-def receive_price_update():
-    auth_key = request.headers.get('X-API-KEY')
-    if auth_key != app.config['API_SECRET_KEY']:
-        return jsonify({'error': 'Brak autoryzacji'}), 401
-    price_data = request.get_json()
-    if not price_data:
-        return jsonify({'error': 'Brak danych'}), 400
-    
-    changed_prices_count = 0
-    try:
-        for item_data in price_data:
-            symbol = item_data.get('symbol')
-            new_price = item_data.get('price')
 
-            if not (symbol and new_price is not None):
-                continue
-
-            item = Fabric.query.filter_by(subiekt_symbol=symbol).first()
-            item_type_str = 'Tkanina'
-            if not item:
-                item = Material.query.filter_by(subiekt_symbol=symbol).first()
-                item_type_str = 'Materiał'
-
-            if item:
-                if item.price is None or not math.isclose(item.price, new_price):
-                    # --- NOWY KOD: Zapis do logu ---
-                    log_entry = PriceUpdateLog(
-                        item_type=item_type_str,
-                        item_name=item.name,
-                        old_price=item.price,
-                        new_price=new_price
-                    )
-                    db.session.add(log_entry)
-                    # --- KONIEC NOWEGO KODU ---
-                    
-                    item.price = new_price
-                    changed_prices_count += 1
-
-        if changed_prices_count > 0:
-            last_update_info = SystemInfo.query.filter_by(key='last_price_update').first()
-            if not last_update_info:
-                last_update_info = SystemInfo(key='last_price_update')
-                db.session.add(last_update_info)
-            last_update_info.value = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-
-            update_count_info = SystemInfo.query.filter_by(key='last_price_update_count').first()
-            if not update_count_info:
-                update_count_info = SystemInfo(key='last_price_update_count')
-                db.session.add(update_count_info)
-            update_count_info.value = str(changed_prices_count)
-
-        db.session.commit()
-        message = f'Sprawdzono ceny. Zaktualizowano {changed_prices_count} pozycji, których cena uległa zmianie.'
-        return jsonify({'status': 'success', 'message': message}), 200
-        
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
 
 # --- ZAKTUALIZOWANA FUNKCJA ---
 @app.route('/api/v1/receive-subiekt-catalog', methods=['POST'])
@@ -1518,30 +1564,52 @@ def skip_subiekt_product():
     return redirect(url_for('subiekt_mapping'))
 
 
+# W app/routes.py
+
 @app.route('/calculator')
 def calculator():
-    products = Product.query.order_by(Product.name).all()
-    fabrics = Fabric.query.order_by(Fabric.name).all()
-    materials = Material.query.order_by(Material.name).all()
-    categories = ProductCategory.query.order_by(ProductCategory.name).all()
-    products_data = {}
-    for p in products:
-        products_data[p.id] = {
-            'name': p.name,
-            'production_price': p.production_price,
-            'category_id': p.category_id,
-            'fabrics_needed': [
-                {'id': pf.fabric.id, 'usage': pf.usage_meters} 
-                for pf in p.fabrics_needed
-            ],
-            'materials_needed': [
-                {'id': pm.material.id, 'name': pm.material.name, 'quantity': pm.quantity} 
-                for pm in p.materials_needed
-            ]
-        }
+    # Pobierz wszystkie potrzebne dane z bazy
+    all_products = Product.query.order_by(Product.name).all()
+    all_fabrics = Fabric.query.order_by(Fabric.name).all()
+    all_materials = Material.query.order_by(Material.name).all()
+    all_categories = ProductCategory.query.order_by(ProductCategory.name).all()
+    all_suppliers_query = Supplier.query.order_by(Supplier.name).all()
+
+    # --- Przygotowanie danych dla JavaScript ---
+    
+    # Konwertujemy obiekty Supplier na prostą listę słowników, którą można bezpiecznie przekazać do JSON
+    all_suppliers_list = [{'id': s.id, 'name': s.name} for s in all_suppliers_query]
+
+    # Dane o produktach
+    products_data = { p.id: {
+        'name': p.name, 'production_price': p.production_price, 'category_id': p.category_id,
+        'fabrics_needed': [{'id': pf.fabric_id, 'usage': pf.usage_meters} for pf in p.fabrics_needed],
+        'materials_needed': [{'id': pm.material_id, 'quantity': pm.quantity} for pm in p.materials_needed]
+    } for p in all_products }
+
+    # Dane o tkaninach z cenami od dostawców
+    fabrics_data = { f.id: {
+        'name': f.name, 'default_price': f.price or 0.0,
+        'prices': [{'supplier_id': sp.supplier_id, 'supplier_name': sp.supplier.name, 'price': sp.price} for sp in f.supplier_prices]
+    } for f in all_fabrics }
+    
+    # Dane o materiałach z cenami od dostawców
+    materials_data = { m.id: {
+        'name': m.name, 'default_price': m.price or 0.0,
+        'prices': [{'supplier_id': sp.supplier_id, 'supplier_name': sp.supplier.name, 'price': sp.price} for sp in m.supplier_prices]
+    } for m in all_materials }
+
     return render_template('calculator.html',
-                           products=products, fabrics=fabrics, materials=materials,
-                           categories=categories, products_json=json.dumps(products_data))
+                           products=all_products, 
+                           fabrics=all_fabrics,        # Przekazujemy dla pętli w szablonie
+                           materials=all_materials,    # Przekazujemy dla pętli w szablonie
+                           categories=all_categories,
+                           suppliers=all_suppliers_query,  # Przekazujemy dla pętli w szablonie
+                           # Zmienna suppliers_json jest teraz poprawnie sformatowana
+                           suppliers_json=json.dumps(all_suppliers_list), 
+                           products_json=json.dumps(products_data),
+                           fabrics_json=json.dumps(fabrics_data),
+                           materials_json=json.dumps(materials_data))
 
 # ### NOWY KOD - SERWOWANIE SERVICE WORKERA Z ZAKAZEM CACHOWANIA ###
 @app.route('/service-worker.js')
@@ -2447,19 +2515,33 @@ def get_recent_cutting_notes():
 
 # W app/routes.py, wklej na końcu pliku
 
-# ### NOWE API DO ZARZĄDZANIA OKRESEM PRODUKCYJNYM ###
+# ### NOWE API DO ZARZĄDZANIA OKRESEM PRODUKCYJNYM (POPRAWIONA WERSJA) ###
 
 @app.route('/api/production_period/<int:year>/<int:month>')
 def get_production_period_orders(year, month):
     """
     Zwraca listę zleceń do zarządzania dla danego okresu rozliczeniowego.
-    Obejmuje zlecenia ZAKOŃCZONE w danym miesiącu ORAZ te, które zostały
-    do niego ręcznie przypisane z innych miesięcy.
+    Logika opiera się na "efektywnym" miesiącu księgowym zlecenia.
     """
-    # Format miesiąca dla zapytań (np. '2025-10')
     period_str = f"{year}-{month:02d}"
-    
-    # Określ poprzedni i następny miesiąc
+
+    # Używamy instrukcji CASE, aby ustalić "efektywny" okres dla każdego zlecenia.
+    # Jeśli production_month jest ustawiony, ma on pierwszeństwo.
+    # W przeciwnym razie, używamy miesiąca z daty zakończenia szycia.
+    effective_period = db.case(
+        (Order.production_month != None, Order.production_month),
+        else_=func.strftime('%Y-%m', Order.sewing_finished_at)
+    )
+
+    # Zapytanie, które filtruje zlecenia na podstawie ich "efektywnego" okresu.
+    # Dzięki temu zlecenie "przeniesione" zniknie z jednego widoku i pojawi się w drugim.
+    all_relevant_orders = Order.query.filter(
+        Order.status == 'ZREALIZOWANE',
+        Order.sewing_finished_at.isnot(None),
+        effective_period == period_str
+    ).order_by(Order.sewing_finished_at.desc()).all()
+
+    # Logika do tworzenia opcji wyboru (poprzedni/bieżący/następny miesiąc)
     current_date = date(year, month, 1)
     prev_month_date = current_date - timedelta(days=1)
     next_month_date = (current_date.replace(day=28) + timedelta(days=4)).replace(day=1)
@@ -2467,35 +2549,10 @@ def get_production_period_orders(year, month):
     prev_period_str = prev_month_date.strftime('%Y-%m')
     next_period_str = next_month_date.strftime('%Y-%m')
 
-    # 1. Znajdź zlecenia zakończone w danym miesiącu kalendarzowym
-    orders_finished_in_month = Order.query.filter(
-        extract('year', Order.sewing_finished_at) == year,
-        extract('month', Order.sewing_finished_at) == month,
-        Order.status == 'ZREALIZOWANE'
-    ).all()
-
-    # 2. Znajdź zlecenia ręcznie przypisane do tego miesiąca (ale zakończone w innym)
-    orders_assigned_to_month = Order.query.filter(
-        Order.production_month == period_str,
-        db.or_(
-            extract('year', Order.sewing_finished_at) != year,
-            extract('month', Order.sewing_finished_at) != month
-        )
-    ).all()
-
-    # Połącz obie listy, usuwając duplikaty
-    all_relevant_orders = sorted(
-        list(set(orders_finished_in_month + orders_assigned_to_month)),
-        key=lambda o: o.sewing_finished_at,
-        reverse=True
-    )
-    
     orders_list = []
     for order in all_relevant_orders:
-        # Określ domyślne przypisanie
-        assigned_period = order.production_month
-        if not assigned_period:
-            assigned_period = order.sewing_finished_at.strftime('%Y-%m')
+        # Określ aktualnie przypisany okres (dla zaznaczenia w <select>)
+        assigned_period = order.production_month or order.sewing_finished_at.strftime('%Y-%m')
 
         orders_list.append({
             'id': order.id,
@@ -2503,12 +2560,12 @@ def get_production_period_orders(year, month):
             'client_name': order.client.name,
             'finished_date': order.sewing_finished_at.strftime('%d.%m.%Y'),
             'production_value': calculate_order_total_cost(order).get('production_cost', 0),
-            'assigned_period': assigned_period, # Do którego miesiąca jest aktualnie przypisane
+            'assigned_period': assigned_period,
             # Opcje do wyboru na froncie
             'assignment_options': [
-                {'value': prev_period_str, 'label': f'Poprzedni ({prev_month_date.strftime("%B %Y")})'},
-                {'value': period_str, 'label': f'Bieżący ({current_date.strftime("%B %Y")})'},
-                {'value': next_period_str, 'label': f'Następny ({next_month_date.strftime("%B %Y")})'},
+                {'value': prev_period_str, 'label': f'Poprzedni ({prev_period_str})'},
+                {'value': period_str, 'label': f'Bieżący ({period_str})'},
+                {'value': next_period_str, 'label': f'Następny ({next_period_str})'},
             ]
         })
         
@@ -2537,3 +2594,122 @@ def assign_production_month():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+    
+
+    # ### POCZĄTEK NOWEGO KODU ###
+
+# W app/routes.py
+
+@app.route('/api/v1/update-prices', methods=['POST'])
+def receive_price_update():
+    # Ta funkcja jest teraz przestarzała, ale zostawiamy ją, aby stary synchronizator nie zwracał błędów.
+    # Logujemy ostrzeżenie, aby wiedzieć, że należy go zaktualizować.
+    app.logger.warning("Odebrano żądanie do przestarzałego endpointu /api/v1/update-prices. Zaktualizuj program synchronizujący.")
+    return jsonify({'status': 'warning', 'message': 'Ten endpoint jest przestarzały. Zaktualizuj program Szwalnia_Serwer do najnowszej wersji.'}), 200
+
+# Nowy, główny endpoint do aktualizacji cen od dostawców
+@app.route('/api/v1/update-supplier-prices', methods=['POST'])
+def receive_supplier_price_update():
+    auth_key = request.headers.get('X-API-KEY')
+    if auth_key != app.config['API_SECRET_KEY']:
+        return jsonify({'error': 'Brak autoryzacji'}), 401
+    
+    price_data = request.get_json()
+    if not price_data:
+        return jsonify({'error': 'Brak danych'}), 400
+    
+    updated_items = set() # Zbiór do śledzenia, dla których towarów zaktualizowaliśmy ceny
+
+    try:
+        for item_data in price_data:
+            symbol = item_data.get('symbol')
+            new_price = item_data.get('price')
+            supplier_name = item_data.get('supplier')
+            price_date_str = item_data.get('price_date')
+
+            if not (symbol and supplier_name and new_price is not None):
+                continue
+
+            # 1. Znajdź towar (tkaninę lub materiał) po symbolu Subiekta
+            item = Fabric.query.filter_by(subiekt_symbol=symbol).first()
+            item_type = 'fabric'
+            if not item:
+                item = Material.query.filter_by(subiekt_symbol=symbol).first()
+                item_type = 'material'
+
+            if not item:
+                continue # Pomiń, jeśli towar nie jest zmapowany w systemie
+
+            # 2. Znajdź lub stwórz dostawcę
+            supplier = Supplier.query.filter_by(name=supplier_name).first()
+            if not supplier:
+                supplier = Supplier(name=supplier_name)
+                db.session.add(supplier)
+                db.session.flush() # Potrzebujemy ID dostawcy
+
+            # 3. Zaktualizuj lub stwórz wpis z ceną dostawcy
+            price_date = datetime.strptime(price_date_str, '%Y-%m-%d').date() if price_date_str else None
+
+            if item_type == 'fabric':
+                supplier_price_entry = FabricPrice.query.filter_by(fabric_id=item.id, supplier_id=supplier.id).first()
+                if supplier_price_entry:
+                    supplier_price_entry.price = new_price
+                    supplier_price_entry.price_date = price_date
+                else:
+                    new_price_entry = FabricPrice(price=new_price, price_date=price_date, fabric_id=item.id, supplier_id=supplier.id)
+                    db.session.add(new_price_entry)
+                updated_items.add(('fabric', item.id))
+
+            elif item_type == 'material':
+                supplier_price_entry = MaterialPrice.query.filter_by(material_id=item.id, supplier_id=supplier.id).first()
+                if supplier_price_entry:
+                    supplier_price_entry.price = new_price
+                    supplier_price_entry.price_date = price_date
+                else:
+                    new_price_entry = MaterialPrice(price=new_price, price_date=price_date, material_id=item.id, supplier_id=supplier.id)
+                    db.session.add(new_price_entry)
+                updated_items.add(('material', item.id))
+        
+        db.session.commit() # Zapisz wszystkie nowe ceny i dostawców
+
+        # 4. Zaktualizuj główną (najnowszą) cenę dla każdego zmodyfikowanego towaru
+        for item_type, item_id in updated_items:
+            if item_type == 'fabric':
+                latest_price_entry = FabricPrice.query.filter_by(fabric_id=item_id).order_by(FabricPrice.price_date.desc().nullslast(), FabricPrice.id.desc()).first()
+                if latest_price_entry:
+                    fabric_to_update = Fabric.query.get(item_id)
+                    fabric_to_update.price = latest_price_entry.price
+            
+            elif item_type == 'material':
+                latest_price_entry = MaterialPrice.query.filter_by(material_id=item_id).order_by(MaterialPrice.price_date.desc().nullslast(), MaterialPrice.id.desc()).first()
+                if latest_price_entry:
+                    material_to_update = Material.query.get(item_id)
+                    material_to_update.price = latest_price_entry.price
+
+        db.session.commit() # Zapisz zaktualizowane ceny główne
+
+        return jsonify({'status': 'success', 'message': f'Pomyślnie przetworzono {len(price_data)} wpisów cenowych.'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Błąd podczas aktualizacji cen od dostawców: {e}")
+        return jsonify({'error': str(e)}), 500
+# ### KONIEC NOWEGO KODU ###
+
+# W app/routes.py
+
+@app.route('/materials-management')
+def materials_management():
+    # Ta część pozostaje prosta, bez subqueryload
+    fabrics = Fabric.query.order_by(Fabric.name).all()
+    materials = Material.query.order_by(Material.name).all()
+
+    # Przekazujemy do szablonu nie tylko dane, ale też potrzebne klasy i funkcje
+    return render_template(
+        'materials_management.html', 
+        fabrics=fabrics, 
+        materials=materials,
+        FabricPrice=FabricPrice,      # Udostępnij klasę FabricPrice w szablonie
+        MaterialPrice=MaterialPrice,  # Udostępnij klasę MaterialPrice w szablonie
+        desc=desc                     # Udostępnij funkcję desc() w szablonie
+    )
