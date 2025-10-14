@@ -23,8 +23,11 @@ class Fabric(db.Model):
     name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Float, nullable=True)
     subiekt_symbol = db.Column(db.String(50), nullable=True, unique=True, index=True)
-    supplier_prices = db.relationship('FabricPrice', backref='fabric', lazy='dynamic', cascade="all, delete-orphan")
     
+    # Relacje
+    supplier_prices = db.relationship('FabricPrice', backref='fabric', cascade="all, delete-orphan")
+    product_links = db.relationship('ProductFabric', backref='fabric', cascade="all, delete-orphan")
+
     def __repr__(self):
         return f'<Fabric {self.name}>'
 
@@ -33,7 +36,10 @@ class Material(db.Model):
     name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Float, nullable=True)
     subiekt_symbol = db.Column(db.String(50), nullable=True, unique=True, index=True)
-    supplier_prices = db.relationship('MaterialPrice', backref='material', lazy='dynamic', cascade="all, delete-orphan")
+    
+    # Relacje
+    supplier_prices = db.relationship('MaterialPrice', backref='material', cascade="all, delete-orphan")
+    product_links = db.relationship('ProductMaterial', back_populates='material', cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<Material {self.name}>'
@@ -75,6 +81,7 @@ class Order(db.Model):
 class ProductCategory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
+    products = db.relationship('Product', back_populates='category')
 
     def __repr__(self):
         return f'<ProductCategory {self.name}>'
@@ -84,26 +91,30 @@ class ProductFabric(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
     fabric_id = db.Column(db.Integer, db.ForeignKey('fabric.id'), nullable=False)
-    usage_meters = db.Column(db.Float, nullable=False, default=0.0)
-    fabric = db.relationship('Fabric')
-
+    usage_meters = db.Column(db.Float, nullable=False)
+    
+    # NOWE POLE
+    supplier_id = db.Column(db.Integer, db.ForeignKey('supplier.id'), nullable=True)
+    
+    # ZAKTUALIZOWANE RELACJE
+    product = db.relationship('Product', back_populates='fabrics_needed')
+    supplier = db.relationship('Supplier', back_populates='product_fabrics')
 
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
     description = db.Column(db.Text, nullable=True) 
-
     production_price = db.Column(db.Float, nullable=False, default=0.0)
     
     category_id = db.Column(db.Integer, db.ForeignKey('product_category.id'), nullable=True)
-    category = db.relationship('ProductCategory', backref='products')
-
-    images = db.relationship('ProductImage', backref='product', lazy=True, cascade="all, delete-orphan")
-
-    fabrics_needed = db.relationship('ProductFabric', backref='product', lazy=True, cascade="all, delete-orphan")
-    materials_needed = db.relationship('ProductMaterial', backref='product', lazy=True, cascade="all, delete-orphan")
-    order_items = db.relationship('OrderItem', backref='product')
     label_template_id = db.Column(db.Integer, db.ForeignKey('label_template.id'), nullable=True)
+
+    # ZAKTUALIZOWANE RELACJE
+    category = db.relationship('ProductCategory', back_populates='products')
+    images = db.relationship('ProductImage', backref='product', lazy=True, cascade="all, delete-orphan")
+    fabrics_needed = db.relationship('ProductFabric', back_populates='product', cascade="all, delete-orphan")
+    materials_needed = db.relationship('ProductMaterial', back_populates='product', cascade="all, delete-orphan")
+    order_items = db.relationship('OrderItem', backref='product')
     label_template = db.relationship('LabelTemplate')
 
     @validates('production_price')
@@ -148,7 +159,6 @@ class TemplateFabric(db.Model):
     fabric_id = db.Column(db.Integer, db.ForeignKey('fabric.id'), primary_key=True)
     fabric = db.relationship('Fabric')
 
-
 class OrderTemplate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     template_name = db.Column(db.String(100), nullable=False, unique=True)
@@ -156,7 +166,6 @@ class OrderTemplate(db.Model):
     description = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     login_info = db.Column(db.Text, nullable=True)
-    
     fabrics = db.relationship('TemplateFabric', cascade="all, delete-orphan")
 
     def __repr__(self):
@@ -172,15 +181,19 @@ class MaterialUsage(db.Model):
         return f"<MaterialUsage {self.material_name}>"
 
 class ProductMaterial(db.Model):
+    __tablename__ = 'product_material'
     id = db.Column(db.Integer, primary_key=True)
-    quantity = db.Column(db.String(50), nullable=False)
     product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
     material_id = db.Column(db.Integer, db.ForeignKey('material.id'), nullable=False)
-    
-    material = db.relationship('Material', backref='product_links')
-    
-    def __repr__(self):
-        return f'<ProductMaterial link: product {self.product_id} to material {self.material_id}>'
+    quantity = db.Column(db.String(50), nullable=False)
+
+    # NOWE POLE
+    supplier_id = db.Column(db.Integer, db.ForeignKey('supplier.id'), nullable=True)
+
+    # ZAKTUALIZOWANE RELACJE
+    product = db.relationship('Product', back_populates='materials_needed')
+    material = db.relationship('Material', back_populates='product_links')
+    supplier = db.relationship('Supplier', back_populates='product_materials')
 
 class SubiektProductCache(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -204,7 +217,6 @@ class LabelTemplate(db.Model):
 
     def __repr__(self):
         return f'<LabelTemplate {self.name}>'
-    
 
 class AiImageTask(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -236,8 +248,11 @@ class Supplier(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False, unique=True, index=True)
     
-    fabric_prices = db.relationship('FabricPrice', backref='supplier', lazy='dynamic', cascade="all, delete-orphan")
-    material_prices = db.relationship('MaterialPrice', backref='supplier', lazy='dynamic', cascade="all, delete-orphan")
+    # ZAKTUALIZOWANE RELACJE
+    fabric_prices = db.relationship('FabricPrice', backref='supplier', cascade="all, delete-orphan")
+    material_prices = db.relationship('MaterialPrice', backref='supplier', cascade="all, delete-orphan")
+    product_fabrics = db.relationship('ProductFabric', back_populates='supplier', cascade="all, delete-orphan")
+    product_materials = db.relationship('ProductMaterial', back_populates='supplier', cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<Supplier {self.name}>'

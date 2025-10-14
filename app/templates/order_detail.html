@@ -64,12 +64,18 @@
                     </ul>
                 {% elif material_summary %}
                     <h5>Planowane zużycie:</h5>
-                    <ul>
+                    <ul class="list-unstyled">
                         {% for item in material_summary %}
-                            <li>{{ item.name }}: {{ item.quantity }}</li>
+                            <li>
+                                {{ item.name }}
+                                {% if item.supplier %}
+                                    <small class="text-muted">({{ item.supplier }})</small>
+                                {% endif %}
+                                : <strong>{{ item.quantity }}</strong>
+                            </li>
                         {% endfor %}
                     </ul>
-                {% else %}
+                    {% else %}
                     <p>Brak zdefiniowanych materiałów dla tego zlecenia.</p>
                 {% endif %}
             </div>

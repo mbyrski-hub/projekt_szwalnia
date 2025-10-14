@@ -23,10 +23,8 @@ import schedule
 import time
 import platform
 import subprocess
-from zebrafy import ZebrafyImage
 import winshell
 from os.path import expanduser
-
 
 # --- Konfiguracja ---
 HOST = '0.0.0.0'
@@ -39,7 +37,6 @@ APP_NAME = "Szwalnia_Serwer"
 log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 log_file = 'synchronizator.log'
 
-# Handler do pliku
 file_handler = logging.FileHandler(log_file, encoding='utf-8')
 file_handler.setFormatter(log_formatter)
 
@@ -144,20 +141,34 @@ def get_warehouses_from_sql(queue, config_data):
         return []
 
 def get_data_from_warehouse(queue, config_data, warehouse_symbol):
-    log_message(queue, f"Pobieranie towarów i cen zakupu z magazynu: {warehouse_symbol}...")
+    log_message(queue, f"Pobieranie towarów, cen i dostawców z magazynu: {warehouse_symbol}...")
     data = []
     query = """
-        WITH LastPurchaseCost AS (
-            SELECT p.Asortyment_Id, k.Wartosc, k.Ilosc, k.Data,
-                   ROW_NUMBER() OVER(PARTITION BY p.Asortyment_Id ORDER BY k.Data DESC, k.Lp DESC) as rn
+        WITH LastPurchasePerSupplier AS (
+            SELECT
+                p.Asortyment_Id,
+                d.PodmiotId,
+                k.Wartosc,
+                k.Ilosc,
+                k.Data,
+                ROW_NUMBER() OVER(PARTITION BY p.Asortyment_Id, d.PodmiotId ORDER BY k.Data DESC, k.Lp DESC) as rn
             FROM ModelDanychContainer.Przyjecia AS p
             INNER JOIN ModelDanychContainer.KosztyZakupu AS k ON p.KosztPierwotny_Id = k.Id
+            INNER JOIN ModelDanychContainer.PozycjeDokumentu AS poz ON p.Id = poz.Przyjecie_Id
+            INNER JOIN ModelDanychContainer.Dokumenty AS d ON poz.Dokument_Id = d.Id
+            WHERE d.PodmiotId IS NOT NULL
         )
-        SELECT a.Symbol, a.Nazwa, lpc.Data AS DataOstatniegoZakupu, (lpc.Wartosc / lpc.Ilosc) AS CenaJednostkowaNetto
+        SELECT
+            a.Symbol,
+            a.Nazwa,
+            pod.NazwaSkrocona AS NazwaDostawcy,
+            lpps.Data AS DataOstatniegoZakupu,
+            (lpps.Wartosc / lpps.Ilosc) AS CenaJednostkowaNetto
         FROM ModelDanychContainer.Asortymenty AS a
         INNER JOIN ModelDanychContainer.StanyMagazynowe AS sm ON a.Id = sm.Asortyment_Id
         INNER JOIN ModelDanychContainer.Magazyny AS m ON sm.Magazyn_Id = m.Id
-        LEFT JOIN LastPurchaseCost lpc ON a.Id = lpc.Asortyment_Id AND lpc.rn = 1
+        INNER JOIN LastPurchasePerSupplier lpps ON a.Id = lpps.Asortyment_Id AND lpps.rn = 1
+        INNER JOIN ModelDanychContainer.Podmioty AS pod ON lpps.PodmiotId = pod.Id
         WHERE m.Symbol = ?
     """
     try:
@@ -167,44 +178,61 @@ def get_data_from_warehouse(queue, config_data, warehouse_symbol):
             for row in cursor.fetchall():
                 price = float(row.CenaJednostkowaNetto) if row.CenaJednostkowaNetto is not None else 0.0
                 data.append({
-                    'symbol': row.Symbol.upper().strip(), 'name': row.Nazwa.strip(), 'price': price,
-                    'price_date': row.DataOstatniegoZakupu.strftime('%Y-%m-%d') if row.DataOstatniegoZakupu else None
+                    'symbol': row.Symbol.upper().strip(),
+                    'name': row.Nazwa.strip(),
+                    'price': price,
+                    'price_date': row.DataOstatniegoZakupu.strftime('%Y-%m-%d') if row.DataOstatniegoZakupu else None,
+                    'supplier': row.NazwaDostawcy.strip() if row.NazwaDostawcy else 'Brak'
                 })
-        log_message(queue, f"Pobrano dane dla {len(data)} towarów.", color='green')
+        log_message(queue, f"Pobrano {len(data)} wpisów cenowych od dostawców.", color='green')
         return data
     except Exception as e:
         log_message(queue, f"Błąd podczas pobierania danych: {e}", color='red', level='error')
         return None
 
 def send_prices_to_webapp(queue, config_data, data_to_send):
-    url = f"{config_data.get('web_app_url')}/api/v1/update-prices"
+    url = f"{config_data.get('web_app_url')}/api/v1/update-supplier-prices"
     headers = {'Content-Type': 'application/json', 'X-API-KEY': config_data.get('api_key')}
-    data_for_api = [{'symbol': item['symbol'], 'price': item.get('price')} for item in data_to_send if item.get('price') is not None]
+    
+    data_for_api = [
+        {
+            'symbol': item['symbol'],
+            'price': item.get('price'),
+            'supplier': item.get('supplier'),
+            'price_date': item.get('price_date')
+        }
+        for item in data_to_send if item.get('price') is not None and item.get('supplier')
+    ]
+
     if not data_for_api:
-        log_message(queue, "Brak cen do zaktualizowania.", color='orange', level='warning')
+        log_message(queue, "Brak cen od dostawców do zaktualizowania.", color='orange', level='warning')
         return True
-    log_message(queue, f"Wysyłanie {len(data_for_api)} aktualizacji cen...")
+        
+    log_message(queue, f"Wysyłanie {len(data_for_api)} aktualizacji cen od dostawców...")
     try:
-        response = requests.post(url, headers=headers, data=json.dumps(data_for_api), timeout=30)
+        response = requests.post(url, headers=headers, data=json.dumps(data_for_api), timeout=60)
         if response.status_code == 200:
-            msg = response.json().get('message', 'Ceny zaktualizowane.')
+            msg = response.json().get('message', 'Ceny dostawców zaktualizowane.')
             log_message(queue, f"SUKCES! {msg}", color='green')
             return True
         else:
-            log_message(queue, f"BŁĄD CEN: {response.status_code} - {response.text}", color='red', level='error')
+            log_message(queue, f"BŁĄD CEN DOSTAWCÓW: {response.status_code} - {response.text}", color='red', level='error')
             return False
     except requests.exceptions.RequestException as e:
-        log_message(queue, f"KRYTYCZNY BŁĄD CEN: {e}", color='red', level='error')
+        log_message(queue, f"KRYTYCZNY BŁĄD CEN DOSTAWCÓW: {e}", color='red', level='error')
         return False
 
 def send_catalog_to_webapp(queue, config_data, data_to_send):
     url = f"{config_data.get('web_app_url')}/api/v1/receive-subiekt-catalog"
     headers = {'Content-Type': 'application/json', 'X-API-KEY': config_data.get('api_key')}
-    catalog_for_api = [{'symbol': item['symbol'], 'name': item.get('name')} for item in data_to_send]
+    
+    unique_items = {item['symbol']: item for item in data_to_send}.values()
+    catalog_for_api = [{'symbol': item['symbol'], 'name': item.get('name')} for item in unique_items]
+    
     if not catalog_for_api:
         log_message(queue, "Brak katalogu do wysłania.", color='orange', level='warning')
         return True
-    log_message(queue, f"Wysyłanie {len(catalog_for_api)} towarów do zmapowania...")
+    log_message(queue, f"Wysyłanie {len(catalog_for_api)} unikalnych towarów do zmapowania...")
     try:
         response = requests.post(url, headers=headers, data=json.dumps(catalog_for_api), timeout=30)
         if response.status_code == 200:
@@ -231,10 +259,10 @@ def full_sync_task(queue, config_data):
         log_message(queue, "Synchronizacja przerwana.", color='red', level='error')
         return
 
-    log_message(queue, "\nKrok 1: Wysyłanie katalogu...", color='blue')
+    log_message(queue, "\nKrok 1: Wysyłanie katalogu unikalnych towarów...", color='blue')
     catalog_success = send_catalog_to_webapp(queue, config_data, data)
 
-    log_message(queue, "\nKrok 2: Aktualizacja cen...", color='blue')
+    log_message(queue, "\nKrok 2: Aktualizacja cen od dostawców...", color='blue')
     prices_success = send_prices_to_webapp(queue, config_data, data)
 
     if catalog_success and prices_success:
@@ -388,9 +416,8 @@ def sync_status():
 def trigger_sync():
     log_handler = flask_app_print.config['LOG_HANDLER']
     
-    # Weryfikacja klucza API przesłanego w nagłówku
     api_key_from_request = request.headers.get('X-API-KEY')
-    current_config = load_config() # Wczytaj aktualną konfigurację z pliku config.json
+    current_config = load_config()
     
     if not api_key_from_request or api_key_from_request != current_config.get('api_key'):
         log_handler.write("Odebrano próbę zdalnego uruchomienia synchronizacji z BŁĘDNYM kluczem API.")
@@ -398,7 +425,6 @@ def trigger_sync():
 
     log_handler.write("Odebrano zdalne polecenie synchronizacji ze strony WWW.")
     
-    # Uruchomienie pełnej synchronizacji w osobnym wątku, aby nie blokować serwera
     sync_thread = threading.Thread(
         target=full_sync_task, 
         args=(main_queue, current_config), 
@@ -420,7 +446,6 @@ class PrintServerApp:
         flask_app_print.config['LOG_HANDLER'] = LogHandler(self.queue)
         flask_app_sync.config['LOG_HANDLER'] = LogHandler(self.queue)
 
-        # --- Zakładki ---
         self.notebook = ttk.Notebook(root)
         self.print_tab = ttk.Frame(self.notebook)
         self.sync_tab = ttk.Frame(self.notebook)
@@ -430,7 +455,6 @@ class PrintServerApp:
         self.notebook.add(self.log_tab, text="Główny Log")
         self.notebook.pack(expand=True, fill="both", padx=10, pady=10)
 
-        # --- Zakładka Logów ---
         log_frame = ttk.LabelFrame(self.log_tab, text="Log operacji")
         log_frame.pack(fill='both', expand=True, padx=5, pady=5)
         self.main_log_text = scrolledtext.ScrolledText(log_frame, state='disabled', wrap=tk.WORD, height=10)
@@ -442,7 +466,6 @@ class PrintServerApp:
         self.main_log_text.tag_config('blue', foreground='#2196F3')
         ttk.Button(log_frame, text="Otwórz plik logu", command=self.open_log_file).pack(side='bottom', pady=5)
 
-        # --- Zakładka drukowania ---
         info_frame = tk.Frame(self.print_tab, pady=10)
         info_frame.pack(fill='x', padx=10)
         printer_label = tk.Label(info_frame, text="Wybierz drukarkę etykiet:")
@@ -450,7 +473,6 @@ class PrintServerApp:
         self.available_printers = get_available_printers()
         self.selected_printer = tk.StringVar(root)
         
-        # Wczytaj i ustaw drukarkę z konfiguracji
         saved_printer = config.get('selected_printer')
         if saved_printer and saved_printer in self.available_printers:
             self.selected_printer.set(saved_printer)
@@ -478,7 +500,6 @@ class PrintServerApp:
         self.stop_button_print = tk.Button(button_frame_print, text="Stop", command=self.stop_server, bg="salmon", state=tk.DISABLED, height=2)
         self.stop_button_print.pack(side='right', expand=True, fill='x', padx=20)
 
-        # --- Zakładka synchronizacji ---
         self.config = load_config()
         self.server_var = tk.StringVar(value=self.config.get('server', ''))
         self.database_var = tk.StringVar(value=self.config.get('database', ''))
@@ -545,11 +566,10 @@ class PrintServerApp:
         self.fetch_button = ttk.Button(btn_config_frame, text="Pobierz i Wyślij Ręcznie...", command=self.run_fetch_data)
         self.fetch_button.pack(side='right', padx=5)
 
-        # --- Inicjalizacja końcowa ---
         self.root.after(100, self.process_queue)
         self.update_full_sync_button_state()
         self.update_ip()
-        self.start_sync_server() # Autostart serwera synchronizacji
+        self.start_sync_server()
         self.root.protocol("WM_DELETE_WINDOW", self.minimize_to_tray)
 
     def create_tray_image(self):
@@ -735,34 +755,44 @@ class PrintServerApp:
 
     def show_review_window(self, data):
         review_window = tk.Toplevel(self.root)
-        review_window.title(f"Podgląd Danych ({len(data)} pozycji)")
-        review_window.geometry("800x500")
-        cols = ('Symbol', 'Nazwa', 'Cena Netto', 'Data Ceny')
+        review_window.title(f"Podgląd Danych ({len(data)} wpisów cenowych)")
+        review_window.geometry("950x500")
+        
+        cols = ('Symbol', 'Nazwa', 'Cena Netto', 'Data Ceny', 'Dostawca')
         tree = ttk.Treeview(review_window, columns=cols, show='headings')
-        tree.heading('Symbol', text='Symbol')
-        tree.column('Symbol', width=150)
-        tree.heading('Nazwa', text='Nazwa')
-        tree.column('Nazwa', width=350)
-        tree.heading('Cena Netto', text='Cena Netto')
-        tree.column('Cena Netto', width=100, anchor='e')
-        tree.heading('Data Ceny', text='Data Ceny')
-        tree.column('Data Ceny', width=100, anchor='center')
-        tree.pack(expand=True, fill='both', padx=10, pady=5)
-        for item in data:
-            tree.insert("", "end", values=(item['symbol'], item['name'], f"{item.get('price', 0.0):.2f} zł", item.get('price_date', 'Brak')))
+        
+        tree.heading('Symbol', text='Symbol'); tree.column('Symbol', width=120)
+        tree.heading('Nazwa', text='Nazwa'); tree.column('Nazwa', width=300)
+        tree.heading('Cena Netto', text='Cena Netto'); tree.column('Cena Netto', width=100, anchor='e')
+        tree.heading('Data Ceny', text='Data Ceny'); tree.column('Data Ceny', width=100, anchor='center')
+        tree.heading('Dostawca', text='Ostatni Dostawca'); tree.column('Dostawca', width=200)
 
+        vsb = ttk.Scrollbar(review_window, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vsb.set)
+        vsb.pack(side='right', fill='y')
+        tree.pack(expand=True, fill='both', padx=10, pady=5)
+        
+        for item in data:
+            tree.insert("", "end", values=(
+                item['symbol'], 
+                item['name'], 
+                f"{item.get('price', 0.0):.2f} zł", 
+                item.get('price_date', 'Brak'),
+                item.get('supplier', 'Brak') 
+            ))
+            
         def send_catalog_action():
             review_window.destroy()
             threading.Thread(target=send_catalog_to_webapp, args=(self.queue, self.get_current_config(), data), daemon=True).start()
-
+        
         def send_prices_action():
             review_window.destroy()
             threading.Thread(target=send_prices_to_webapp, args=(self.queue, self.get_current_config(), data), daemon=True).start()
-
+            
         button_frame = tk.Frame(review_window)
         button_frame.pack(pady=10)
-        ttk.Button(button_frame, text=f"Wyślij katalog ({len(data)}) do zmapowania", command=send_catalog_action).pack(side='left', padx=10)
-        ttk.Button(button_frame, text=f"Aktualizuj ceny istniejących", command=send_prices_action).pack(side='left', padx=10)
+        ttk.Button(button_frame, text=f"Wyślij katalog unikalnych towarów", command=send_catalog_action).pack(side='left', padx=10)
+        ttk.Button(button_frame, text=f"Aktualizuj ceny od dostawców", command=send_prices_action).pack(side='left', padx=10)
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -2,7 +2,7 @@
 {% block title %}{{ title }}{% endblock %}
 {% block head %}
 <style>
-    /* Style dla galerii w modalu */
+    /* Style dla galerii w modalu (z Twojego kodu) */
     .label-gallery-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -56,19 +56,17 @@
                         {{ form.category_id(class="form-control") }}
                     </div>
                     
-                    {# --- POCZĄTEK ZMIANY --- #}
                     <div class="form-group">
-    {{ form.label_template_id.label(class="form-control-label") }}
-    <div class="input-group">
-        {{ form.label_template_id(class="form-control") }}
-        <div class="input-group-append">
-            <button class="btn btn-info" type="button" data-toggle="modal" data-target="#galleryModal" title="Pokaż galerię szablonów">
-                <i class="fas fa-images"></i>
-            </button>
-        </div>
-    </div>
-</div>
-                    {# --- KONIEC ZMIANY --- #}
+                        {{ form.label_template_id.label(class="form-control-label") }}
+                        <div class="input-group">
+                            {{ form.label_template_id(class="form-control") }}
+                            <div class="input-group-append">
+                                <button class="btn btn-info" type="button" data-toggle="modal" data-target="#galleryModal" title="Pokaż galerię szablonów">
+                                    <i class="fas fa-images"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="form-group">
                         {{ form.production_price.label(class="form-label") }}
@@ -108,10 +106,18 @@
                     <h5><i class="fas fa-scroll"></i> Tkaniny Potrzebne do Produkcji</h5>
                     <div id="fabrics-list">
                         {% for fabric_form in form.fabrics_needed %}
-                        <div class="form-row align-items-center mb-2 fabric-row">
-                            <div class="col-6"> {{ fabric_form.fabric_id(class="form-control form-control-sm") }}
+                        <div class="form-row align-items-center mb-2 fabric-row" 
+                             data-supplier-id="{{ product.fabrics_needed[loop.index0].supplier_id if product and product.fabrics_needed and loop.index0 < product.fabrics_needed|length else '' }}">
+                            <div class="col-5">
+                                {{ fabric_form.fabric_id(class="form-control form-control-sm item-select") }}
                             </div>
-                            <div class="col-4"> {{ fabric_form.usage_meters(class="form-control form-control-sm", placeholder="Zużycie [m]") }}
+                            <div class="col-3">
+                                <select name="fabrics_needed-{{ loop.index0 }}-supplier_id" class="form-control form-control-sm supplier-select" disabled>
+                                    <option value="">-- Dostawca --</option>
+                                </select>
+                            </div>
+                            <div class="col-2">
+                                {{ fabric_form.usage_meters(class="form-control form-control-sm", placeholder="[m]") }}
                             </div>
                             <div class="col-2">
                                 <button type="button" class="btn btn-danger btn-sm remove-fabric"><i class="fas fa-trash"></i></button>
@@ -124,10 +130,18 @@
                     <h5><i class="fas fa-cogs"></i> Materiały Dodatkowe</h5>
                     <div id="materials-list">
                         {% for material_form in form.materials_needed %}
-                        <div class="form-row align-items-center mb-2 material-row">
-                            <div class="col-6"> {{ material_form.material_name(class="form-control form-control-sm", list="materials-datalist", placeholder="Nazwa materiału") }}
+                        <div class="form-row align-items-center mb-2 material-row"
+                             data-supplier-id="{{ product.materials_needed[loop.index0].supplier_id if product and product.materials_needed and loop.index0 < product.materials_needed|length else '' }}">
+                            <div class="col-5">
+                                {{ material_form.material_name(class="form-control form-control-sm item-select", list="materials-datalist", placeholder="Nazwa materiału") }}
                             </div>
-                            <div class="col-4"> {{ material_form.quantity(class="form-control form-control-sm", placeholder="Ilość") }}
+                            <div class="col-3">
+                                <select name="materials_needed-{{ loop.index0 }}-supplier_id" class="form-control form-control-sm supplier-select" disabled>
+                                    <option value="">-- Dostawca --</option>
+                                </select>
+                            </div>
+                            <div class="col-2">
+                                {{ material_form.quantity(class="form-control form-control-sm", placeholder="Ilość") }}
                             </div>
                             <div class="col-2">
                                 <button type="button" class="btn btn-danger btn-sm remove-material"><i class="fas fa-trash"></i></button>
@@ -155,13 +169,18 @@
 
 <template id="fabric-row-template">
     <div class="form-row align-items-center mb-2 fabric-row">
-        <div class="col-6"> <select class="form-control form-control-sm">
-                {% for id, name in fabric_choices %}
-                <option value="{{ id }}">{{ name }}</option>
-                {% endfor %}
+        <div class="col-5">
+            <select class="form-control form-control-sm item-select">
+                {% for id, name in fabric_choices %}<option value="{{ id }}">{{ name }}</option>{% endfor %}
             </select>
         </div>
-        <div class="col-4"> <input type="number" class="form-control form-control-sm" placeholder="Zużycie [m]" value="0.0" step="0.01">
+        <div class="col-3">
+            <select class="form-control form-control-sm supplier-select" disabled>
+                <option value="">-- Dostawca --</option>
+            </select>
+        </div>
+        <div class="col-2">
+            <input type="number" class="form-control form-control-sm" placeholder="[m]" value="0.0" step="0.01">
         </div>
         <div class="col-2">
             <button type="button" class="btn btn-danger btn-sm remove-fabric"><i class="fas fa-trash"></i></button>
@@ -171,9 +190,16 @@
 
 <template id="material-row-template">
     <div class="form-row align-items-center mb-2 material-row">
-        <div class="col-6"> <input type="text" class="form-control form-control-sm" list="materials-datalist" placeholder="Nazwa materiału">
+        <div class="col-5">
+            <input type="text" class="form-control form-control-sm item-select" list="materials-datalist" placeholder="Nazwa materiału">
         </div>
-        <div class="col-4"> <input type="text" class="form-control form-control-sm" placeholder="Ilość">
+        <div class="col-3">
+            <select class="form-control form-control-sm supplier-select" disabled>
+                <option value="">-- Dostawca --</option>
+            </select>
+        </div>
+        <div class="col-2">
+            <input type="text" class="form-control form-control-sm" placeholder="Ilość" value="1">
         </div>
         <div class="col-2">
             <button type="button" class="btn btn-danger btn-sm remove-material"><i class="fas fa-trash"></i></button>
@@ -204,156 +230,142 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    // --- SKRYPT 1: Logika formularza (dodawanie/usuwanie materiałów) ---
+    // 1. DANE Z SERWERA
+    const fabricsData = {{ fabrics_json|tojson|safe }};
+    const materialsData = {{ materials_json|tojson|safe }};
+
+    // 2. STARA LOGIKA REINDEKSOWANIA (NIEZBĘDNA DLA WTFORMS)
     function reindexForms() {
         document.querySelectorAll('#fabrics-list .fabric-row').forEach((row, index) => {
-            const select = row.querySelector('select');
-            const usageInput = row.querySelector('input[type="number"]');
-            if (select) select.name = `fabrics_needed-${index}-fabric_id`;
-            if (usageInput) usageInput.name = `fabrics_needed-${index}-usage_meters`;
+            row.querySelectorAll('select, input').forEach(input => {
+                if (!input.name) return; // Pomiń przyciski i inne elementy bez 'name'
+                input.name = input.name.replace(/-\d+-/, `-${index}-`);
+            });
         });
         document.querySelectorAll('#materials-list .material-row').forEach((row, index) => {
-            const nameInput = row.querySelector('input[list="materials-datalist"]');
-            const quantityInput = row.querySelector('input[placeholder="Ilość"]');
-            if (nameInput) nameInput.name = `materials_needed-${index}-material_name`;
-            if (quantityInput) quantityInput.name = `materials_needed-${index}-quantity`;
+            row.querySelectorAll('select, input').forEach(input => {
+                if (!input.name) return;
+                input.name = input.name.replace(/-\d+-/, `-${index}-`);
+            });
         });
     }
 
-    const fabricsList = document.getElementById('fabrics-list');
-    const fabricTemplate = document.getElementById('fabric-row-template');
-    const materialsList = document.getElementById('materials-list');
-    const materialTemplate = document.getElementById('material-row-template');
+    // 3. NOWA LOGIKA ZARZĄDZANIA WIERSZEM I DOSTAWCAMI
+    function setupRow(row) {
+        const itemSelect = row.querySelector('.item-select');
+        const supplierSelect = row.querySelector('.supplier-select');
+        
+        function populateSuppliers() {
+            const itemType = row.classList.contains('fabric-row') ? 'fabric' : 'material';
+            const itemsData = itemType === 'fabric' ? fabricsData : materialsData;
+            
+            let itemId;
+            if (itemType === 'fabric') {
+                itemId = itemSelect.value;
+            } else {
+                const materialName = itemSelect.value.trim().toUpperCase();
+                const materialEntry = Object.entries(itemsData).find(([id, data]) => data.name === materialName);
+                itemId = materialEntry ? materialEntry[0] : null;
+            }
 
+            supplierSelect.innerHTML = '<option value="">-- Dostawca --</option>';
+            supplierSelect.disabled = true;
+
+            if (itemId && itemsData[itemId] && itemsData[itemId].prices) {
+                const item = itemsData[itemId];
+                let defaultSupplierId = null;
+
+                item.prices.forEach(p => {
+                    if (p.is_default) defaultSupplierId = p.supplier_id;
+                    const style = p.is_default ? 'style="font-weight: bold; color: #007bff;"' : '';
+                    supplierSelect.innerHTML += `<option value="${p.supplier_id}" ${style}>${p.supplier_name} (${p.price.toFixed(2)})</option>`;
+                });
+                
+                if (item.prices.length > 0) supplierSelect.disabled = false;
+                
+                const preselectedId = row.dataset.supplierId;
+                if (preselectedId && supplierSelect.querySelector(`option[value="${preselectedId}"]`)) {
+                    supplierSelect.value = preselectedId;
+                    row.removeAttribute('data-supplier-id');
+                } else if (defaultSupplierId) {
+                    supplierSelect.value = defaultSupplierId;
+                }
+            }
+        }
+        itemSelect.addEventListener('change', populateSuppliers);
+        if (itemSelect.value && itemSelect.value !== '0') populateSuppliers();
+    }
+
+    // 4. OBSŁUGA ZDARZEŃ (POŁĄCZENIE STAREGO I NOWEGO)
     document.getElementById('add-fabric').addEventListener('click', () => {
-        const newRow = fabricTemplate.content.cloneNode(true);
-        fabricsList.appendChild(newRow);
+        const newRow = document.getElementById('fabric-row-template').content.cloneNode(true);
+        document.getElementById('fabrics-list').appendChild(newRow);
+        setupRow(document.querySelector('#fabrics-list .fabric-row:last-child'));
         reindexForms();
     });
 
     document.getElementById('add-material').addEventListener('click', () => {
-        const newRow = materialTemplate.content.cloneNode(true);
-        materialsList.appendChild(newRow);
+        const newRow = document.getElementById('material-row-template').content.cloneNode(true);
+        document.getElementById('materials-list').appendChild(newRow);
+        setupRow(document.querySelector('#materials-list .material-row:last-child'));
         reindexForms();
     });
 
     document.body.addEventListener('click', e => {
-        if (e.target.closest('.remove-fabric')) {
-            e.target.closest('.fabric-row').remove();
-            reindexForms();
-        }
-        if (e.target.closest('.remove-material')) {
-            e.target.closest('.material-row').remove();
+        if (e.target.closest('.remove-fabric, .remove-material')) {
+            e.target.closest('.form-row').remove();
             reindexForms();
         }
     });
 
+    // 5. INICJALIZACJA
+    document.querySelectorAll('.fabric-row, .material-row').forEach(setupRow);
     reindexForms();
 
-    // --- SKRYPT 2: Logika dla modala galerii ---
+    // 6. STARA LOGIKA GALERII METEK (BEZ ZMIAN)
     function renderLabelHtmlForPreview(templateJson, size = 'M') {
         let elementsHtml = '';
-        if (!templateJson || !Array.isArray(templateJson.elements)) {
-            console.error("Invalid template data provided", templateJson);
-            return '';
-        }
-
+        if (!templateJson || !Array.isArray(templateJson.elements)) return '';
         templateJson.elements.forEach(element => {
             if (typeof element !== 'object' || element === null) return;
-            let content = '';
-            let extraStyles = '';
-            const elementType = element.type || 'text';
-            const src = element.src || '';
-            const symbol = element.symbol || '';
-            const elementContent = element.content || '';
-            const fontSize = element.fontSize || 12;
-            const fontWeight = elementType === 'dynamic' ? 'bold' : 'normal';
-            const width = element.width || 'auto';
-            const x = element.x || 0;
-            const y = element.y || 0;
-
-            if (elementType === 'image') {
-                content = `<img src="${src}" style="width: 100%; height: auto;">`;
-            } else if (elementType === 'icon') {
-                content = `<span style="font-family: 'WashCareSymbols', sans-serif;">${symbol}</span>`;
-            } else if (elementType === 'dynamic') {
-                content = size;
-            } else {
-                content = elementContent;
-            }
-
-            if (element.isCentered) {
-                extraStyles = 'text-align: center; width: 100%; left: 0;';
-            }
-            
-            const xPos = x === '50%' ? '50%' : `${x}px`;
-            const yPos = `${y}px`;
-            const transform = x === '50%' ? 'translateX(-50%)' : '';
-
-            elementsHtml += `
-                <div style="position: absolute; left: ${xPos}; top: ${yPos}; transform: ${transform}; font-size: ${fontSize}px; font-weight: ${fontWeight}; width: ${width}; padding: 2px; color: #000; line-height: 1.1; ${extraStyles}">
-                    ${content}
-                </div>
-            `;
+            let content = ''; let extraStyles = '';
+            const elementType = element.type || 'text', src = element.src || '', symbol = element.symbol || '';
+            const elementContent = element.content || '', fontSize = element.fontSize || 12;
+            const fontWeight = elementType === 'dynamic' ? 'bold' : 'normal', width = element.width || 'auto';
+            const x = element.x || 0, y = element.y || 0;
+            if (elementType === 'image') content = `<img src="${src}" style="width: 100%; height: auto;">`;
+            else if (elementType === 'icon') content = `<span style="font-family: 'WashCareSymbols', sans-serif;">${symbol}</span>`;
+            else if (elementType === 'dynamic') content = size; else content = elementContent;
+            if (element.isCentered) extraStyles = 'text-align: center; width: 100%; left: 0;';
+            const xPos = x === '50%' ? '50%' : `${x}px`, yPos = `${y}px`, transform = x === '50%' ? 'translateX(-50%)' : '';
+            elementsHtml += `<div style="position: absolute; left: ${xPos}; top: ${yPos}; transform: ${transform}; font-size: ${fontSize}px; font-weight: ${fontWeight}; width: ${width}; padding: 2px; color: #000; line-height: 1.1; ${extraStyles}">${content}</div>`;
         });
-        
         const height = templateJson.height || '189px';
-        return `
-            <div class="label-canvas-render" style="width: 132px; height: ${height}; background-color: white; position: relative; overflow: hidden; border: 1px solid #ccc;">
-                ${elementsHtml}
-            </div>
-        `;
+        return `<div class="label-canvas-render" style="width: 132px; height: ${height}; background-color: white; position: relative; overflow: hidden; border: 1px solid #ccc;">${elementsHtml}</div>`;
     }
-
     $('#galleryModal').on('show.bs.modal', function () {
-        const modalBody = document.getElementById('galleryModalBody');
-        const renderContainer = document.getElementById('label-render-container');
+        const modalBody = document.getElementById('galleryModalBody'), renderContainer = document.getElementById('label-render-container');
         const labelSelector = document.getElementById('label_template_id');
-
-        fetch("{{ url_for('label_gallery_content') }}")
-            .then(response => response.text())
-            .then(html => {
-                modalBody.innerHTML = html;
-                modalBody.querySelectorAll('.gallery-item').forEach(async (item) => {
-                    const previewContainer = item.querySelector('.preview-container');
-                    if(!previewContainer) { // Dodatkowe zabezpieczenie
-                         const newPreview = document.createElement('div');
-                         newPreview.className = 'preview-container';
-                         item.prepend(newPreview);
-                    }
-                    item.querySelector('.preview-container').innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>';
-                    
-                    const templateDataJson = item.querySelector('.template-data').textContent;
-                    
-                    try {
-                        const templateData = JSON.parse(JSON.parse(templateDataJson));
-                        renderContainer.innerHTML = renderLabelHtmlForPreview(templateData);
-                        const labelElement = renderContainer.firstElementChild;
-
-                        if (!labelElement) throw new Error("Nie udało się wyrenderować HTML metki.");
-
-                        const canvasElement = await html2canvas(labelElement, { scale: 2, backgroundColor: null, useCORS: true });
-                        
-                        const img = document.createElement('img');
-                        img.src = canvasElement.toDataURL('image/png');
-                        img.alt = item.dataset.templateName;
-                        item.querySelector('.preview-container').innerHTML = '';
-                        item.querySelector('.preview-container').appendChild(img);
-
-                        item.addEventListener('click', function() {
-                            const templateId = this.dataset.templateId;
-                            labelSelector.value = templateId;
-                            $('#galleryModal').modal('hide');
-                        });
-
-                    } catch(e) {
-                        console.error("Błąd generowania podglądu:", item.dataset.templateName, e);
-                        item.querySelector('.preview-container').innerHTML = '<p class="text-danger small">Błąd</p>';
-                    } finally {
-                        renderContainer.innerHTML = '';
-                    }
-                });
+        fetch("{{ url_for('label_gallery_content') }}").then(response => response.text()).then(html => {
+            modalBody.innerHTML = html;
+            modalBody.querySelectorAll('.gallery-item').forEach(async (item) => {
+                const previewContainer = item.querySelector('.preview-container');
+                if(!previewContainer) { const newPreview = document.createElement('div'); newPreview.className = 'preview-container'; item.prepend(newPreview); }
+                item.querySelector('.preview-container').innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>';
+                const templateDataJson = item.querySelector('.template-data').textContent;
+                try {
+                    const templateData = JSON.parse(JSON.parse(templateDataJson));
+                    renderContainer.innerHTML = renderLabelHtmlForPreview(templateData);
+                    const labelElement = renderContainer.firstElementChild;
+                    if (!labelElement) throw new Error("Nie udało się wyrenderować HTML metki.");
+                    const canvasElement = await html2canvas(labelElement, { scale: 2, backgroundColor: null, useCORS: true });
+                    const img = document.createElement('img'); img.src = canvasElement.toDataURL('image/png'); img.alt = item.dataset.templateName;
+                    item.querySelector('.preview-container').innerHTML = ''; item.querySelector('.preview-container').appendChild(img);
+                    item.addEventListener('click', function() { labelSelector.value = this.dataset.templateId; $('#galleryModal').modal('hide'); });
+                } catch(e) { console.error("Błąd generowania podglądu:", item.dataset.templateName, e); item.querySelector('.preview-container').innerHTML = '<p class="text-danger small">Błąd</p>';
+                } finally { renderContainer.innerHTML = ''; }
             });
+        });
     });
 });
 </script>

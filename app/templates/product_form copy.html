@@ -1,0 +1,360 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block head %}
+<style>
+    /* Style dla galerii w modalu */
+    .label-gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 15px;
+    }
+    .gallery-item {
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 10px;
+        text-align: center;
+        cursor: pointer;
+        transition: background-color 0.2s, transform 0.2s;
+    }
+    .gallery-item:hover {
+        background-color: var(--hover-bg-color);
+        transform: scale(1.05);
+    }
+    .gallery-item img {
+        max-width: 100%;
+        height: auto;
+        background-color: white;
+        border: 1px solid #ddd;
+    }
+    .gallery-item-name {
+        margin-top: 10px;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+    #label-render-container {
+        position: absolute;
+        left: -9999px;
+        top: -9999px;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<h2><i class="fas fa-box"></i> {{ title }}</h2>
+
+<form method="POST" enctype="multipart/form-data" class="mt-4">
+    {{ form.hidden_tag() }}
+    <div class="card">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        {{ form.name.label(class="form-label") }}
+                        {{ form.name(class="form-control") }}
+                    </div>
+                    <div class="form-group">
+                        {{ form.category_id.label(class="form-label") }}
+                        {{ form.category_id(class="form-control") }}
+                    </div>
+                    
+                    {# --- POCZĄTEK ZMIANY --- #}
+                    <div class="form-group">
+    {{ form.label_template_id.label(class="form-control-label") }}
+    <div class="input-group">
+        {{ form.label_template_id(class="form-control") }}
+        <div class="input-group-append">
+            <button class="btn btn-info" type="button" data-toggle="modal" data-target="#galleryModal" title="Pokaż galerię szablonów">
+                <i class="fas fa-images"></i>
+            </button>
+        </div>
+    </div>
+</div>
+                    {# --- KONIEC ZMIANY --- #}
+
+                    <div class="form-group">
+                        {{ form.production_price.label(class="form-label") }}
+                        {{ form.production_price(class="form-control") }}
+                    </div>
+                    <div class="form-group">
+                        {{ form.description.label(class="form-label") }}
+                        {{ form.description(class="form-control", rows=5) }}
+                    </div>
+                    <div class="form-group">
+                        {{ form.images.label() }}
+                        {{ form.images(class="form-control-file", multiple="multiple") }}
+                        {% if form.images.errors %}
+                            {% for error in form.images.errors %}
+                                <span class="text-danger">{{ error }}</span><br>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    {% if product and product.images %}
+                    <div class="form-group">
+                        <label>Aktualne zdjęcia:</label><br>
+                        <div class="row">
+                            {% for image in product.images %}
+                            <div class="col-md-3 text-center mb-3">
+                                <img src="https://drive.google.com/thumbnail?id={{ image.image_id }}&sz=w200" style="max-width: 100%; border-radius: 5px;" alt="Zdjęcie produktu">
+                                <form method="POST" action="{{ url_for('delete_product_image', image_id=image.id) }}" class="mt-2" onsubmit="return confirm('Czy na pewno chcesz usunąć to zdjęcie?');">
+                                    <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i> Usuń</button>
+                                </form>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="col-md-6">
+                    <h5><i class="fas fa-scroll"></i> Tkaniny Potrzebne do Produkcji</h5>
+                    <div id="fabrics-list">
+                        {% for fabric_form in form.fabrics_needed %}
+                        <div class="form-row align-items-center mb-2 fabric-row">
+                            <div class="col-6"> {{ fabric_form.fabric_id(class="form-control form-control-sm") }}
+                            </div>
+                            <div class="col-4"> {{ fabric_form.usage_meters(class="form-control form-control-sm", placeholder="Zużycie [m]") }}
+                            </div>
+                            <div class="col-2">
+                                <button type="button" class="btn btn-danger btn-sm remove-fabric"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm mb-3" id="add-fabric"><i class="fas fa-plus"></i> Dodaj tkaninę</button>
+                    <hr>
+                    <h5><i class="fas fa-cogs"></i> Materiały Dodatkowe</h5>
+                    <div id="materials-list">
+                        {% for material_form in form.materials_needed %}
+                        <div class="form-row align-items-center mb-2 material-row">
+                            <div class="col-6"> {{ material_form.material_name(class="form-control form-control-sm", list="materials-datalist", placeholder="Nazwa materiału") }}
+                            </div>
+                            <div class="col-4"> {{ material_form.quantity(class="form-control form-control-sm", placeholder="Ilość") }}
+                            </div>
+                            <div class="col-2">
+                                <button type="button" class="btn btn-danger btn-sm remove-material"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="add-material"><i class="fas fa-plus"></i> Dodaj materiał</button>
+                </div>
+            </div>
+
+            <div class="text-center mt-4">
+                {{ form.submit(class="btn btn-primary btn-lg") }}
+                <a href="{{ url_for('products_list') }}" class="btn btn-secondary btn-lg">Anuluj</a>
+            </div>
+        </div>
+    </div>
+</form>
+
+<datalist id="materials-datalist">
+    {% for material in available_materials %}
+        <option value="{{ material.name }}">
+    {% endfor %}
+</datalist>
+
+<template id="fabric-row-template">
+    <div class="form-row align-items-center mb-2 fabric-row">
+        <div class="col-6"> <select class="form-control form-control-sm">
+                {% for id, name in fabric_choices %}
+                <option value="{{ id }}">{{ name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-4"> <input type="number" class="form-control form-control-sm" placeholder="Zużycie [m]" value="0.0" step="0.01">
+        </div>
+        <div class="col-2">
+            <button type="button" class="btn btn-danger btn-sm remove-fabric"><i class="fas fa-trash"></i></button>
+        </div>
+    </div>
+</template>
+
+<template id="material-row-template">
+    <div class="form-row align-items-center mb-2 material-row">
+        <div class="col-6"> <input type="text" class="form-control form-control-sm" list="materials-datalist" placeholder="Nazwa materiału">
+        </div>
+        <div class="col-4"> <input type="text" class="form-control form-control-sm" placeholder="Ilość">
+        </div>
+        <div class="col-2">
+            <button type="button" class="btn btn-danger btn-sm remove-material"><i class="fas fa-trash"></i></button>
+        </div>
+    </div>
+</template>
+<div class="modal fade" id="galleryModal" tabindex="-1" role="dialog" aria-labelledby="galleryModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="galleryModalLabel">Galeria Szablonów Metek</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body" id="galleryModalBody">
+        <div class="text-center"><div class="spinner-border" role="status"><span class="sr-only">Ładowanie...</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="label-render-container"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- SKRYPT 1: Logika formularza (dodawanie/usuwanie materiałów) ---
+    function reindexForms() {
+        document.querySelectorAll('#fabrics-list .fabric-row').forEach((row, index) => {
+            const select = row.querySelector('select');
+            const usageInput = row.querySelector('input[type="number"]');
+            if (select) select.name = `fabrics_needed-${index}-fabric_id`;
+            if (usageInput) usageInput.name = `fabrics_needed-${index}-usage_meters`;
+        });
+        document.querySelectorAll('#materials-list .material-row').forEach((row, index) => {
+            const nameInput = row.querySelector('input[list="materials-datalist"]');
+            const quantityInput = row.querySelector('input[placeholder="Ilość"]');
+            if (nameInput) nameInput.name = `materials_needed-${index}-material_name`;
+            if (quantityInput) quantityInput.name = `materials_needed-${index}-quantity`;
+        });
+    }
+
+    const fabricsList = document.getElementById('fabrics-list');
+    const fabricTemplate = document.getElementById('fabric-row-template');
+    const materialsList = document.getElementById('materials-list');
+    const materialTemplate = document.getElementById('material-row-template');
+
+    document.getElementById('add-fabric').addEventListener('click', () => {
+        const newRow = fabricTemplate.content.cloneNode(true);
+        fabricsList.appendChild(newRow);
+        reindexForms();
+    });
+
+    document.getElementById('add-material').addEventListener('click', () => {
+        const newRow = materialTemplate.content.cloneNode(true);
+        materialsList.appendChild(newRow);
+        reindexForms();
+    });
+
+    document.body.addEventListener('click', e => {
+        if (e.target.closest('.remove-fabric')) {
+            e.target.closest('.fabric-row').remove();
+            reindexForms();
+        }
+        if (e.target.closest('.remove-material')) {
+            e.target.closest('.material-row').remove();
+            reindexForms();
+        }
+    });
+
+    reindexForms();
+
+    // --- SKRYPT 2: Logika dla modala galerii ---
+    function renderLabelHtmlForPreview(templateJson, size = 'M') {
+        let elementsHtml = '';
+        if (!templateJson || !Array.isArray(templateJson.elements)) {
+            console.error("Invalid template data provided", templateJson);
+            return '';
+        }
+
+        templateJson.elements.forEach(element => {
+            if (typeof element !== 'object' || element === null) return;
+            let content = '';
+            let extraStyles = '';
+            const elementType = element.type || 'text';
+            const src = element.src || '';
+            const symbol = element.symbol || '';
+            const elementContent = element.content || '';
+            const fontSize = element.fontSize || 12;
+            const fontWeight = elementType === 'dynamic' ? 'bold' : 'normal';
+            const width = element.width || 'auto';
+            const x = element.x || 0;
+            const y = element.y || 0;
+
+            if (elementType === 'image') {
+                content = `<img src="${src}" style="width: 100%; height: auto;">`;
+            } else if (elementType === 'icon') {
+                content = `<span style="font-family: 'WashCareSymbols', sans-serif;">${symbol}</span>`;
+            } else if (elementType === 'dynamic') {
+                content = size;
+            } else {
+                content = elementContent;
+            }
+
+            if (element.isCentered) {
+                extraStyles = 'text-align: center; width: 100%; left: 0;';
+            }
+            
+            const xPos = x === '50%' ? '50%' : `${x}px`;
+            const yPos = `${y}px`;
+            const transform = x === '50%' ? 'translateX(-50%)' : '';
+
+            elementsHtml += `
+                <div style="position: absolute; left: ${xPos}; top: ${yPos}; transform: ${transform}; font-size: ${fontSize}px; font-weight: ${fontWeight}; width: ${width}; padding: 2px; color: #000; line-height: 1.1; ${extraStyles}">
+                    ${content}
+                </div>
+            `;
+        });
+        
+        const height = templateJson.height || '189px';
+        return `
+            <div class="label-canvas-render" style="width: 132px; height: ${height}; background-color: white; position: relative; overflow: hidden; border: 1px solid #ccc;">
+                ${elementsHtml}
+            </div>
+        `;
+    }
+
+    $('#galleryModal').on('show.bs.modal', function () {
+        const modalBody = document.getElementById('galleryModalBody');
+        const renderContainer = document.getElementById('label-render-container');
+        const labelSelector = document.getElementById('label_template_id');
+
+        fetch("{{ url_for('label_gallery_content') }}")
+            .then(response => response.text())
+            .then(html => {
+                modalBody.innerHTML = html;
+                modalBody.querySelectorAll('.gallery-item').forEach(async (item) => {
+                    const previewContainer = item.querySelector('.preview-container');
+                    if(!previewContainer) { // Dodatkowe zabezpieczenie
+                         const newPreview = document.createElement('div');
+                         newPreview.className = 'preview-container';
+                         item.prepend(newPreview);
+                    }
+                    item.querySelector('.preview-container').innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>';
+                    
+                    const templateDataJson = item.querySelector('.template-data').textContent;
+                    
+                    try {
+                        const templateData = JSON.parse(JSON.parse(templateDataJson));
+                        renderContainer.innerHTML = renderLabelHtmlForPreview(templateData);
+                        const labelElement = renderContainer.firstElementChild;
+
+                        if (!labelElement) throw new Error("Nie udało się wyrenderować HTML metki.");
+
+                        const canvasElement = await html2canvas(labelElement, { scale: 2, backgroundColor: null, useCORS: true });
+                        
+                        const img = document.createElement('img');
+                        img.src = canvasElement.toDataURL('image/png');
+                        img.alt = item.dataset.templateName;
+                        item.querySelector('.preview-container').innerHTML = '';
+                        item.querySelector('.preview-container').appendChild(img);
+
+                        item.addEventListener('click', function() {
+                            const templateId = this.dataset.templateId;
+                            labelSelector.value = templateId;
+                            $('#galleryModal').modal('hide');
+                        });
+
+                    } catch(e) {
+                        console.error("Błąd generowania podglądu:", item.dataset.templateName, e);
+                        item.querySelector('.preview-container').innerHTML = '<p class="text-danger small">Błąd</p>';
+                    } finally {
+                        renderContainer.innerHTML = '';
+                    }
+                });
+            });
+    });
+});
+</script>
+{% endblock %}

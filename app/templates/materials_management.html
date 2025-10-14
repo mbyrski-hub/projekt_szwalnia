@@ -76,7 +76,7 @@
                                 {% endif %}
                                 <small class="text-muted d-block">Najnowsza</small>
                             </div>
-                            <span class="badge badge-info mr-3" title="Liczba dostawców">{{ fabric.supplier_prices.count() }}</span>
+                            <span class="badge badge-info mr-3" title="Liczba dostawców">{{ fabric.sorted_prices|length }}</span>
                             <div>
                                 <a href="{{ url_for('edit_mapped_item', item_type='fabric', item_id=fabric.id) }}" class="btn btn-sm btn-warning" title="Edytuj"><i class="fas fa-edit"></i></a>
                                 <form method="POST" action="{{ url_for('delete_fabric', fabric_id=fabric.id) }}" class="d-inline" onsubmit="return confirm('Czy na pewno usunąć?');">
@@ -89,17 +89,17 @@
                 <div id="collapse-fabric-{{ fabric.id }}" class="collapse" data-parent="#fabricsAccordion">
                     <div class="card-body card-body-details">
                         <h6>Historia cen dla: <strong>{{ fabric.name }}</strong></h6>
-                        {% if fabric.supplier_prices.count() > 0 %}
+                        {% if fabric.sorted_prices|length > 0 %}
                             <table class="table table-sm table-borderless bg-transparent">
                                 <thead><tr><th>Dostawca</th><th>Cena Netto</th><th>Data Ceny</th></tr></thead>
                                 <tbody>
-                                {% for sp in fabric.supplier_prices.order_by(desc(FabricPrice.price_date)) %}
-                                    <tr>
-                                        <td>{{ sp.supplier.name }}</td>
-                                        <td>{{ "%.2f zł"|format(sp.price) }}</td>
-                                        <td>{{ sp.price_date.strftime('%Y-%m-%d') if sp.price_date else 'Brak' }}</td>
-                                    </tr>
-                                {% endfor %}
+                                    {% for sp in fabric.sorted_prices %}
+                                        <tr>
+                                            <td>{{ sp.supplier.name }}</td>
+                                            <td>{{ "%.2f zł"|format(sp.price) }}</td>
+                                            <td>{{ sp.price_date.strftime('%Y-%m-%d') if sp.price_date else 'Brak' }}</td>
+                                        </tr>
+                                    {% endfor %}
                                 </tbody>
                             </table>
                         {% else %}
@@ -140,7 +140,7 @@
                                 {% endif %}
                                 <small class="text-muted d-block">Najnowsza</small>
                             </div>
-                            <span class="badge badge-info mr-3" title="Liczba dostawców">{{ material.supplier_prices.count() }}</span>
+                            <span class="badge badge-info mr-3" title="Liczba dostawców">{{ material.sorted_prices|length }}</span>
                             <div>
                                 <a href="{{ url_for('edit_mapped_item', item_type='material', item_id=material.id) }}" class="btn btn-sm btn-warning" title="Edytuj"><i class="fas fa-edit"></i></a>
                                 <form method="POST" action="{{ url_for('delete_material', material_id=material.id) }}" class="d-inline" onsubmit="return confirm('Czy na pewno usunąć?');">
@@ -153,17 +153,17 @@
                 <div id="collapse-material-{{ material.id }}" class="collapse" data-parent="#materialsAccordion">
                     <div class="card-body card-body-details">
                         <h6>Historia cen dla: <strong>{{ material.name }}</strong></h6>
-                        {% if material.supplier_prices.count() > 0 %}
+                        {% if material.sorted_prices|length > 0 %}
                             <table class="table table-sm table-borderless bg-transparent">
                                 <thead><tr><th>Dostawca</th><th>Cena Netto</th><th>Data Ceny</th></tr></thead>
                                 <tbody>
-                                {% for sp in material.supplier_prices.order_by(desc(MaterialPrice.price_date)) %}
-                                    <tr>
-                                        <td>{{ sp.supplier.name }}</td>
-                                        <td>{{ "%.2f zł"|format(sp.price) }}</td>
-                                        <td>{{ sp.price_date.strftime('%Y-%m-%d') if sp.price_date else 'Brak' }}</td>
-                                    </tr>
-                                {% endfor %}
+                                    {% for sp in material.sorted_prices %}
+                                        <tr>
+                                            <td>{{ sp.supplier.name }}</td>
+                                            <td>{{ "%.2f zł"|format(sp.price) }}</td>
+                                            <td>{{ sp.price_date.strftime('%Y-%m-%d') if sp.price_date else 'Brak' }}</td>
+                                        </tr>
+                                    {% endfor %}
                                 </tbody>
                             </table>
                         {% else %}

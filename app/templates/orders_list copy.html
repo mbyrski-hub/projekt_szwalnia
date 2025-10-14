@@ -669,15 +669,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
             elementsHtml += `
                 <div style="position: absolute; 
-                                 transform: ${element.x === '50%' ? 'translateX(-50%)' : `translate(${element.x}px, ${element.y}px)`};
-                                 top: ${element.x === '50%' ? `${element.y}px` : '0'};
-                                 left: ${element.x === '50%' ? '50%' : '0'};
-                                 font-size: ${element.fontSize}px;
-                                 font-weight: ${element.type === 'dynamic' ? 'bold' : 'normal'};
-                                 color: ${element.color || 'black'};
-                                 width: ${element.width};
-                                 padding: 5px;
-                                 ${extraStyles}">
+                            transform: ${element.x === '50%' ? 'translateX(-50%)' : `translate(${element.x}px, ${element.y}px)`};
+                            top: ${element.x === '50%' ? `${element.y}px` : '0'};
+                            left: ${element.x === '50%' ? '50%' : '0'};
+                            font-size: ${element.fontSize}px;
+                            font-weight: ${element.type === 'dynamic' ? 'bold' : 'normal'};
+                            color: ${element.color || 'black'};
+                            width: ${element.width};
+                            padding: 5px;
+                            ${extraStyles}">
                     ${content}
                 </div>
             `;
