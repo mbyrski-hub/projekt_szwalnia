@@ -61,43 +61,73 @@ def index():
 
 def calculate_material_summary(order):
     """Oblicza podsumowanie materiałów z uwzględnieniem dostawców."""
-    summary = defaultdict(lambda: {'quantity': 0.0, 'unit': ''})
+    summary = defaultdict(lambda: {'quantity': 0.0, 'unit': '', 'suppliers': set()})
 
-    # Przetwarzanie tkanin
+    # Krok 1: Zbierz wszystkie dane o materiałach w jedną strukturę
+    all_materials_data = []
+
+    # Materiały i tkaniny z produktów w zleceniu
     for item in order.order_items:
-        if item.product and item.product.fabrics_needed:
+        if item.product:
+            # Tkaniny z produktu
             for pf_link in item.product.fabrics_needed:
-                key = (pf_link.fabric.name.upper(), pf_link.supplier.name if pf_link.supplier else None)
-                summary[key]['quantity'] += pf_link.usage_meters * item.quantity
-                summary[key]['unit'] = 'metra'
-
-    # Przetwarzanie materiałów dodatkowych
-    for item in order.order_items:
-        if item.product and item.product.materials_needed:
+                all_materials_data.append({
+                    'name': pf_link.fabric.name.strip().upper(),
+                    'supplier': pf_link.supplier.name if pf_link.supplier else None,
+                    'quantity': pf_link.usage_meters * item.quantity,
+                    'unit': 'metra'
+                })
+            # Materiały dodatkowe z produktu
             for pm_link in item.product.materials_needed:
                 match = re.match(r'^\s*(\d+\.?\d*)\s*(.*)', pm_link.quantity)
-                if not match: continue
-                value_str, unit_str = match.groups()
-                
-                key = (pm_link.material.name.strip().upper(), pm_link.supplier.name if pm_link.supplier else None)
-                summary[key]['quantity'] += float(value_str) * item.quantity
-                summary[key]['unit'] = unit_str.strip()
+                if match:
+                    value_str, unit_str = match.groups()
+                    all_materials_data.append({
+                        'name': pm_link.material.name.strip().upper(),
+                        'supplier': pm_link.supplier.name if pm_link.supplier else None,
+                        'quantity': float(value_str) * item.quantity,
+                        'unit': unit_str.strip()
+                    })
 
-    # Tworzenie sformatowanej listy wyjściowej
+    # Tkaniny dodane ręcznie bezpośrednio do zlecenia
+    for order_fabric in order.fabrics:
+        if order_fabric.usage_meters and order_fabric.usage_meters > 0:
+            all_materials_data.append({
+                'name': order_fabric.fabric.name.strip().upper(),
+                'supplier': order_fabric.supplier.name if order_fabric.supplier else None,
+                'quantity': order_fabric.usage_meters,
+                'unit': 'metra'
+            })
+
+    # Krok 2: Agreguj zebrane dane
+    for data in all_materials_data:
+        key = data['name']
+        summary[key]['quantity'] += data['quantity']
+        summary[key]['unit'] = data['unit'] # Zakładamy spójność jednostek
+        if data['supplier']:
+            summary[key]['suppliers'].add(data['supplier'])
+
+    # Krok 3: Sformatuj wynik końcowy
     structured_summary = []
-    for (name, supplier), data in sorted(summary.items()):
+    for name, data in sorted(summary.items()):
         total_val = data['quantity']
         total_val_str = f"{int(total_val)}" if total_val == int(total_val) else f"{total_val:.2f}"
+        
+        # Formatowanie nazwy z dostawcami
+        display_name = name
+        if data['suppliers']:
+            # Jeśli jest tylko jeden dostawca, pokaż go w nawiasie
+            # Jeśli jest wielu, nie pokazuj żadnego, aby uniknąć bałaganu
+            if len(data['suppliers']) == 1:
+                 display_name = f"{name} ({list(data['suppliers'])[0]})"
+
         structured_summary.append({
-            'name': name,
+            'name': display_name,
             'quantity': f"{total_val_str} {data['unit']}",
-            'supplier': supplier
+            # Pole 'supplier' nie jest już potrzebne w tym formacie
         })
         
     return structured_summary
-
-# pogoda
-# Wklej ten kod w app/routes.py, zastępując poprzednią funkcję get_weather_forecast
 
 def map_wmo_code_to_icon(wmo_code):
     """Mapuje kody pogodowe WMO na animowane ikony SVG."""
@@ -172,10 +202,17 @@ def get_weather_forecast():
 @app.route('/orders/new', methods=['GET', 'POST'])
 def new_order():
     form = OrderForm()
+    
     all_fabrics = Fabric.query.order_by('name').all()
     fabric_choices = [(f.id, f.name) for f in all_fabrics]
+    all_suppliers = Supplier.query.order_by('name').all()
+    supplier_choices = [(s.id, s.name) for s in all_suppliers]
+    supplier_choices.insert(0, (0, '-- Brak --')) 
+
     for fabric_form in form.fabrics:
         fabric_form.fabric_id.choices = fabric_choices
+        fabric_form.supplier_id.choices = supplier_choices
+    
     template_id = request.args.get('template_id', type=int)
     if request.method == 'GET' and template_id:
         order_template = OrderTemplate.query.get(template_id)
@@ -192,14 +229,28 @@ def new_order():
                 client = Client(name=client_name)
                 db.session.add(client)
                 db.session.flush()
+
             order = Order(
-                client_id=client.id, description=form.description.data.strip().upper(),uwagi=form.uwagi.data.strip() if form.uwagi.data else None,
+                client_id=client.id, 
+                description=form.description.data.strip().upper(),
+                uwagi=form.uwagi.data.strip() if form.uwagi.data else None,
                 login_info=form.login_info.data.strip().upper() if form.login_info.data else None,
-                deadline=form.deadline.data, status='NOWE', zlecajacy=form.zlecajacy.data.upper()
+                deadline=form.deadline.data, 
+                status='NOWE', 
+                zlecajacy=form.zlecajacy.data.upper()
             )
             db.session.add(order)
+            
             for fabric_data in form.fabrics.data:
-                db.session.add(OrderFabric(order=order, fabric_id=fabric_data['fabric_id']))
+                if fabric_data['fabric_id']:
+                    supplier_id = fabric_data['supplier_id'] if fabric_data['supplier_id'] != 0 else None
+                    db.session.add(OrderFabric(
+                        order=order, 
+                        fabric_id=fabric_data['fabric_id'],
+                        usage_meters=fabric_data['usage_meters'],
+                        supplier_id=supplier_id
+                    ))
+
             for prod_data in form.products.data:
                 product_name = prod_data['product_name'].strip().upper()
                 if not product_name: continue
@@ -214,9 +265,11 @@ def new_order():
                     except (ValueError, TypeError): quantity = 0
                     if quantity > 0 and size:
                         db.session.add(OrderItem(order_id=order.id, product_id=product.id, size=size, quantity=quantity))
+            
             db.session.flush()
             today = date.today()
             order.order_code = f"{today.year}/{today.month:02d}/{today.day:02d}-{order.id}"
+
             if 'attachments' in request.files:
                 files = request.files.getlist('attachments')
                 for file in files:
@@ -226,43 +279,39 @@ def new_order():
                         filename = f"{timestamp}_{order.id}_{filename}"
                         file.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
                         db.session.add(Attachment(order_id=order.id, filename=filename))
+            
             if form.save_template.data and form.template_name.data:
                 template_name = form.template_name.data.strip().upper()
                 if not OrderTemplate.query.filter_by(template_name=template_name).first():
                     new_template = OrderTemplate(
-                        template_name=template_name, client_name=client.name,
-                        description=order.description, login_info=order.login_info
+                        template_name=template_name, 
+                        client_name=client.name,
+                        description=order.description, 
+                        login_info=order.login_info
                     )
-                    for fabric_link in order.fabrics:
-                        new_template.fabrics.append(TemplateFabric(fabric_id=fabric_link.fabric_id))
                     db.session.add(new_template)
                     flash('Szablon został zapisany.', 'info')
                 else:
                     flash('Szablon o tej nazwie już istnieje.', 'warning')
+            
             db.session.commit()
             flash('Zlecenie zostało dodane.', 'success')
             
-            # ### POCZĄTEK POPRAWIONEGO KODU - WYSYŁANIE POWIADOMIENIA PUSH DO OBU APLIKACJI ###
             try:
-                # 1. Powiadomienie dla Krojowni
                 send_push_notification(
                     title="Nowe zlecenie w systemie!",
                     body=f"Dodano zlecenie {order.order_code} dla {client.name}. Sprawdź je w aplikacji.",
                     target_url=url_for('show_order', order_id=order.id, _external=False),
-                    app_context='krojownia' # Kontekst dla krojowni
+                    app_context='krojownia'
                 )
-                # 2. Powiadomienie dla Szwalni
                 send_push_notification(
                     title="Nowe zlecenie w systemie!",
                     body=f"Nowe zlecenie {order.order_code} czeka na obróbkę w krojowni.",
                     target_url=url_for('show_order', order_id=order.id, _external=False),
-                    app_context='szwalnia' # Kontekst dla szwalni
+                    app_context='szwalnia'
                 )
             except Exception as e:
-                # Logowanie błędu, ale nie przerywanie działania aplikacji
                 print(f"Nie udało się wysłać powiadomienia push: {e}")
-            # ### KONIEC POPRAWIONEGO KODU ###
-
 
             return redirect(url_for('orders_list'))
 
@@ -274,15 +323,31 @@ def new_order():
     existing_clients = Client.query.all()
     all_categories = ProductCategory.query.order_by(ProductCategory.name).all()
     all_templates = OrderTemplate.query.order_by(OrderTemplate.template_name).all()
-    products_for_js = [
-        {
-            'id': p.id, 'name': p.name, 'category_id': p.category_id,
-            'fabrics': [pf.fabric_id for pf in p.fabrics_needed]
+    products_for_js = [{'id': p.id, 'name': p.name, 'category_id': p.category_id, 'fabrics': [{'id': pf.fabric_id, 'usage': pf.usage_meters, 'supplier_id': pf.supplier_id} for pf in p.fabrics_needed]} for p in Product.query.order_by(Product.name).all()]
+    
+    # ### POCZĄTEK POPRAWKI - BEZPIECZNE ŁADOWANIE DOSTAWCÓW ###
+    all_fabrics_with_suppliers = Fabric.query.options(
+        joinedload(Fabric.supplier_prices).joinedload(FabricPrice.supplier)
+    ).order_by(Fabric.name).all()
+    
+    fabrics_json_data = {}
+    for f in all_fabrics_with_suppliers:
+        # Sortujemy ceny po dacie, aby najnowsza była domyślna
+        sorted_prices = sorted(
+            [sp for sp in f.supplier_prices if sp.supplier],  # Bierzemy tylko ceny Z przypisanym dostawcą
+            key=lambda sp: sp.price_date or date.min,
+            reverse=True
+        )
+        
+        fabrics_json_data[f.id] = {
+            'name': f.name,
+            'suppliers': [{'id': sp.supplier.id, 'name': sp.supplier.name} for sp in sorted_prices]
         }
-        for p in Product.query.order_by(Product.name).all()
-    ]
+    
     return render_template('order_form.html', form=form, clients=existing_clients, categories=all_categories,
-                           templates=all_templates, products_json=json.dumps(products_for_js), fabric_choices=fabric_choices)
+                           templates=all_templates, products_json=products_for_js, 
+                           fabric_choices=fabric_choices, supplier_choices=supplier_choices,
+                           fabrics_json=fabrics_json_data)
 
 @app.route('/order/edit/<int:order_id>', methods=['GET', 'POST'])
 def edit_order(order_id):
@@ -290,13 +355,18 @@ def edit_order(order_id):
     
     all_fabrics = Fabric.query.order_by('name').all()
     fabric_choices = [(f.id, f.name) for f in all_fabrics]
+    all_suppliers = Supplier.query.order_by('name').all()
+    supplier_choices = [(s.id, s.name) for s in all_suppliers]
+    supplier_choices.insert(0, (0, '-- Brak --'))
 
-    # Tworzymy formularz, który automatycznie wczyta dane z obiektu 'order'
-    form = OrderForm(obj=order)
-
-    # Ustawiamy opcje wyboru dla już wczytanych pól tkanin
+    if request.method == 'POST':
+        form = OrderForm()
+    else:
+        form = OrderForm() # Zawsze zaczynamy z pustym formularzem w trybie GET, wypełnimy go ręcznie
+    
     for fabric_form in form.fabrics:
         fabric_form.fabric_id.choices = fabric_choices
+        fabric_form.supplier_id.choices = supplier_choices
 
     if form.validate_on_submit():
         try:
@@ -316,8 +386,14 @@ def edit_order(order_id):
 
             OrderFabric.query.filter_by(order_id=order.id).delete()
             for fabric_data in form.fabrics.data:
-                if fabric_data.get('fabric_id'):
-                    db.session.add(OrderFabric(order_id=order.id, fabric_id=fabric_data['fabric_id']))
+                if fabric_data.get('fabric_id') and (fabric_data.get('usage_meters') is not None):
+                    supplier_id = fabric_data['supplier_id'] if fabric_data.get('supplier_id') != 0 else None
+                    db.session.add(OrderFabric(
+                        order_id=order.id, 
+                        fabric_id=fabric_data['fabric_id'],
+                        usage_meters=fabric_data['usage_meters'],
+                        supplier_id=supplier_id
+                    ))
 
             OrderItem.query.filter_by(order_id=order.id).delete()
             for prod_data in form.products.data:
@@ -356,16 +432,24 @@ def edit_order(order_id):
             db.session.rollback()
             flash(f'Wystąpił nieoczekiwany błąd podczas aktualizacji: {e}', 'danger')
 
-    # --- POCZĄTEK ZMIANY ---
-    # Ten blok jest teraz znacznie prostszy. Uzupełniamy tylko te pola,
-    # których 'obj=order' nie wypełnia automatycznie.
     if request.method == 'GET':
         form.client_name.data = order.client.name
         form.zlecajacy.data = order.zlecajacy
+        form.description.data = order.description
+        form.uwagi.data = order.uwagi
+        form.login_info.data = order.login_info
+        form.deadline.data = order.deadline
         
-        # Usunięto błędne czyszczenie i ponowne wypełnianie pola z tkaninami.
-        # Dane produktów są już wczytane przez 'obj=order', ale musimy ręcznie
-        # obsłużyć warianty (rozmiary i ilości), ponieważ są one zagnieżdżone.
+        form.fabrics.entries = []
+        for fabric_link in order.fabrics:
+            entry = form.fabrics.append_entry({
+                'fabric_id': fabric_link.fabric_id,
+                'usage_meters': fabric_link.usage_meters,
+                'supplier_id': fabric_link.supplier_id or 0
+            })
+            entry.fabric_id.choices = fabric_choices
+            entry.supplier_id.choices = supplier_choices
+        
         form.products.entries = []
         products_in_order = db.session.query(Product, func.group_concat(OrderItem.size + ':' + OrderItem.quantity.cast(db.String))).join(OrderItem).filter(OrderItem.order_id == order.id).group_by(Product.id).all()
         for product, variants_str in products_in_order:
@@ -375,16 +459,35 @@ def edit_order(order_id):
                 for variant_pair in variants_str.split(','):
                     size, qty = variant_pair.split(':')
                     product_entry.variants.append_entry({'size': size, 'quantity': qty})
-    # --- KONIEC ZMIANY ---
 
     existing_clients = Client.query.all()
     all_categories = ProductCategory.query.order_by(ProductCategory.name).all()
-    products_for_js = [{'id': p.id, 'name': p.name, 'category_id': p.category_id, 'fabrics': [pf.fabric_id for pf in p.fabrics_needed]} for p in Product.query.order_by(Product.name).all()]
+    products_for_js = [{'id': p.id, 'name': p.name, 'category_id': p.category_id, 'fabrics': [{'id': pf.fabric_id, 'usage': pf.usage_meters, 'supplier_id': pf.supplier_id} for pf in p.fabrics_needed]} for p in Product.query.order_by(Product.name).all()]
+    
+    # ### POCZĄTEK POPRAWKI - BEZPIECZNE ŁADOWANIE DOSTAWCÓW ###
+    all_fabrics_with_suppliers = Fabric.query.options(
+        joinedload(Fabric.supplier_prices).joinedload(FabricPrice.supplier)
+    ).order_by(Fabric.name).all()
+    
+    fabrics_json_data = {}
+    for f in all_fabrics_with_suppliers:
+        # Sortujemy ceny po dacie, aby najnowsza była domyślna
+        sorted_prices = sorted(
+            [sp for sp in f.supplier_prices if sp.supplier],  # Bierzemy tylko ceny Z przypisanym dostawcą
+            key=lambda sp: sp.price_date or date.min,
+            reverse=True
+        )
+        
+        fabrics_json_data[f.id] = {
+            'name': f.name,
+            'suppliers': [{'id': sp.supplier.id, 'name': sp.supplier.name} for sp in sorted_prices]
+        }
 
     return render_template('order_form.html', form=form, title=f"Edytuj Zlecenie {order.order_code}",
                            order=order, clients=existing_clients, categories=all_categories,
-                           products_json=json.dumps(products_for_js), fabric_choices=fabric_choices)
-
+                           products_json=products_for_js, 
+                           fabric_choices=fabric_choices, supplier_choices=supplier_choices,
+                           fabrics_json=fabrics_json_data)
 
 
 @app.route('/order_templates')
@@ -442,22 +545,17 @@ def calculate_order_total_cost(order):
     """Oblicza całkowity koszt zlecenia na podstawie produktów."""
     total_fabric_cost = 0.0
     total_material_cost = 0.0
-    # Zmieniamy nazwę, aby było jasne, że to suma przeliczonych kosztów
     adjusted_production_cost = 0.0 
 
+    # Koszty z produktów
     for item in order.order_items:
         product = item.product
         if not product:
             continue
 
-        # KROK 1: Obliczamy przeliczony koszt dla JEDNEJ SZTUKI produktu
-        # (koszt produkcji * 2.5) + 2
         single_item_adjusted_production_cost = (product.production_price or 0.0) * 2.5 + 2
-        
-        # KROK 2: Mnożymy koszt jednostkowy przez ilość sztuk i dodajemy do sumy
         adjusted_production_cost += single_item_adjusted_production_cost * item.quantity
 
-        # Obliczenia dla tkanin i materiałów pozostają bez zmian
         for pf in product.fabrics_needed:
             fabric_price = pf.fabric.price or 0.0
             total_fabric_cost += (pf.usage_meters * fabric_price) * item.quantity
@@ -469,7 +567,13 @@ def calculate_order_total_cost(order):
             except (ValueError, AttributeError):
                 continue
     
-    # Używamy nowej, poprawnie obliczonej sumy kosztów produkcji
+    # --- NOWY BLOK: Dodajemy koszt tkanin dodanych ręcznie do zlecenia ---
+    for order_fabric in order.fabrics:
+        if order_fabric.usage_meters and order_fabric.usage_meters > 0:
+            fabric_price = order_fabric.fabric.price or 0.0
+            total_fabric_cost += order_fabric.usage_meters * fabric_price
+    # --- KONIEC NOWEGO BLOKU ---
+
     base_subtotal = adjusted_production_cost + total_fabric_cost + total_material_cost
     final_total_cost = base_subtotal * 1.15
     
@@ -479,8 +583,6 @@ def calculate_order_total_cost(order):
         'production_cost': round(adjusted_production_cost, 2),
         'total_cost': round(final_total_cost, 2)
     }
-
-# ### KONIEC OSTATECZNEJ POPRAWKI ###
 
 
 
@@ -615,8 +717,6 @@ def orders_history():
 # W app/routes.py
 @app.route('/api/monthly_production_details/<int:year>/<int:month>')
 def monthly_production_details(year, month):
-    # ### POCZĄTEK POPRAWIONEJ LOGIKI ###
-    
     # Używamy tej samej logiki grupowania, co w orders_history
     grouping_date = db.case(
         (Order.production_month != None, func.date(Order.production_month + '-01')),
@@ -628,10 +728,15 @@ def monthly_production_details(year, month):
         extract('month', grouping_date) == month,
         Order.status == 'ZREALIZOWANE',
         Order.sewing_finished_at.isnot(None)
-    ).all()
-    # ### KONIEC POPRAWIONEJ LOGIKI ###
+    ).options(joinedload(Order.order_items).joinedload(OrderItem.product)).all() # Optymalizacja zapytania
 
-    product_details = defaultdict(lambda: {'quantity': 0, 'total_value': 0.0})
+    # ### POCZĄTEK ZMIANY: Zbieramy teraz również numery zleceń ###
+    product_details = defaultdict(lambda: {
+        'quantity': 0, 
+        'total_value': 0.0, 
+        'price': 0.0,
+        'order_codes': set()  # Używamy seta, aby uniknąć duplikatów
+    })
 
     for order in orders_in_month:
         for item in order.order_items:
@@ -642,16 +747,20 @@ def monthly_production_details(year, month):
             product_details[product_name]['quantity'] += quantity
             product_details[product_name]['total_value'] += quantity * price
             product_details[product_name]['price'] = price
+            # Dodajemy skrócony numer zlecenia (bez daty) do seta
+            product_details[product_name]['order_codes'].add(order.order_code.split('-')[-1])
 
     details_list = [
         {
             'name': name,
             'quantity': data['quantity'],
             'price': data['price'],
-            'total_value': data['total_value']
+            'total_value': data['total_value'],
+            'order_codes': sorted(list(data['order_codes']), key=int) # Sortujemy numery zleceń
         }
         for name, data in product_details.items()
     ]
+    # ### KONIEC ZMIANY ###
 
     return jsonify(sorted(details_list, key=lambda x: x['name']))
 
@@ -1250,55 +1359,111 @@ def delete_material(material_id):
     flash('Materiał został usunięty.', 'success')
     return redirect(url_for('materials_management'))
 
+# W app/routes.py
+
+# W app/routes.py
+
 @app.route('/reports')
 def reports():
+    # 1. Nowe filtry daty
+    year_filter = request.args.get('year', 'all')
+    month_filter = request.args.get('month', 'all')
     material_filter = request.args.get('material', '').strip().upper()
 
-    all_fabric_names = {f.name.upper() for f in Fabric.query.all()}
-    
-    final_fabric_summary = defaultdict(float)
-    final_material_summary = defaultdict(lambda: defaultdict(float))
+    query = Order.query.filter_by(status='ZREALIZOWANE').options(
+        joinedload(Order.materials_used),
+        joinedload(Order.fabrics).joinedload(OrderFabric.fabric),
+        joinedload(Order.order_items).joinedload(OrderItem.product).options(
+            joinedload(Product.fabrics_needed).joinedload(ProductFabric.fabric),
+            joinedload(Product.materials_needed).joinedload(ProductMaterial.material)
+        )
+    )
 
-    completed_orders = Order.query.filter_by(status='ZREALIZOWANE').all()
+    # Aplikowanie filtrów daty
+    if year_filter != 'all':
+        try:
+            query = query.filter(extract('year', Order.created_at) == int(year_filter))
+        except (ValueError, TypeError): pass
+    if month_filter != 'all':
+        try:
+            query = query.filter(extract('month', Order.created_at) == int(month_filter))
+        except (ValueError, TypeError): pass
+    
+    completed_orders = query.all()
+
+    # 2. Nowa, precyzyjna logika zliczania
+    fabric_summary = defaultdict(lambda: {'quantity': 0.0, 'cost': 0.0})
+    material_summary = defaultdict(lambda: {'quantity': 0.0, 'unit': set(), 'cost': 0.0})
 
     for order in completed_orders:
+        # Priorytet: ręcznie wprowadzone zużycie
         if order.materials_used:
+            all_fabric_names = {f.name.upper() for f in Fabric.query.all()}
             for usage in order.materials_used:
                 name = usage.material_name.strip().upper()
-                match = re.match(r'^\s*(\d+\.?\d*)\s*(.*)', usage.quantity)
+                match = re.match(r'^\s*(\d+\.?\d*)\s*(.*)', usage.quantity or "")
                 if match:
                     value, unit = float(match.groups()[0]), match.groups()[1].strip()
                     if name in all_fabric_names:
-                        final_fabric_summary[name] += value
+                        fabric = Fabric.query.filter(func.upper(Fabric.name) == name).first()
+                        if fabric:
+                            fabric_summary[fabric.name]['quantity'] += value
+                            fabric_summary[fabric.name]['cost'] += value * (fabric.price or 0.0)
                     else:
-                        final_material_summary[name][unit] += value
+                        material = Material.query.filter(func.upper(Material.name) == name).first()
+                        if material:
+                            material_summary[material.name]['quantity'] += value
+                            material_summary[material.name]['unit'].add(unit)
+                            material_summary[material.name]['cost'] += value * (material.price or 0.0)
+        # Jeśli brak, zużycie planowane
         else:
-            planned_summary = calculate_material_summary(order)
-            for item in planned_summary:
-                name = item['name'].strip().upper()
-                match = re.match(r'^\s*(\d+\.?\d*)\s*(.*)', item['quantity'])
-                if match:
-                    value, unit = float(match.groups()[0]), match.groups()[1].strip()
-                    if name in all_fabric_names:
-                        final_fabric_summary[name] += value
-                    else:
-                        final_material_summary[name][unit] += value
-    
-    if material_filter:
-        filtered_fabric_summary = {k: v for k, v in final_fabric_summary.items() if material_filter in k}
-        filtered_material_summary = {k: v for k, v in final_material_summary.items() if material_filter in k}
-    else:
-        filtered_fabric_summary = final_fabric_summary
-        filtered_material_summary = final_material_summary
-    
-    all_materials_query = set([r.material_name.upper() for r in MaterialUsage.query.all()] + [f.name.upper() for f in Fabric.query.all()])
-    all_materials_list = sorted(list(all_materials_query))
+            for item in order.order_items:
+                if item.product:
+                    for pf in item.product.fabrics_needed:
+                        qty = (pf.usage_meters or 0.0) * item.quantity
+                        fabric_summary[pf.fabric.name]['quantity'] += qty
+                        fabric_summary[pf.fabric.name]['cost'] += qty * (pf.fabric.price or 0.0)
+                    for pm in item.product.materials_needed:
+                        match = re.match(r'^\s*(\d+\.?\d*)', pm.quantity or "")
+                        if match:
+                            val = float(match.group(1)) * item.quantity
+                            material_summary[pm.material.name]['quantity'] += val
+                            material_summary[pm.material.name]['cost'] += val * (pm.material.price or 0.0)
+                            material_summary[pm.material.name]['unit'].add(pm.quantity.replace(match.group(1), '').strip())
+            # Tkaniny dodane ręcznie do zlecenia
+            for of in order.fabrics:
+                qty = of.usage_meters or 0.0 # NAPRAWA BŁĘDU: Zabezpieczenie przed None
+                if of.fabric:
+                    fabric_summary[of.fabric.name]['quantity'] += qty
+                    fabric_summary[of.fabric.name]['cost'] += qty * (of.fabric.price or 0.0)
 
-    return render_template('reports.html', 
-                           fabric_summary=filtered_fabric_summary, 
-                           material_summary=filtered_material_summary,
-                           all_materials=all_materials_list,
-                           current_filter=material_filter)
+    # 3. Filtrowanie po nazwie
+    if material_filter:
+        fabric_summary = {k: v for k, v in fabric_summary.items() if material_filter in k.upper()}
+        material_summary = {k: v for k, v in material_summary.items() if material_filter in k.upper()}
+
+    # 4. Przygotowanie danych do wykresów
+    all_material_costs = {name: data['cost'] for name, data in fabric_summary.items()}
+    all_material_costs.update({name: data['cost'] for name, data in material_summary.items()})
+    top_10_costly_materials = sorted(all_material_costs.items(), key=lambda item: item[1], reverse=True)[:10]
+
+    years_query = db.session.query(extract('year', Order.created_at)).distinct().all()
+    years = sorted([y[0] for y in years_query if y[0] is not None], reverse=True)
+    
+    all_materials_list = sorted(list(set(list(fabric_summary.keys()) + list(material_summary.keys()))))
+
+    return render_template(
+        'reports.html',
+        fabric_summary=fabric_summary,
+        material_summary=material_summary,
+        all_materials=all_materials_list,
+        current_filter=material_filter,
+        years=years,
+        current_year=year_filter,
+        current_month=month_filter,
+        fabric_chart_data=fabric_summary,
+        cost_chart_data=top_10_costly_materials
+    )
 
 @app.context_processor
 def inject_in_progress_orders():
@@ -2220,15 +2385,30 @@ def kokpit():
     # --- KONIEC NOWEGO KODU -----
     bottlenecks = Order.query.filter_by(status='W REALIZACJI').order_by(Order.created_at.asc()).limit(5).all()
     # --- NOWY KOD: Pobranie TOP 5 klientów ---
-    top_clients_query = db.session.query(
+    # ### POCZĄTEK POPRAWKI - TOP KLIENCI MIESIĄC/ROK ###
+    current_month = datetime.utcnow().month
+    current_year = datetime.utcnow().year
+
+    # Zapytanie bazowe BEZ limitu, które będziemy rozszerzać
+    base_top_clients_query = db.session.query(
         Client.name,
         func.count(Order.id).label('order_count')
     ).join(Order, Client.id == Order.client_id)\
     .filter(Order.status == 'ZREALIZOWANE')\
     .group_by(Client.name)\
-    .order_by(func.count(Order.id).desc())\
-    .limit(5).all()
-    # --- KONIEC NOWEGO KODU ---
+    .order_by(func.count(Order.id).desc())
+
+    # Top klienci w bieżącym miesiącu: NAJPIERW filtruj, POTEM ogranicz
+    top_clients_month = base_top_clients_query.filter(
+        extract('month', Order.created_at) == current_month,
+        extract('year', Order.created_at) == current_year
+    ).limit(5).all()
+
+    # Top klienci w bieżącym roku: NAJPIERW filtruj, POTEM ogranicz
+    top_clients_year = base_top_clients_query.filter(
+        extract('year', Order.created_at) == current_year
+    ).limit(5).all()
+    # ### KONIEC POPRAWKI ###
     upcoming_deadlines = Order.query.filter(
         Order.deadline.between(datetime.utcnow().date(), datetime.utcnow().date() + timedelta(days=7))
     ).order_by(Order.deadline.asc()).all()
@@ -2249,7 +2429,8 @@ def kokpit():
         bottlenecks=bottlenecks,
         upcoming_deadlines=upcoming_deadlines,
         recent_price_updates=recent_price_updates,  
-        top_clients=top_clients_query,  # <-- DODAJ TĘ LINIĘ
+        top_clients_month=top_clients_month,
+        top_clients_year=top_clients_year,  # <-- DODAJ TĘ LINIĘ
         api_key=app.config.get('API_SECRET_KEY'), 
         weather_forecast=weather_forecast  # Dodajemy pogodę
     )

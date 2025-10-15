@@ -98,8 +98,7 @@
 </div>
 
 <div class="modal fade" id="detailsModal" tabindex="-1" role="dialog" aria-labelledby="detailsModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg" role="document">
-    <div class="modal-content">
+  <div class="modal-dialog modal-xl" role="document"> <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="detailsModalLabel">Szczegóły Produkcji</h5>
         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
@@ -110,6 +109,7 @@
         <table class="table">
             <thead>
                 <tr>
+                    <th class="small">Nr Zlecenia</th>
                     <th>Produkt</th>
                     <th>Ilość</th>
                     <th>Cena Produkcji</th>
@@ -126,7 +126,6 @@
     </div>
   </div>
 </div>
-
 <div class="modal fade" id="managePeriodModal" tabindex="-1" role="dialog" aria-labelledby="managePeriodModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
@@ -137,7 +136,7 @@
                 </button>
             </div>
             <div class="modal-body" id="modal-body-content" style="max-height: 70vh; overflow-y: auto;">
-                </div>
+            </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Anuluj</button>
                 <button type="button" class="btn btn-primary" id="save-period-changes-btn">Zapisz zmiany</button>
@@ -158,7 +157,7 @@ $(document).ready(function() {
         var modalTableBody = $('#modal-table-body');
         
         $('#detailsModalLabel').text(`Szczegóły Produkcji dla ${year}-${String(month).padStart(2, '0')}`);
-        modalTableBody.html('<tr><td colspan="4" class="text-center">Ładowanie...</td></tr>');
+        modalTableBody.html('<tr><td colspan="5" class="text-center">Ładowanie...</td></tr>'); // Zmieniono colspan na 5
         $('#detailsModal').modal('show');
 
         $.ajax({
@@ -168,31 +167,34 @@ $(document).ready(function() {
                 var tableContent = '';
                 var totalValue = 0;
                 data.forEach(function(item) {
+                    // ### POCZĄTEK ZMIANY: JAVASCRIPT ###
                     tableContent += `
                         <tr>
+                            <td style="font-size: 0.8em; word-break: break-all;">${item.order_codes.join(', ')}</td>
                             <td>${item.name}</td>
                             <td>${item.quantity}</td>
                             <td>${item.price.toFixed(2)} zł</td>
                             <td class="text-right">${item.total_value.toFixed(2)} zł</td>
                         </tr>
                     `;
+                    // ### KONIEC ZMIANY: JAVASCRIPT ###
                     totalValue += item.total_value;
                 });
                 tableContent += `
                     <tr style="border-top: 2px solid #dee2e6;">
-                        <td colspan="3" class="text-right"><strong>Suma:</strong></td>
+                        <td colspan="4" class="text-right"><strong>Suma:</strong></td>
                         <td class="text-right"><strong>${totalValue.toFixed(2)} zł</strong></td>
                     </tr>
-                `;
+                `; // Zmieniono colspan na 4
                 modalTableBody.html(tableContent);
             },
             error: function() {
-                modalTableBody.html('<tr><td colspan="4" class="text-center text-danger">Błąd ładowania danych.</td></tr>');
+                modalTableBody.html('<tr><td colspan="5" class="text-center text-danger">Błąd ładowania danych.</td></tr>'); // Zmieniono colspan na 5
             }
         });
     });
 
-    // --- Logika dla modala ZARZĄDZANIA OKRESEM ---
+    // --- Logika dla modala ZARZĄDZANIA OKRESEM (bez zmian) ---
     var currentYear, currentMonth;
     $('.manage-period-btn').on('click', function() {
         currentYear = $(this).data('year');

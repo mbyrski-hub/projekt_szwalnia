@@ -1,49 +1,193 @@
 {% extends "base.html" %}
 {% block title %}Zestawienia{% endblock %}
+
+{% block head %}
+<style>
+    .chart-container {
+        position: relative;
+        height: 350px;
+        width: 100%;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <h2><i class="fas fa-chart-pie"></i> Zestawienia Zużycia Materiałów</h2>
-<p>Podsumowanie dotyczy tylko zleceń o statusie "ZREALIZOWANE".</p>
+<p>Podsumowanie dotyczy tylko zleceń o statusie "ZREALIZOWANE" w wybranym okresie.</p>
 
-<form method="GET" class="form-inline mb-4">
-    <div class="form-group">
-        <label for="material" class="mr-2">Filtruj po nazwie:</label>
-        <input type="text" name="material" id="material" class="form-control mr-2" list="materials-list" value="{{ current_filter }}">
-        <datalist id="materials-list">
-            {% for m in all_materials %}<option value="{{ m }}">{% endfor %}
-        </datalist>
-    </div>
-    <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filtruj</button>
-    <a href="{{ url_for('reports') }}" class="btn btn-secondary ml-2">Wyczyść</a>
-</form>
-
-<div class="row">
-    <div class="col-md-6">
-        <h4>Zużycie Tkanin</h4>
-        <ul class="list-group">
-            {% for name, total in fabric_summary.items() %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                {{ name }}
-                <span class="badge badge-primary badge-pill">{{ "%.2f"|format(total) }} metra</span>
-            </li>
-            {% else %}
-            <li class="list-group-item">Brak danych</li>
-            {% endfor %}
-        </ul>
-    </div>
-    <div class="col-md-6">
-        <h4>Zużycie Dodatkowych Materiałów</h4>
-        <ul class="list-group">
-            {% for name, units in material_summary.items() %}
-                {% for unit, total in units.items() %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    {{ name }}
-                    <span class="badge badge-info badge-pill">{{ "%.2f"|format(total) }} {{ unit }}</span>
-                </li>
-                {% endfor %}
-            {% else %}
-            <li class="list-group-item">Brak danych</li>
-            {% endfor %}
-        </ul>
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="form-row align-items-end">
+            <div class="form-group col-md-3">
+                <label for="year">Rok:</label>
+                <select name="year" id="year" class="form-control">
+                    <option value="all">Wszystkie lata</option>
+                    {% for y in years %}<option value="{{ y }}" {% if current_year == y|string %}selected{% endif %}>{{ y }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group col-md-3">
+                <label for="month">Miesiąc:</label>
+                <select name="month" id="month" class="form-control">
+                    <option value="all">Wszystkie miesiące</option>
+                    {% for m in range(1, 13) %}<option value="{{ m }}" {% if current_month == m|string %}selected{% endif %}>{{ m }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group col-md-4">
+                <label for="material">Filtruj po nazwie:</label>
+                <input type="text" name="material" id="material" class="form-control" list="materials-list" value="{{ current_filter }}">
+                <datalist id="materials-list">
+                    {% for m in all_materials %}<option value="{{ m }}">{% endfor %}
+                </datalist>
+            </div>
+            <div class="form-group col-md-2">
+                <button type="submit" class="btn btn-primary btn-block"><i class="fas fa-filter"></i> Filtruj</button>
+                <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-block mt-1">Wyczyść</a>
+            </div>
+        </form>
     </div>
 </div>
+
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header"><h4><i class="fas fa-scroll"></i> Zużycie Tkanin</h4></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead><tr><th>Nazwa Tkaniny</th><th class="text-right">Ilość</th><th class="text-right">Szacowany Koszt</th></tr></thead>
+                        <tbody>
+                        {% for name, data in fabric_summary.items()|sort %}
+                            <tr>
+                                <td>{{ name }}</td>
+                                <td class="text-right">{{ "%.2f m"|format(data.quantity) }}</td>
+                                <td class="text-right"><strong>{{ "%.2f zł"|format(data.cost) }}</strong></td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="3" class="text-center text-muted">Brak danych</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header"><h4><i class="fas fa-cogs"></i> Zużycie Materiałów Dodatkowych</h4></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead><tr><th>Nazwa Materiału</th><th class="text-right">Ilość</th><th class="text-right">Szacowany Koszt</th></tr></thead>
+                        <tbody>
+                        {% for name, data in material_summary.items()|sort %}
+                            <tr>
+                                <td>{{ name }}</td>
+                                <td class="text-right">{{ "%.2f"|format(data.quantity) }} {{ data.unit|join(', ') }}</td>
+                                <td class="text-right"><strong>{{ "%.2f zł"|format(data.cost) }}</strong></td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="3" class="text-center text-muted">Brak danych</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header"><h4>Udział procentowy tkanin</h4></div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="fabricUsageChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header"><h4>Top 10 najkosztowniejszych materiałów</h4></div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="materialCostChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const chartTextColor = getComputedStyle(document.body).getPropertyValue('--text-color').trim();
+    const chartGridColor = getComputedStyle(document.body).getPropertyValue('--border-color').trim();
+
+    // 1. Wykres kołowy zużycia tkanin
+    const fabricCtx = document.getElementById('fabricUsageChart');
+    const fabricData = {{ fabric_chart_data|tojson|safe }};
+    const fabricLabels = Object.keys(fabricData);
+    const fabricValues = Object.values(fabricData).map(d => d.quantity);
+
+    if (fabricCtx && fabricLabels.length > 0) {
+        new Chart(fabricCtx, {
+            type: 'doughnut',
+            data: {
+                labels: fabricLabels,
+                datasets: [{
+                    label: 'Zużycie [m]',
+                    data: fabricValues,
+                    backgroundColor: ['#007bff', '#ff9900', '#28a745', '#dc3545', '#17a2b8', '#6f42c1', '#fd7e14', '#20c997'],
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'right', labels: { color: chartTextColor, font: {size: 10}, boxWidth: 15 } } }
+            }
+        });
+    } else if (fabricCtx) {
+         fabricCtx.parentElement.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><p>Brak danych do wygenerowania wykresu.</p></div>';
+    }
+    
+    // 2. Wykres słupkowy kosztów materiałów
+    const costCtx = document.getElementById('materialCostChart');
+    const costData = {{ cost_chart_data|tojson|safe }};
+    const costLabels = costData.map(item => item[0]);
+    const costValues = costData.map(item => item[1]);
+
+    if (costCtx && costLabels.length > 0) {
+        new Chart(costCtx, {
+            type: 'bar',
+            data: {
+                labels: costLabels,
+                datasets: [{
+                    label: 'Koszt materiałów [zł]',
+                    data: costValues,
+                    backgroundColor: 'rgba(255, 153, 0, 0.7)',
+                    borderColor: 'rgba(255, 153, 0, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { beginAtZero: true, ticks: { color: chartTextColor }, grid: { color: chartGridColor } },
+                    y: { ticks: { color: chartTextColor }, grid: { display: false } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+    } else if (costCtx) {
+         costCtx.parentElement.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><p>Brak danych do wygenerowania wykresu.</p></div>';
+    }
+});
+</script>
 {% endblock %}

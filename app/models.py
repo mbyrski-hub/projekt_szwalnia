@@ -16,8 +16,12 @@ class OrderFabric(db.Model):
     __tablename__ = 'order_fabric'
     order_id = db.Column(db.Integer, db.ForeignKey('order.id'), primary_key=True)
     fabric_id = db.Column(db.Integer, db.ForeignKey('fabric.id'), primary_key=True)
+    usage_meters = db.Column(db.Float, nullable=True)
+    # --- NOWE POLE I RELACJA ---
+    supplier_id = db.Column(db.Integer, db.ForeignKey('supplier.id'), nullable=True)
+    
     fabric = db.relationship('Fabric')
-    usage_meters = db.Column(db.Float, nullable=True) # Pozwalamy na nullable, na wypadek starych danych
+    supplier = db.relationship('Supplier')
 
 class Fabric(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -25,7 +29,6 @@ class Fabric(db.Model):
     price = db.Column(db.Float, nullable=True)
     subiekt_symbol = db.Column(db.String(50), nullable=True, unique=True, index=True)
     
-    # Relacje
     supplier_prices = db.relationship('FabricPrice', backref='fabric', cascade="all, delete-orphan")
     product_links = db.relationship('ProductFabric', backref='fabric', cascade="all, delete-orphan")
 
@@ -38,7 +41,6 @@ class Material(db.Model):
     price = db.Column(db.Float, nullable=True)
     subiekt_symbol = db.Column(db.String(50), nullable=True, unique=True, index=True)
     
-    # Relacje
     supplier_prices = db.relationship('MaterialPrice', backref='material', cascade="all, delete-orphan")
     product_links = db.relationship('ProductMaterial', back_populates='material', cascade="all, delete-orphan")
 
@@ -94,10 +96,8 @@ class ProductFabric(db.Model):
     fabric_id = db.Column(db.Integer, db.ForeignKey('fabric.id'), nullable=False)
     usage_meters = db.Column(db.Float, nullable=False)
     
-    # NOWE POLE
     supplier_id = db.Column(db.Integer, db.ForeignKey('supplier.id'), nullable=True)
     
-    # ZAKTUALIZOWANE RELACJE
     product = db.relationship('Product', back_populates='fabrics_needed')
     supplier = db.relationship('Supplier', back_populates='product_fabrics')
 
@@ -110,7 +110,6 @@ class Product(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey('product_category.id'), nullable=True)
     label_template_id = db.Column(db.Integer, db.ForeignKey('label_template.id'), nullable=True)
 
-    # ZAKTUALIZOWANE RELACJE
     category = db.relationship('ProductCategory', back_populates='products')
     images = db.relationship('ProductImage', backref='product', lazy=True, cascade="all, delete-orphan")
     fabrics_needed = db.relationship('ProductFabric', back_populates='product', cascade="all, delete-orphan")
@@ -187,11 +186,8 @@ class ProductMaterial(db.Model):
     product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
     material_id = db.Column(db.Integer, db.ForeignKey('material.id'), nullable=False)
     quantity = db.Column(db.String(50), nullable=False)
-
-    # NOWE POLE
     supplier_id = db.Column(db.Integer, db.ForeignKey('supplier.id'), nullable=True)
 
-    # ZAKTUALIZOWANE RELACJE
     product = db.relationship('Product', back_populates='materials_needed')
     material = db.relationship('Material', back_populates='product_links')
     supplier = db.relationship('Supplier', back_populates='product_materials')
@@ -249,7 +245,6 @@ class Supplier(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False, unique=True, index=True)
     
-    # ZAKTUALIZOWANE RELACJE
     fabric_prices = db.relationship('FabricPrice', backref='supplier', cascade="all, delete-orphan")
     material_prices = db.relationship('MaterialPrice', backref='supplier', cascade="all, delete-orphan")
     product_fabrics = db.relationship('ProductFabric', back_populates='supplier', cascade="all, delete-orphan")

@@ -499,21 +499,35 @@
                 <div class="card-header">
                     <h5 class="mb-0"><i class="fas fa-trophy mr-2"></i> Top Klienci</h5>
                 </div>
-                <div class="card-body">
-                    {% if top_clients %}
-                        <ul class="list-group list-group-flush card-list-scrollable">
-                            {% for client, count in top_clients %}
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <i class="fas fa-user-tie mr-2 text-muted"></i>
-                                        <strong>{{ client }}</strong>
-                                    </div>
-                                    <span class="badge badge-primary badge-pill" style="font-size: 0.9rem;">{{ count }} zleceń</span>
+                <div class="card-body card-list-scrollable">
+                    <h6 class="text-muted" style="font-size: 0.85rem;">W tym miesiącu</h6>
+                    {% if top_clients_month %}
+                        <ul class="list-group list-group-flush mb-3">
+                            {% for client, count in top_clients_month %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-1">
+                                    <div><i class="fas fa-user-tie mr-2 text-muted"></i><strong>{{ client }}</strong></div>
+                                    <span class="badge badge-success badge-pill" style="font-size: 0.9rem;">{{ count }}</span>
                                 </li>
                             {% endfor %}
                         </ul>
                     {% else %}
-                        <p class="text-muted">Brak zrealizowanych zleceń do wygenerowania rankingu.</p>
+                        <p class="small text-muted mb-3">Brak zleceń w tym miesiącu.</p>
+                    {% endif %}
+                    
+                    <hr>
+                    
+                    <h6 class="text-muted" style="font-size: 0.85rem;">W tym roku</h6>
+                     {% if top_clients_year %}
+                        <ul class="list-group list-group-flush">
+                            {% for client, count in top_clients_year %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-1">
+                                    <div><i class="fas fa-user-tie mr-2 text-muted"></i><strong>{{ client }}</strong></div>
+                                    <span class="badge badge-primary badge-pill" style="font-size: 0.9rem;">{{ count }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="small text-muted">Brak zleceń w tym roku.</p>
                     {% endif %}
                 </div>
             </div>

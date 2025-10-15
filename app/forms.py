@@ -1,47 +1,36 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, DateField, SelectField, FieldList, FormField, SubmitField, BooleanField, IntegerField, FloatField, DecimalField, SelectField
+from wtforms import StringField, TextAreaField, DateField, SelectField, FieldList, FormField, SubmitField, BooleanField, IntegerField, FloatField, DecimalField
 from wtforms.validators import DataRequired, NumberRange, Optional, Length
 from wtforms import Form
 from flask_wtf.file import FileField, FileAllowed, MultipleFileField
 
-# --- POCZĄTEK NOWEGO KODU ---
-# Klasa CustomDecimalField, która obsługuje przecinki jako separatory
 class CustomDecimalField(DecimalField):
-    """
-    Niestandardowe pole DecimalField, które automatycznie konwertuje
-    przecinki na kropki, umożliwiając walidację obu formatów.
-    """
     def process_formdata(self, valuelist):
         if valuelist:
-            # Zamień przecinek na kropkę w wartości przesłanej z formularza
             valuelist[0] = str(valuelist[0]).replace(',', '.')
         return super(CustomDecimalField, self).process_formdata(valuelist)
 
-# --- KONIEC NOWEGO KODU ---
-
-
-# --- NOWY, MAŁY FORMULARZ DO WYBORU TKANINY ---
-class FabricSelectionForm(Form):
+# --- POCZĄTEK ZMIANY: Dodanie pola dostawcy ---
+class OrderFabricForm(Form):
     fabric_id = SelectField('Tkanina', coerce=int, validators=[DataRequired()])
+    usage_meters = FloatField('Zużycie [m]', validators=[Optional(), NumberRange(min=0)])
+    supplier_id = SelectField('Dostawca (opcjonalnie)', coerce=int, validators=[Optional()])
+# --- KONIEC ZMIANY ---
 
-# Formularz dla pojedynczego wariantu produktu (rozmiar + ilość)
 class ProductVariantForm(Form):
     size = StringField('Rozmiar', validators=[DataRequired()])
     quantity = IntegerField('Ilość', validators=[DataRequired()])
 
-# Formularz dla jednego produktu w zleceniu – nazwa produktu i lista wariantów
 class OrderProductForm(Form):
     product_name = StringField('Nazwa produktu', validators=[DataRequired()])
     variants = FieldList(FormField(ProductVariantForm), min_entries=1, max_entries=10)
 
-# Główny formularz zlecenia
 class OrderForm(FlaskForm):
     client_name = StringField('Nazwa klienta', validators=[DataRequired()])
     description = TextAreaField('Opis zlecenia', validators=[DataRequired()])
-    uwagi = TextAreaField('Uwagi do zlecenia (opcjonalnie)') # <-- DODAJ TĘ LINIĘ
+    uwagi = TextAreaField('Uwagi do zlecenia (opcjonalnie)')
     
-    # --- ZMIANA: Z SelectField na FieldList ---
-    fabrics = FieldList(FormField(FabricSelectionForm), min_entries=1)
+    fabrics = FieldList(FormField(OrderFabricForm), min_entries=0) # Zmieniono min_entries na 0
 
     login_info = TextAreaField('Logowanie (opcjonalne)')
     deadline = DateField('Termin realizacji (RRRR-MM-DD)', format='%Y-%m-%d', validators=[DataRequired()])
@@ -54,28 +43,21 @@ class OrderForm(FlaskForm):
     template_name = StringField('Nazwa szablonu (jeśli zapisujesz)')
     submit = SubmitField('Dodaj zlecenie')
 
-# Formularz do dodawania/edycji szablonu
 class OrderTemplateForm(FlaskForm):
     template_name = StringField('Nazwa szablonu', validators=[DataRequired()])
     client_name = StringField('Nazwa klienta', validators=[DataRequired()])
     description = TextAreaField('Opis zlecenia', validators=[DataRequired()])
-    
-    
-    
     login_info = TextAreaField('Logowanie (opcjonalne)')
     submit = SubmitField('Zapisz szablon')
 
-# Formularz dla pojedynczego materiału w produkcie
 class ProductMaterialForm(Form):
     material_name = StringField('Materiał', validators=[DataRequired()])
     quantity = StringField('Ilość', validators=[DataRequired()])
 
-# --- NOWY FORMULARZ DLA TKANIN W PRODUKCIE ---
 class ProductFabricForm(Form):
     fabric_id = SelectField('Tkanina', coerce=int, validators=[DataRequired()])
     usage_meters = FloatField('Zużycie [m]', validators=[DataRequired(), NumberRange(min=0)])
 
-# NOWY FORMULARZ DLA KATEGORII
 class ProductCategoryForm(FlaskForm):
     name = StringField('Nazwa kategorii', validators=[DataRequired()])
     submit = SubmitField('Zapisz')
@@ -85,16 +67,11 @@ class ProductForm(FlaskForm):
     description = TextAreaField('Opis produktu (opcjonalnie)')
     category_id = SelectField('Kategoria', coerce=int, validators=[Optional()])
     production_price = CustomDecimalField('Cena Produkcji (np. robocizna)', places=2, validators=[DataRequired(), NumberRange(min=0)])
-    # --- POCZĄTEK ZMIANY ---
     label_template_id = SelectField('Szablon metki (opcjonalnie)', coerce=int, validators=[Optional()])
-    # --- KONIEC ZMIANY ---
     images = MultipleFileField('Dodaj zdjęcia (można wybrać kilka)', validators=[
         FileAllowed(['jpg', 'png', 'jpeg'], 'Dozwolone są tylko pliki graficzne!')
     ])
-    # --- ZMIANA: usunięcie starego pola, dodanie nowego ---
-    # fabric_usage_meters = FloatField('Zużycie tkaniny (w metrach)', validators=[DataRequired(), NumberRange(min=0)])
     fabrics_needed = FieldList(FormField(ProductFabricForm), min_entries=0)
-
     materials_needed = FieldList(FormField(ProductMaterialForm), min_entries=0)
     submit = SubmitField('Zapisz produkt')
 
