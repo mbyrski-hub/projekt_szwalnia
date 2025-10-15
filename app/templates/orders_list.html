@@ -261,8 +261,8 @@
                         <i class="fas fa-tags"></i>
                     </button>
                     <a href="{{ url_for('edit_order', order_id=order.id) }}" class="btn btn-sm btn-warning" title="Edytuj zlecenie">
-        <i class="fas fa-edit"></i>
-    </a>
+    <i class="fas fa-edit"></i>
+</a>
                     <form method="POST" action="{{ url_for('delete_order', order_id=order.id) }}" class="d-inline delete-order-form">
                         <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
                     </form>
@@ -279,8 +279,19 @@
             <strong>Opis:</strong> {{ order.description }}<br>
             <strong>Zlecający:</strong> {{ order.zlecajacy }}<br>
             <strong>Logowanie:</strong> {{ order.login_info or 'Brak' }}<br>
-            <strong>Tkanina:</strong> {% for fab in order.fabrics %}{{ fab.fabric.name }}{% if not loop.last %}, {% endif %}{% else %}Brak{% endfor %}<br>
             
+            {# --- POCZĄTEK ZMIANY --- #}
+            <strong>Tkanina:</strong> 
+            {% set fabrics = [] %}
+            {% for material in order.planned_materials %}
+                {% if 'metra' in material.quantity and material.name not in fabrics %}
+                    {% set _ = fabrics.append(material.name) %}
+                {% endif %}
+            {% endfor %}
+            {{ fabrics|join(', ') if fabrics else 'Brak' }}
+            <br>
+            {# --- KONIEC ZMIANY --- #}
+
             <strong>Produkty:</strong>
             <ul style="list-style-type: none; padding-left: 0;">
             {% for product_name, items in order.order_items|groupby('product.name') %}

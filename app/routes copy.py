@@ -34,7 +34,7 @@ import locale
 import pathlib
 import qrcode
 from pywebpush import webpush, WebPushException 
-from sqlalchemy.orm import joinedload, subqueryload
+from sqlalchemy.orm import joinedload
 
 if platform.system() == 'Windows':
     config_pdf = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
@@ -60,40 +60,33 @@ def index():
     return redirect(url_for('kokpit'))
 
 def calculate_material_summary(order):
-    """Oblicza podsumowanie materiałów z uwzględnieniem dostawców."""
-    summary = defaultdict(lambda: {'quantity': 0.0, 'unit': ''})
-
-    # Przetwarzanie tkanin
+    summary = defaultdict(float)
+    units = {}
+    product_fabric_usage = defaultdict(float)
     for item in order.order_items:
-        if item.product and item.product.fabrics_needed:
+        if item.product:
             for pf_link in item.product.fabrics_needed:
-                key = (pf_link.fabric.name.upper(), pf_link.supplier.name if pf_link.supplier else None)
-                summary[key]['quantity'] += pf_link.usage_meters * item.quantity
-                summary[key]['unit'] = 'metra'
-
-    # Przetwarzanie materiałów dodatkowych
-    for item in order.order_items:
-        if item.product and item.product.materials_needed:
-            for pm_link in item.product.materials_needed:
-                match = re.match(r'^\s*(\d+\.?\d*)\s*(.*)', pm_link.quantity)
-                if not match: continue
-                value_str, unit_str = match.groups()
-                
-                key = (pm_link.material.name.strip().upper(), pm_link.supplier.name if pm_link.supplier else None)
-                summary[key]['quantity'] += float(value_str) * item.quantity
-                summary[key]['unit'] = unit_str.strip()
-
-    # Tworzenie sformatowanej listy wyjściowej
+                product_fabric_usage[pf_link.fabric.name.upper()] += pf_link.usage_meters * item.quantity
     structured_summary = []
-    for (name, supplier), data in sorted(summary.items()):
-        total_val = data['quantity']
-        total_val_str = f"{int(total_val)}" if total_val == int(total_val) else f"{total_val:.2f}"
-        structured_summary.append({
-            'name': name,
-            'quantity': f"{total_val_str} {data['unit']}",
-            'supplier': supplier
-        })
-        
+    for name, total_usage in sorted(product_fabric_usage.items()):
+        total_val_str = f"{int(total_usage)}" if total_usage == int(total_usage) else f"{total_usage:.2f}"
+        structured_summary.append({'name': name, 'quantity': f"{total_val_str} metra"})
+    for item in order.order_items:
+        if not item.product or not item.product.materials_needed:
+            continue
+        for pm_link in item.product.materials_needed:
+            material_name = pm_link.material.name
+            quantity_str = pm_link.quantity
+            match = re.match(r'^\s*(\d+\.?\d*)\s*(.*)', quantity_str)
+            if not match: continue
+            value_str, unit_str = match.groups()
+            key = (material_name.strip().upper(), unit_str.strip())
+            if key not in units: units[key] = unit_str.strip()
+            summary[key] += float(value_str) * item.quantity
+    for (name, unit_key), total_value in sorted(summary.items()):
+        total_val_str = f"{int(total_value)}" if total_value == int(total_value) else f"{total_value:.2f}"
+        unit = units.get((name, unit_key), unit_key)
+        structured_summary.append({'name': name, 'quantity': f"{total_val_str} {unit}"})
     return structured_summary
 
 # pogoda
@@ -183,7 +176,9 @@ def new_order():
             form.client_name.data = order_template.client_name
             form.description.data = order_template.description
             form.login_info.data = order_template.login_info
-            
+            form.fabrics.entries = []
+            for template_fabric in order_template.fabrics:
+                form.fabrics.append_entry({'fabric_id': template_fabric.fabric_id})
     if form.validate_on_submit():
         try:
             client_name = form.client_name.data.strip().upper()
@@ -284,22 +279,28 @@ def new_order():
     return render_template('order_form.html', form=form, clients=existing_clients, categories=all_categories,
                            templates=all_templates, products_json=json.dumps(products_for_js), fabric_choices=fabric_choices)
 
+# W app/routes.py
+
+# W app/routes.py
+
 @app.route('/order/edit/<int:order_id>', methods=['GET', 'POST'])
 def edit_order(order_id):
     order = Order.query.get_or_404(order_id)
     
+    # --- POCZĄTEK KLUCZOWEJ ZMIANY ---
+    # Najpierw pobieramy opcje wyboru dla tkanin
     all_fabrics = Fabric.query.order_by('name').all()
     fabric_choices = [(f.id, f.name) for f in all_fabrics]
 
-    # Tworzymy formularz, który automatycznie wczyta dane z obiektu 'order'
+    # Tworzymy formularz i OD RAZU przekazujemy mu opcje wyboru
     form = OrderForm(obj=order)
-
-    # Ustawiamy opcje wyboru dla już wczytanych pól tkanin
     for fabric_form in form.fabrics:
         fabric_form.fabric_id.choices = fabric_choices
+    # --- KONIEC KLUCZOWEJ ZMIANY ---
 
     if form.validate_on_submit():
         try:
+            # Ta sekcja pozostaje bez zmian
             client_name = form.client_name.data.strip().upper()
             client = Client.query.filter_by(name=client_name).first()
             if not client:
@@ -356,16 +357,16 @@ def edit_order(order_id):
             db.session.rollback()
             flash(f'Wystąpił nieoczekiwany błąd podczas aktualizacji: {e}', 'danger')
 
-    # --- POCZĄTEK ZMIANY ---
-    # Ten blok jest teraz znacznie prostszy. Uzupełniamy tylko te pola,
-    # których 'obj=order' nie wypełnia automatycznie.
     if request.method == 'GET':
         form.client_name.data = order.client.name
         form.zlecajacy.data = order.zlecajacy
         
-        # Usunięto błędne czyszczenie i ponowne wypełnianie pola z tkaninami.
-        # Dane produktów są już wczytane przez 'obj=order', ale musimy ręcznie
-        # obsłużyć warianty (rozmiary i ilości), ponieważ są one zagnieżdżone.
+        form.fabrics.entries = []
+        for fabric_link in order.fabrics:
+            # Ponownie przypisujemy opcje po dynamicznym dodaniu wierszy
+            new_entry = form.fabrics.append_entry({'fabric_id': fabric_link.fabric_id})
+            new_entry.fabric_id.choices = fabric_choices
+
         form.products.entries = []
         products_in_order = db.session.query(Product, func.group_concat(OrderItem.size + ':' + OrderItem.quantity.cast(db.String))).join(OrderItem).filter(OrderItem.order_id == order.id).group_by(Product.id).all()
         for product, variants_str in products_in_order:
@@ -375,7 +376,6 @@ def edit_order(order_id):
                 for variant_pair in variants_str.split(','):
                     size, qty = variant_pair.split(':')
                     product_entry.variants.append_entry({'size': size, 'quantity': qty})
-    # --- KONIEC ZMIANY ---
 
     existing_clients = Client.query.all()
     all_categories = ProductCategory.query.order_by(ProductCategory.name).all()
@@ -395,6 +395,13 @@ def order_templates():
 @app.route('/order_templates/new', methods=['GET', 'POST'])
 def new_template():
     form = OrderTemplateForm()
+    # Przeniesiono pobieranie opcji wyboru na początek
+    fabric_choices = [(f.id, f.name) for f in Fabric.query.order_by('name').all()]
+    
+    # Pętla przypisująca opcje wyboru do każdego podformularza tkaniny
+    for fabric_form in form.fabrics:
+        fabric_form.fabric_id.choices = fabric_choices
+        
     clients = Client.query.all()
     if form.validate_on_submit():
         template_name = form.template_name.data.strip().upper()
@@ -405,21 +412,33 @@ def new_template():
                 template_name=template_name, client_name=form.client_name.data.strip().upper(),
                 description=form.description.data.strip().upper(), login_info=form.login_info.data.strip().upper()
             )
-            # USUNIĘTO PĘTLĘ DODAJĄCĄ TKANINY
+            for fabric_data in form.fabrics.data:
+                template.fabrics.append(TemplateFabric(fabric_id=fabric_data['fabric_id']))
             db.session.add(template)
             db.session.commit()
             flash('Szablon został utworzony.', 'success')
             return redirect(url_for('order_templates'))
             
-    # USUNIĘTO PRZEKAZYWANIE 'fabric_choices'
-    return render_template('order_template_form.html', form=form, clients=clients)
+    return render_template('order_template_form.html', form=form, clients=clients, fabric_choices=fabric_choices)
 
 @app.route('/order_templates/edit/<int:template_id>', methods=['GET', 'POST'])
 def edit_template(template_id):
     template = OrderTemplate.query.get_or_404(template_id)
     form = OrderTemplateForm(obj=template)
     clients = Client.query.all()
-    # USUNIĘTO LOGIKĘ ZWIĄZANĄ Z 'fabric_choices' ORAZ WCZYTYWANIEM ISTNIEJĄCYCH TKANIN DO FORMULARZA
+    fabric_choices = [(f.id, f.name) for f in Fabric.query.order_by('name').all()]
+
+    # --- POCZĄTEK KLUCZOWEJ ZMIANY ---
+    # Wczytaj zapisane tkaniny do formularza przy żądaniu GET
+    if request.method == 'GET':
+        form.fabrics.entries = [] # Wyczyść listę, aby uniknąć duplikatów
+        for tf in template.fabrics:
+            form.fabrics.append_entry({'fabric_id': tf.fabric_id})
+
+    # Ustaw opcje wyboru dla wszystkich (także tych już wczytanych) podformularzy tkanin
+    for fabric_form in form.fabrics:
+        fabric_form.fabric_id.choices = fabric_choices
+    # --- KONIEC KLUCZOWEJ ZMIANY ---
 
     if form.validate_on_submit():
         template.template_name = form.template_name.data.strip().upper()
@@ -427,14 +446,17 @@ def edit_template(template_id):
         template.description = form.description.data.strip().upper()
         template.login_info = form.login_info.data.strip().upper()
         
-        # USUNIĘTO LOGIKĘ USUWANIA I PONOWNEGO DODAWANIA POWIĄZAŃ TKANIN
+        # Usuń stare powiązania i dodaj nowe na podstawie danych z formularza
+        TemplateFabric.query.filter_by(template_id=template.id).delete()
+        for fabric_data in form.fabrics.data:
+            if fabric_data['fabric_id']: # Upewnij się, że ID tkaniny nie jest puste
+                template.fabrics.append(TemplateFabric(fabric_id=fabric_data['fabric_id']))
                 
         db.session.commit()
         flash('Szablon został zaktualizowany.', 'success')
         return redirect(url_for('order_templates'))
 
-    # USUNIĘTO PRZEKAZYWANIE 'fabric_choices'
-    return render_template('order_template_form.html', form=form, clients=clients)
+    return render_template('order_template_form.html', form=form, clients=clients, fabric_choices=fabric_choices)
 
 # ### POCZĄTEK OSTATECZNEJ POPRAWKI w app/routes.py ###
 
@@ -485,45 +507,50 @@ def calculate_order_total_cost(order):
 
 
 
+
+# app/routes.py
+
+# app/routes.py
+
 @app.route('/orders')
 def orders_list():
     client_filter = request.args.get('client', '').strip().upper()
     status_filter = request.args.get('status', '').strip().upper()
+    
+    # --- POCZĄTEK NOWEJ LOGIKI FILTROWANIA ---
+    # Domyślnie ustawiamy widok na bieżący rok i miesiąc
     year_filter = request.args.get('year', 'current')
     month_filter = request.args.get('month', 'current')
 
-    # ### POCZĄTEK ZMIANY: Dodajemy opcję ładowania tkanin przypisanych do zlecenia ###
-    eager_loading_options = [
-        # TA LINIA ZOSTAŁA DODANA, ABY ODŚWIEŻAĆ DANE O TKANINACH
-        joinedload(Order.fabrics).joinedload(OrderFabric.fabric),
-        
-        subqueryload(Order.order_items).subqueryload(OrderItem.product).subqueryload(Product.fabrics_needed).joinedload(ProductFabric.supplier),
-        subqueryload(Order.order_items).subqueryload(OrderItem.product).subqueryload(Product.fabrics_needed).joinedload(ProductFabric.fabric),
-        subqueryload(Order.order_items).subqueryload(OrderItem.product).subqueryload(Product.materials_needed).joinedload(ProductMaterial.supplier),
-        subqueryload(Order.order_items).subqueryload(OrderItem.product).subqueryload(Product.materials_needed).joinedload(ProductMaterial.material),
-    ]
-    # ### KONIEC ZMIANY ###
+    orders_query = Order.query.join(Client)
 
-    orders_query = Order.query.join(Client).options(*eager_loading_options)
-
+    # Aplikuj filtry (klient, status)
     if client_filter:
         orders_query = orders_query.filter(Client.name == client_filter)
     if status_filter:
         orders_query = orders_query.filter(Order.status == status_filter)
+
+    # Przetłumacz i aplikuj filtry daty
+    # Ustal rok do filtrowania
     if year_filter == 'current':
         orders_query = orders_query.filter(extract('year', Order.created_at) == datetime.utcnow().year)
     elif year_filter != 'all':
         try:
             orders_query = orders_query.filter(extract('year', Order.created_at) == int(year_filter))
-        except (ValueError, TypeError): pass
+        except (ValueError, TypeError):
+            pass # Ignoruj niepoprawną wartość, jeśli ktoś wpisze ją ręcznie w URL
+
+    # Ustal miesiąc do filtrowania
     if month_filter == 'current':
         orders_query = orders_query.filter(extract('month', Order.created_at) == datetime.utcnow().month)
     elif month_filter != 'all':
         try:
             orders_query = orders_query.filter(extract('month', Order.created_at) == int(month_filter))
-        except (ValueError, TypeError): pass
+        except (ValueError, TypeError):
+            pass # Ignoruj niepoprawną wartość
 
     all_orders = orders_query.order_by(Order.created_at.desc()).all()
+    # --- KONIEC NOWEJ LOGIKI FILTROWANIA ---
     
     for order in all_orders:
         order.planned_materials = calculate_material_summary(order)
@@ -540,20 +567,28 @@ def orders_list():
     
     return render_template('orders_list.html', in_progress_orders=in_progress_orders, new_orders=new_orders,
                            completed_orders=completed_orders, clients=clients, years=years,
+                           # Przekaż aktualne wartości filtrów do szablonu
                            current_year_filter=year_filter,
                            current_month_filter=month_filter)
 
+# W app/routes.py
 @app.route('/orders/history')
 def orders_history():
     client_filter = request.args.get('client', '').strip().upper()
     year_filter = request.args.get('year', type=int)
     month_filter = request.args.get('month', type=int)
 
+    # ### OSTATECZNA WERSJA LOGIKI PODSUMOWANIA ###
+    
+    # Używamy SQL CASE, aby wybrać właściwą datę do grupowania:
+    # 1. Jeśli 'production_month' jest ustawiony, użyj go (np. '2025-10-01').
+    # 2. W przeciwnym razie, użyj 'sewing_finished_at'.
     grouping_date = db.case(
         (Order.production_month != None, func.date(Order.production_month + '-01')),
         else_=func.date(Order.sewing_finished_at)
     )
 
+    # Zapytanie do podsumowania miesięcznego
     summary_query = db.session.query(
         extract('year', grouping_date).label('year'),
         extract('month', grouping_date).label('month'),
@@ -564,20 +599,13 @@ def orders_history():
         Order.sewing_finished_at.isnot(None)
     )
 
-    # ### POCZĄTEK ZMIANY: Dodajemy opcje "chciwego ładowania" ###
-    eager_loading_options = [
-        subqueryload(Order.order_items).subqueryload(OrderItem.product).subqueryload(Product.fabrics_needed).joinedload(ProductFabric.supplier),
-        subqueryload(Order.order_items).subqueryload(OrderItem.product).subqueryload(Product.fabrics_needed).joinedload(ProductFabric.fabric),
-        subqueryload(Order.order_items).subqueryload(OrderItem.product).subqueryload(Product.materials_needed).joinedload(ProductMaterial.supplier),
-        subqueryload(Order.order_items).subqueryload(OrderItem.product).subqueryload(Product.materials_needed).joinedload(ProductMaterial.material),
-    ]
+    # Zapytanie do pełnej listy zleceń (pozostaje bez zmian - zawsze pokazuje wg daty zakończenia)
     orders_query = Order.query.join(Client).filter(
         Order.status == 'ZREALIZOWANE',
         Order.sewing_finished_at.isnot(None)
-    ).options(*eager_loading_options)
-    # ### KONIEC ZMIANY ###
+    )
 
-    # Reszta funkcji bez zmian
+    # Aplikowanie filtrów (teraz filtrujemy po 'grouping_date')
     if client_filter:
         summary_query = summary_query.join(Client).filter(Client.name == client_filter)
         orders_query = orders_query.filter(Client.name == client_filter)
@@ -595,10 +623,7 @@ def orders_history():
     
     all_orders = orders_query.order_by(Order.sewing_finished_at.desc()).all()
     
-    # ### NOWA LINIJKA DO DODANIA ###
-    for order in all_orders:
-        order.planned_materials = calculate_material_summary(order)
-        
+    # Lata do filtra pobieramy z obu możliwych dat, aby niczego nie pominąć
     years_q1 = db.session.query(extract('year', Order.sewing_finished_at)).distinct()
     years_q2 = db.session.query(func.substr(Order.production_month, 1, 4)).distinct()
     all_years = {int(y[0]) for y in years_q1.union(years_q2) if y[0]}
@@ -2778,35 +2803,16 @@ def receive_supplier_price_update():
 
 @app.route('/materials-management')
 def materials_management():
-    # Używamy joinedload, aby od razu załadować powiązane ceny i dostawców.
-    # Jest to bardziej wydajne i zapobiega błędom.
-    all_fabrics = Fabric.query.options(
-        joinedload(Fabric.supplier_prices).joinedload(FabricPrice.supplier)
-    ).order_by(Fabric.name).all()
-    
-    all_materials = Material.query.options(
-        joinedload(Material.supplier_prices).joinedload(MaterialPrice.supplier)
-    ).order_by(Material.name).all()
+    # Ta część pozostaje prosta, bez subqueryload
+    fabrics = Fabric.query.order_by(Fabric.name).all()
+    materials = Material.query.order_by(Material.name).all()
 
-    # Sortujemy ceny dla każdego materiału w Pythonie, a nie w szablonie.
-    # Wynik zapisujemy w nowym atrybucie, np. 'sorted_prices'.
-    for fabric in all_fabrics:
-        fabric.sorted_prices = sorted(
-            fabric.supplier_prices,
-            key=lambda sp: sp.price_date or date.min,
-            reverse=True
-        )
-        
-    for material in all_materials:
-        material.sorted_prices = sorted(
-            material.supplier_prices,
-            key=lambda sp: sp.price_date or date.min,
-            reverse=True
-        )
-
+    # Przekazujemy do szablonu nie tylko dane, ale też potrzebne klasy i funkcje
     return render_template(
         'materials_management.html', 
-        fabrics=all_fabrics, 
-        materials=all_materials
+        fabrics=fabrics, 
+        materials=materials,
+        FabricPrice=FabricPrice,      # Udostępnij klasę FabricPrice w szablonie
+        MaterialPrice=MaterialPrice,  # Udostępnij klasę MaterialPrice w szablonie
+        desc=desc                     # Udostępnij funkcję desc() w szablonie
     )
-    

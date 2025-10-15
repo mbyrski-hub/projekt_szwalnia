@@ -17,6 +17,7 @@ class OrderFabric(db.Model):
     order_id = db.Column(db.Integer, db.ForeignKey('order.id'), primary_key=True)
     fabric_id = db.Column(db.Integer, db.ForeignKey('fabric.id'), primary_key=True)
     fabric = db.relationship('Fabric')
+    usage_meters = db.Column(db.Float, nullable=True) # Pozwalamy na nullable, na wypadek starych danych
 
 class Fabric(db.Model):
     id = db.Column(db.Integer, primary_key=True)

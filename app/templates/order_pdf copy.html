@@ -72,22 +72,12 @@
 
     <h2>Tkaniny</h2>
     <ul>
-        {# --- POCZĄTEK ZMIANY: Wyświetlanie tkanin na podstawie planowanego zużycia --- #}
-        {% set fabrics = [] %}
-        {% for material in material_summary %}
-            {% if 'metra' in material.quantity and material.name not in fabrics %}
-                {% set _ = fabrics.append(material.name) %}
-            {% endif %}
-        {% endfor %}
-        
-        {% for fabric_name in fabrics %}
-            <li>{{ fabric_name }}</li>
+        {% for order_fabric in order.fabrics %}
+            <li>{{ order_fabric.fabric.name }}</li>
         {% else %}
             <li>Brak przypisanych tkanin.</li>
         {% endfor %}
-        {# --- KONIEC ZMIANY --- #}
     </ul>
-    
     <h2>Opis zlecenia</h2>
     <p>{{ order.description | nl2br }}</p>
 

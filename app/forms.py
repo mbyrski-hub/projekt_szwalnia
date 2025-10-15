@@ -60,8 +60,7 @@ class OrderTemplateForm(FlaskForm):
     client_name = StringField('Nazwa klienta', validators=[DataRequired()])
     description = TextAreaField('Opis zlecenia', validators=[DataRequired()])
     
-    # --- ZMIANA: Z SelectField na FieldList ---
-    fabrics = FieldList(FormField(FabricSelectionForm), min_entries=0)
+    
     
     login_info = TextAreaField('Logowanie (opcjonalne)')
     submit = SubmitField('Zapisz szablon')
