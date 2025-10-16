@@ -1,119 +1,100 @@
 {% extends "base.html" %}
-{% block title %}Zestawienia{% endblock %}
+{% block title %}Zestawienia - Raporty{% endblock %}
 
 {% block head %}
 <style>
+    .kpi-card {
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: .75rem;
+        padding: 1.25rem;
+        text-align: center;
+        height: 100%;
+    }
+    .kpi-icon {
+        font-size: 2rem;
+        color: var(--accent-color);
+        margin-bottom: 0.5rem;
+    }
+    .kpi-value {
+        font-size: 1.75rem;
+        font-weight: 600;
+        color: var(--text-color);
+    }
+    .kpi-label {
+        font-size: 0.9rem;
+        color: var(--text-muted-color);
+    }
     .chart-container {
         position: relative;
-        height: 350px;
+        height: 300px; /* Zmniejszona wysokość dla spójności */
         width: 100%;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<h2><i class="fas fa-chart-pie"></i> Zestawienia Zużycia Materiałów</h2>
-<p>Podsumowanie dotyczy tylko zleceń o statusie "ZREALIZOWANE" w wybranym okresie.</p>
+<h2><i class="fas fa-chart-line"></i> Raporty i Analizy</h2>
+<p>Analiza dotyczy zleceń o statusie "ZREALIZOWANE".</p>
 
 <div class="card mb-4">
     <div class="card-body">
         <form method="GET" class="form-row align-items-end">
-            <div class="form-group col-md-3">
-                <label for="year">Rok:</label>
-                <select name="year" id="year" class="form-control">
-                    <option value="all">Wszystkie lata</option>
-                    {% for y in years %}<option value="{{ y }}" {% if current_year == y|string %}selected{% endif %}>{{ y }}</option>{% endfor %}
-                </select>
-            </div>
-            <div class="form-group col-md-3">
-                <label for="month">Miesiąc:</label>
-                <select name="month" id="month" class="form-control">
-                    <option value="all">Wszystkie miesiące</option>
-                    {% for m in range(1, 13) %}<option value="{{ m }}" {% if current_month == m|string %}selected{% endif %}>{{ m }}</option>{% endfor %}
-                </select>
-            </div>
-            <div class="form-group col-md-4">
-                <label for="material">Filtruj po nazwie:</label>
-                <input type="text" name="material" id="material" class="form-control" list="materials-list" value="{{ current_filter }}">
-                <datalist id="materials-list">
-                    {% for m in all_materials %}<option value="{{ m }}">{% endfor %}
-                </datalist>
-            </div>
-            <div class="form-group col-md-2">
-                <button type="submit" class="btn btn-primary btn-block"><i class="fas fa-filter"></i> Filtruj</button>
-                <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-block mt-1">Wyczyść</a>
-            </div>
+            <div class="form-group col-md-3"><label for="year">Rok:</label><select name="year" id="year" class="form-control">
+                <option value="all">Wszystkie lata</option>{% for y in years %}<option value="{{ y }}" {% if current_year == y|string %}selected{% endif %}>{{ y }}</option>{% endfor %}
+            </select></div>
+            <div class="form-group col-md-3"><label for="month">Miesiąc:</label><select name="month" id="month" class="form-control">
+                <option value="all">Wszystkie miesiące</option>{% for m in range(1, 13) %}<option value="{{ m }}" {% if current_month == m|string %}selected{% endif %}>{{ m }}</option>{% endfor %}
+            </select></div>
+            <div class="form-group col-md-4"><label for="material">Filtruj materiał:</label><input type="text" name="material" id="material" class="form-control" list="materials-list" value="{{ current_filter }}"><datalist id="materials-list">{% for m in all_materials %}<option value="{{ m }}">{% endfor %}</datalist></div>
+            <div class="form-group col-md-2"><button type="submit" class="btn btn-primary btn-block"><i class="fas fa-filter"></i> Filtruj</button><a href="{{ url_for('reports') }}" class="btn btn-secondary btn-block mt-1">Wyczyść</a></div>
         </form>
     </div>
 </div>
 
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-4"><div class="kpi-card"><div class="kpi-icon"><i class="fas fa-hammer"></i></div><div class="kpi-value">{{ "%.2f zł"|format(total_production_value) }}</div><div class="kpi-label">Wartość Produkcji</div></div></div>
+    <div class="col-lg-3 col-md-6 mb-4"><div class="kpi-card"><div class="kpi-icon"><i class="fas fa-dollar-sign"></i></div><div class="kpi-value">{{ "%.2f zł"|format(total_material_cost) }}</div><div class="kpi-label">Koszt Materiałów</div></div></div>
+    <div class="col-lg-3 col-md-6 mb-4"><div class="kpi-card"><div class="kpi-icon"><i class="fas fa-file-invoice"></i></div><div class="kpi-value">{{ order_count }}</div><div class="kpi-label">Liczba Zleceń</div></div></div>
+    <div class="col-lg-3 col-md-6 mb-4"><div class="kpi-card"><div class="kpi-icon"><i class="fas fa-tshirt"></i></div><div class="kpi-value">{{ total_items_produced }}</div><div class="kpi-label">Wyprodukowanych Sztuk</div></div></div>
+</div>
+
 <div class="row">
-    <div class="col-lg-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header"><h4><i class="fas fa-scroll"></i> Zużycie Tkanin</h4></div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover">
-                        <thead><tr><th>Nazwa Tkaniny</th><th class="text-right">Ilość</th><th class="text-right">Szacowany Koszt</th></tr></thead>
-                        <tbody>
-                        {% for name, data in fabric_summary.items()|sort %}
-                            <tr>
-                                <td>{{ name }}</td>
-                                <td class="text-right">{{ "%.2f m"|format(data.quantity) }}</td>
-                                <td class="text-right"><strong>{{ "%.2f zł"|format(data.cost) }}</strong></td>
-                            </tr>
-                        {% else %}
-                            <tr><td colspan="3" class="text-center text-muted">Brak danych</td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+    <div class="col-lg-8 mb-4">
+        <div class="card h-100"><div class="card-header"><h4>Trend Wartości Produkcji (ostatnie 12 miesięcy)</h4></div><div class="card-body"><div class="chart-container"><canvas id="productionTrendChart"></canvas></div></div></div>
     </div>
-    <div class="col-lg-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header"><h4><i class="fas fa-cogs"></i> Zużycie Materiałów Dodatkowych</h4></div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover">
-                        <thead><tr><th>Nazwa Materiału</th><th class="text-right">Ilość</th><th class="text-right">Szacowany Koszt</th></tr></thead>
-                        <tbody>
-                        {% for name, data in material_summary.items()|sort %}
-                            <tr>
-                                <td>{{ name }}</td>
-                                <td class="text-right">{{ "%.2f"|format(data.quantity) }} {{ data.unit|join(', ') }}</td>
-                                <td class="text-right"><strong>{{ "%.2f zł"|format(data.cost) }}</strong></td>
-                            </tr>
-                        {% else %}
-                            <tr><td colspan="3" class="text-center text-muted">Brak danych</td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100"><div class="card-header"><h4>Struktura Kosztów (dla okresu)</h4></div><div class="card-body"><div class="chart-container"><canvas id="costStructureChart"></canvas></div></div></div>
     </div>
 </div>
 
 <div class="row mt-4">
-    <div class="col-lg-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header"><h4>Udział procentowy tkanin</h4></div>
-            <div class="card-body">
-                <div class="chart-container">
-                    <canvas id="fabricUsageChart"></canvas>
-                </div>
+    <div class="col-lg-9 mb-4">
+        <div class="card h-100"><div class="card-header"><h4><i class="fas fa-scroll"></i> Szczegółowe Zużycie Materiałów</h4></div>
+            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                <h5>Tkaniny</h5>
+                <table class="table table-sm table-hover"><thead><tr><th>Nazwa</th><th class="text-right">Ilość</th><th class="text-right">Szac. Koszt</th></tr></thead><tbody>
+                {% for name, data in fabric_summary.items()|sort %}<tr><td>{{ name }}</td><td class="text-right">{{ "%.2f m"|format(data.quantity) }}</td><td class="text-right"><strong>{{ "%.2f zł"|format(data.cost) }}</strong></td></tr>{% else %}<tr><td colspan="3" class="text-center text-muted">Brak danych</td></tr>{% endfor %}
+                </tbody></table><hr>
+                <h5>Materiały Dodatkowe</h5>
+                <table class="table table-sm table-hover"><thead><tr><th>Nazwa</th><th class="text-right">Ilość</th><th class="text-right">Szac. Koszt</th></tr></thead><tbody>
+                {% for name, data in material_summary.items()|sort %}<tr><td>{{ name }}</td><td class="text-right">{{ "%.2f"|format(data.quantity) }} {{ data.unit|join(', ') }}</td><td class="text-right"><strong>{{ "%.2f zł"|format(data.cost) }}</strong></td></tr>{% else %}<tr><td colspan="3" class="text-center text-muted">Brak danych</td></tr>{% endfor %}
+                </tbody></table>
             </div>
         </div>
     </div>
-    <div class="col-lg-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header"><h4>Top 10 najkosztowniejszych materiałów</h4></div>
-            <div class="card-body">
-                <div class="chart-container">
-                    <canvas id="materialCostChart"></canvas>
-                </div>
+    <div class="col-lg-3 mb-4">
+        <div class="card h-100"><div class="card-header"><h4><i class="fas fa-trophy"></i> Top Klienci (wg wartości)</h4></div>
+            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                {% if top_clients_by_value %}
+                    <ul class="list-group list-group-flush">
+                        {% for client, value in top_clients_by_value %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0"><strong>{{ loop.index }}. {{ client }}</strong><span class="badge badge-primary badge-pill">{{ "%.0f zł"|format(value) }}</span></li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">Brak danych do rankingu.</p>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -128,66 +109,37 @@ document.addEventListener("DOMContentLoaded", function() {
     const chartTextColor = getComputedStyle(document.body).getPropertyValue('--text-color').trim();
     const chartGridColor = getComputedStyle(document.body).getPropertyValue('--border-color').trim();
 
-    // 1. Wykres kołowy zużycia tkanin
-    const fabricCtx = document.getElementById('fabricUsageChart');
-    const fabricData = {{ fabric_chart_data|tojson|safe }};
-    const fabricLabels = Object.keys(fabricData);
-    const fabricValues = Object.values(fabricData).map(d => d.quantity);
-
-    if (fabricCtx && fabricLabels.length > 0) {
-        new Chart(fabricCtx, {
-            type: 'doughnut',
-            data: {
-                labels: fabricLabels,
-                datasets: [{
-                    label: 'Zużycie [m]',
-                    data: fabricValues,
-                    backgroundColor: ['#007bff', '#ff9900', '#28a745', '#dc3545', '#17a2b8', '#6f42c1', '#fd7e14', '#20c997'],
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { position: 'right', labels: { color: chartTextColor, font: {size: 10}, boxWidth: 15 } } }
-            }
-        });
-    } else if (fabricCtx) {
-         fabricCtx.parentElement.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><p>Brak danych do wygenerowania wykresu.</p></div>';
-    }
-    
-    // 2. Wykres słupkowy kosztów materiałów
-    const costCtx = document.getElementById('materialCostChart');
-    const costData = {{ cost_chart_data|tojson|safe }};
-    const costLabels = costData.map(item => item[0]);
-    const costValues = costData.map(item => item[1]);
-
-    if (costCtx && costLabels.length > 0) {
+    // Wykres 1: Struktura kosztów
+    const costCtx = document.getElementById('costStructureChart');
+    const costData = {{ cost_structure_data|tojson|safe }};
+    if (costCtx && Object.values(costData).some(v => v > 0)) {
         new Chart(costCtx, {
-            type: 'bar',
+            type: 'doughnut', data: { labels: Object.keys(costData), datasets: [{ data: Object.values(costData), backgroundColor: ['#007bff', '#ff9900', '#6f42c1'] }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: chartTextColor } } } }
+        });
+    } else if (costCtx) { costCtx.parentElement.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted small"><p>Brak danych do analizy kosztów.</p></div>'; }
+
+    // Wykres 2: Trend produkcji
+    const trendCtx = document.getElementById('productionTrendChart');
+    const trendData = {{ production_trend_data|tojson|safe }};
+    if (trendCtx && trendData.length > 0) {
+        new Chart(trendCtx, {
+            type: 'line',
             data: {
-                labels: costLabels,
+                labels: trendData.map(d => d.month),
                 datasets: [{
-                    label: 'Koszt materiałów [zł]',
-                    data: costValues,
-                    backgroundColor: 'rgba(255, 153, 0, 0.7)',
-                    borderColor: 'rgba(255, 153, 0, 1)',
-                    borderWidth: 1
+                    label: 'Wartość Produkcji', data: trendData.map(d => d.value),
+                    borderColor: 'rgba(255, 153, 0, 1)', backgroundColor: 'rgba(255, 153, 0, 0.2)',
+                    fill: true, tension: 0.3
                 }]
             },
             options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: { beginAtZero: true, ticks: { color: chartTextColor }, grid: { color: chartGridColor } },
-                    y: { ticks: { color: chartTextColor }, grid: { display: false } }
-                },
+                responsive: true, maintainAspectRatio: false,
+                scales: { x: { ticks: { color: chartTextColor }, grid: { color: chartGridColor } }, y: { beginAtZero: true, ticks: { color: chartTextColor }, grid: { color: chartGridColor } } },
                 plugins: { legend: { display: false } }
             }
         });
-    } else if (costCtx) {
-         costCtx.parentElement.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><p>Brak danych do wygenerowania wykresu.</p></div>';
-    }
+    } else if (trendCtx) { trendCtx.parentElement.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted small"><p>Brak danych do analizy trendu.</p></div>'; }
 });
 </script>
 {% endblock %}
