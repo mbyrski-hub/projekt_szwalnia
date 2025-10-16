@@ -382,7 +382,7 @@
                         <small id="comment-legend" class="comment-legend">
                             <span class="blue-dot"></span> Nowa uwaga z krojowni
                         </small>
-                        </div>
+                    </div>
                     {% include '_in_progress_strip.html' %}
                 </div>
             </div>
@@ -391,16 +391,17 @@
 
 
     <div class="row mt-4">
+        
         <div class="col-lg-4 mb-4">
             <div class="card h-100 production-value-card">
                 <div class="card-body d-flex flex-column justify-content-center">
-                    <h5 class="card-title text-center">Wartość produkcji (zrealizowane w tym miesiącu)</h5>
+                    <h5 class="card-title text-center">Obrót w tym miesiącu</h5>
                     <div class="text-center">
-                        <div class="stat-number" id="animated-value" data-value="{{ monthly_production_value }}">0,00 zł</div>
+                        <div class="stat-number" id="animated-value" data-value="{{ monthly_turnover }}">0,00 zł</div>
                         <div class="production-history mt-2" style="font-size: 0.85rem;">
-                            <strong>Poprzednie miesiące:</strong><br>
-                            {% for month_data in last_months_production %}
-                                {{ month_data.year }}-{{ "%02d"|format(month_data.month) }}: <strong>{{ "%.2f zł"|format(month_data.value) }}</strong>
+                            <strong>Poprzednie miesiące (obrót):</strong><br>
+                            {% for month_data in last_months_turnover %}
+                                {{ month_data.year }}-{{ "%02d"|format(month_data.month) }}: <strong>{{ "{:,.2f}".format(month_data.value).replace(",", " ").replace(".", ",") }} zł</strong>
                                 {% if not loop.last %}<br>{% endif %}
                             {% endfor %}
                         </div>
@@ -563,7 +564,7 @@
 document.addEventListener("DOMContentLoaded", function() {
     
     // =======================================================
-    // === TWÓJ ISTNIEJĄCY KOD DO OBSŁUGI WYKRESÓW I ZEGARA ===
+    // ===                 ZMIENIONY KOD                   ===
     // =======================================================
     let fabricChart = null;
     let profitableChart = null;
@@ -583,15 +584,24 @@ document.addEventListener("DOMContentLoaded", function() {
             htmlEl.classList.remove('dark-mode');
             localStorage.setItem('theme', 'light');
         }
-        setTimeout(renderAllCharts, 50);
+        // Przerenderuj wykresy po zmianie motywu, aby dostosować kolory
+        setTimeout(() => {
+            renderAllCharts();
+        }, 50);
     });
 
+    // Funkcja do renderowania wszystkich wykresów
     function renderAllCharts() {
-        const chartTextColor = getComputedStyle(document.body).getPropertyValue('--text-color').trim();
-        const chartGridColor = getComputedStyle(document.body).getPropertyValue('--border-color').trim();
+        renderFabricChart();
+        renderProfitableChart();
+    }
 
+    // Funkcja do renderowania wykresu zużycia tkanin
+    function renderFabricChart() {
+        const chartTextColor = getComputedStyle(document.body).getPropertyValue('--text-color').trim();
         const fabricCtx = document.getElementById('fabricUsageChart');
         const fabricData = {{ fabric_summary | tojson }};
+
         if (fabricCtx && fabricData && Object.keys(fabricData).length > 0) {
             if(fabricChart) fabricChart.destroy(); 
             fabricChart = new Chart(fabricCtx, {
@@ -620,9 +630,15 @@ document.addEventListener("DOMContentLoaded", function() {
         } else if (fabricCtx) {
             fabricCtx.parentElement.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><p>Brak danych o zużyciu tkanin.</p></div>';
         }
+    }
 
+    // Funkcja do renderowania wykresu dochodowych produktów
+    function renderProfitableChart() {
+        const chartTextColor = getComputedStyle(document.body).getPropertyValue('--text-color').trim();
+        const chartGridColor = getComputedStyle(document.body).getPropertyValue('--border-color').trim();
         const profitableCtx = document.getElementById('mostProfitableChart');
         const profitableData = {{ most_profitable_products | tojson }};
+
         if (profitableCtx && profitableData && profitableData.length > 0) {
             if(profitableChart) profitableChart.destroy(); 
             profitableChart = new Chart(profitableCtx, {
@@ -653,6 +669,10 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
 
+    // Wywołaj renderowanie wykresów po załadowaniu strony
+    renderAllCharts();
+
+    // Reszta skryptów (zegar, statusy serwerów, etc.)
     const printStatusDot = document.getElementById('print-server-status');
     const syncStatusDot = document.getElementById('sync-server-status');
     function checkServerStatus(url, dotElement) {
@@ -687,21 +707,21 @@ document.addEventListener("DOMContentLoaded", function() {
         const targetValue = parseFloat(animatedValue.dataset.value);
         if (!isNaN(targetValue)) {
             let start = 0;
-            const duration = 400;
+            const duration = 1000;
             const step = (timestamp) => {
                 if (!start) start = timestamp;
                 const progress = Math.min((timestamp - start) / duration, 1);
                 const currentValue = progress * targetValue;
-                animatedValue.textContent = `${currentValue.toFixed(2).replace('.', ',')} zł`;
+                animatedValue.textContent = `${currentValue.toLocaleString('pl-PL', {minimumFractionDigits: 2, maximumFractionDigits: 2})} zł`;
                 if (progress < 1) {
                     window.requestAnimationFrame(step);
+                } else {
+                    animatedValue.textContent = `${targetValue.toLocaleString('pl-PL', {minimumFractionDigits: 2, maximumFractionDigits: 2})} zł`;
                 }
             };
             window.requestAnimationFrame(step);
         }
     }
-
-    renderAllCharts(); 
 
     const triggerSyncBtn = document.getElementById('trigger-sync-btn');
     if (triggerSyncBtn) {
@@ -809,9 +829,8 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     // =======================================================
-    // === NOWY KOD DO OBSŁUGI POWIADOMIEŃ O UWAGACH =======
+    // === KOD DO OBSŁUGI POWIADOMIEŃ O UWAGACH (bez zmian) ===
     // =======================================================
-    // --- NOWA FUNKCJA POMOCNICZA ---
     function updateLegendVisibility() {
         const legend = document.getElementById('comment-legend');
         const hasNewComments = document.querySelector('.in-progress-card.has-new-comment');
@@ -834,7 +853,6 @@ document.addEventListener("DOMContentLoaded", function() {
                         }
                     }
                 });
-                // --- ZMIANA: Zaktualizuj widoczność legendy po sprawdzeniu ---
                 updateLegendVisibility();
             });
     }
@@ -854,7 +872,6 @@ document.addEventListener("DOMContentLoaded", function() {
 
                 card.classList.remove('has-new-comment');
 
-                // --- ZMIANA: Zaktualizuj widoczność legendy po kliknięciu ---
                 updateLegendVisibility();
             }
         });

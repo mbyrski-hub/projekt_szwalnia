@@ -2321,67 +2321,68 @@ def generate_and_save_ai_images_task(app, product_id, original_image_id, product
 
 @app.route('/kokpit')
 def kokpit():
+    current_month = datetime.utcnow().month
+    current_year = datetime.utcnow().year
+
     # Statystyki zleceń
     stats = {
         'nowe': Order.query.filter_by(status='NOWE').count(),
         'w_realizacji': Order.query.filter_by(status='W REALIZACJI').count(),
-        'zrealizowane': Order.query.filter_by(status='ZREALIZOWANE').count()
+        'zrealizowane': Order.query.filter(
+            Order.status == 'ZREALIZOWANE',
+            extract('month', Order.created_at) == current_month,
+            extract('year', Order.created_at) == current_year
+        ).count()
     }
 
-    # Zużycie tkanin w bieżącym miesiącu (POPRAWIONA LOGIKA)
-    current_month = datetime.utcnow().month
-    current_year = datetime.utcnow().year
-
-    # Pobierz nazwy wszystkich tkanin, aby odróżnić je od innych materiałów
-    all_fabric_names = {f.name.upper() for f in Fabric.query.all()}
-    fabric_summary_dict = defaultdict(float)
+    # Opcje "eager loading" do wielokrotnego użytku
+    eager_loading_options = [
+        joinedload(Order.order_items).joinedload(OrderItem.product).options(
+            joinedload(Product.fabrics_needed).joinedload(ProductFabric.fabric),
+            joinedload(Product.materials_needed).joinedload(ProductMaterial.material)
+        ),
+        joinedload(Order.fabrics).joinedload(OrderFabric.fabric),
+        joinedload(Order.materials_used)
+    ]
 
     # Pobierz zrealizowane zlecenia z bieżącego miesiąca
     completed_orders_this_month = Order.query.filter(
         Order.status == 'ZREALIZOWANE',
         extract('month', Order.created_at) == current_month,
         extract('year', Order.created_at) == current_year
-    ).all()
+    ).options(*eager_loading_options).all()
 
-    # Przetwarzaj każde zlecenie
+    # --- Obliczanie obrotu i zużycia tkanin w jednej pętli ---
+    monthly_turnover = 0.0
+    fabric_summary_dict = defaultdict(float)
+    all_fabric_names = {f.name.upper() for f in Fabric.query.all()}
+
     for order in completed_orders_this_month:
-        # 1. Sprawdź, czy istnieje ręcznie wprowadzone zużycie
+        # 1. Oblicz obrót
+        cost_details = calculate_order_total_cost(order)
+        monthly_turnover += cost_details.get('total_cost', 0.0)
+
+        # 2. Oblicz zużycie tkanin
         if order.materials_used:
             for usage in order.materials_used:
                 name = usage.material_name.strip().upper()
-                # Jeśli materiał jest tkaniną, dodaj go do podsumowania
                 if name in all_fabric_names:
-                    # Wyodrębnij wartość liczbową z ilości (np. "2.5 metra")
                     match = re.match(r'^\s*(\d+\.?\d*)', usage.quantity)
                     if match:
-                        value = float(match.groups()[0])
-                        fabric_summary_dict[name] += value
-        # 2. Jeśli nie, oblicz zużycie planowane
+                        fabric_summary_dict[name] += float(match.groups()[0])
         else:
             planned_summary = calculate_material_summary(order)
             for item in planned_summary:
-                name = item['name'].strip().upper()
-                if name in all_fabric_names:
+                clean_name = re.sub(r'\s*\([^)]*\)$', '', item['name']).strip().upper()
+                if clean_name in all_fabric_names:
                     match = re.match(r'^\s*(\d+\.?\d*)', item['quantity'])
                     if match:
-                        value = float(match.groups()[0])
-                        fabric_summary_dict[name] += value
+                        fabric_summary_dict[clean_name] += float(match.groups()[0])
     
-    # Zaokrąglij wartości na końcu
     fabric_summary_dict = {name: round(total, 2) for name, total in fabric_summary_dict.items()}
     
-    # --- NOWY KOD: Obliczanie wartości produkcji ---
-    
-    # Wartość produkcji w bieżącym miesiącu
-    monthly_production_value = db.session.query(
-        func.sum(OrderItem.quantity * Product.production_price)
-    ).join(Product).join(Order)\
-     .filter(Order.status == 'ZREALIZOWANE')\
-     .filter(extract('month', Order.created_at) == current_month)\
-     .filter(extract('year', Order.created_at) == current_year).scalar() or 0.0
-
-    # Wartość produkcji z 3 ostatnich miesięcy
-    last_months_production = []
+    # --- NOWA LOGIKA: Obliczanie OBRÓT z 3 ostatnich miesięcy ---
+    last_months_turnover = []
     for i in range(1, 4):
         month = current_month - i
         year = current_year
@@ -2389,85 +2390,76 @@ def kokpit():
             month += 12
             year -= 1
         
-        value = db.session.query(
-            func.sum(OrderItem.quantity * Product.production_price)
-        ).join(Product).join(Order)\
-         .filter(Order.status == 'ZREALIZOWANE')\
-         .filter(extract('month', Order.created_at) == month)\
-         .filter(extract('year', Order.created_at) == year).scalar() or 0.0
+        # Pobierz zlecenia dla danego miesiąca historycznego
+        orders_in_month = Order.query.filter(
+            Order.status == 'ZREALIZOWANE',
+            extract('month', Order.created_at) == month,
+            extract('year', Order.created_at) == year
+        ).options(*eager_loading_options).all()
         
-        last_months_production.append({
+        # Oblicz obrót dla tego miesiąca
+        total_turnover_for_month = 0.0
+        for order in orders_in_month:
+            cost_details = calculate_order_total_cost(order)
+            total_turnover_for_month += cost_details.get('total_cost', 0.0)
+            
+        last_months_turnover.append({
             'month': month,
             'year': year,
-            'value': round(value, 2)
+            'value': round(total_turnover_for_month, 2)
         })
 
-    # --- KONIEC NOWEGO KODU ---
-
-    # Ostatnie aktywności, dochodowe produkty, etc. (bez zmian)
+    # Reszta logiki kokpitu bez zmian
     recent_activities = Order.query.order_by(Order.created_at.desc()).limit(30).all()
     most_profitable_products_query = db.session.query(
         Product.name,
         func.sum(OrderItem.quantity * Product.production_price).label('total_profit')
     ).join(OrderItem).join(Order)\
-    .filter(Order.status == 'ZREALIZOWANE')\
-    .filter(extract('month', Order.created_at) == current_month)\
-    .filter(extract('year', Order.created_at) == current_year)\
-    .group_by(Product.name).order_by(func.sum(OrderItem.quantity * Product.production_price).desc()).limit(5).all()
+    .filter(Order.status == 'ZREALIZOWANE', extract('month', Order.created_at) == current_month, extract('year', Order.created_at) == current_year)\
+    .group_by(Product.name).order_by(desc('total_profit')).limit(5).all()
 
-    # --- NOWY KOD: Konwersja danych na listę ---
     most_profitable_products = [list(row) for row in most_profitable_products_query]
-    # --- KONIEC NOWEGO KODU -----
     bottlenecks = Order.query.filter_by(status='W REALIZACJI').order_by(Order.created_at.asc()).limit(5).all()
-    # --- NOWY KOD: Pobranie TOP 5 klientów ---
-    # ### POCZĄTEK POPRAWKI - TOP KLIENCI MIESIĄC/ROK ###
-    current_month = datetime.utcnow().month
-    current_year = datetime.utcnow().year
-
-    # Zapytanie bazowe BEZ limitu, które będziemy rozszerzać
+    
     base_top_clients_query = db.session.query(
         Client.name,
         func.count(Order.id).label('order_count')
     ).join(Order, Client.id == Order.client_id)\
     .filter(Order.status == 'ZREALIZOWANE')\
     .group_by(Client.name)\
-    .order_by(func.count(Order.id).desc())
+    .order_by(desc('order_count'))
 
-    # Top klienci w bieżącym miesiącu: NAJPIERW filtruj, POTEM ogranicz
     top_clients_month = base_top_clients_query.filter(
         extract('month', Order.created_at) == current_month,
         extract('year', Order.created_at) == current_year
     ).limit(5).all()
 
-    # Top klienci w bieżącym roku: NAJPIERW filtruj, POTEM ogranicz
     top_clients_year = base_top_clients_query.filter(
         extract('year', Order.created_at) == current_year
     ).limit(5).all()
-    # ### KONIEC POPRAWKI ###
+
     upcoming_deadlines = Order.query.filter(
         Order.deadline.between(datetime.utcnow().date(), datetime.utcnow().date() + timedelta(days=7))
     ).order_by(Order.deadline.asc()).all()
 
-# --- NOWY KOD: Pobranie ostatnich aktualizacji cen ---
     recent_price_updates = PriceUpdateLog.query.order_by(PriceUpdateLog.changed_at.desc()).limit(8).all()
-    # --- KONIEC NOWEGO KODU ---
     weather_forecast = get_weather_forecast()
 
     return render_template(
         'kokpit.html',
         stats=stats,
         fabric_summary=fabric_summary_dict,
-        monthly_production_value=round(monthly_production_value, 2),
-        last_months_production=last_months_production, # Dodane
-        recent_activities=recent_activities,
+        monthly_turnover=round(monthly_turnover, 2),
+        last_months_turnover=last_months_turnover,  # Przekazujemy nową zmienną
         most_profitable_products=most_profitable_products,
+        recent_activities=recent_activities,
         bottlenecks=bottlenecks,
         upcoming_deadlines=upcoming_deadlines,
-        recent_price_updates=recent_price_updates,  
+        recent_price_updates=recent_price_updates,
         top_clients_month=top_clients_month,
-        top_clients_year=top_clients_year,  # <-- DODAJ TĘ LINIĘ
-        api_key=app.config.get('API_SECRET_KEY'), 
-        weather_forecast=weather_forecast  # Dodajemy pogodę
+        top_clients_year=top_clients_year,
+        api_key=app.config.get('API_SECRET_KEY'),
+        weather_forecast=weather_forecast
     )
 
 
