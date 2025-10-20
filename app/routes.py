@@ -35,6 +35,7 @@ import pathlib
 import qrcode
 from pywebpush import webpush, WebPushException 
 from sqlalchemy.orm import joinedload, subqueryload
+import base64
 
 if platform.system() == 'Windows':
     config_pdf = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
@@ -2576,23 +2577,37 @@ def get_recent_price_updates():
     except ValueError:
         return jsonify({'error': 'Niepoprawny format daty dla parametru "since".'}), 400
     
+# app/routes.py
+
 @app.route('/products/<int:product_id>/card')
 def product_card(product_id):
     """Generuje kartę produktu w formacie PDF."""
     product = Product.query.get_or_404(product_id)
+    now = datetime.utcnow()
+
+    # --- NOWA LOGIKA: Osadzanie logo w PDF ---
+    logo_base64 = None
+    try:
+        # Wczytaj plik logo i zakoduj go w base64
+        logo_path = os.path.join(current_app.static_folder, 'images', 'hoxa_logo_bw.png')
+        with open(logo_path, "rb") as image_file:
+            logo_base64 = base64.b64encode(image_file.read()).decode('utf-8')
+    except Exception as e:
+        print(f"Nie udało się wczytać logo: {e}")
+    # --- KONIEC NOWEJ LOGIKI ---
+
+    # Renderujemy szablon HTML, przekazując nowe dane
+    rendered = render_template(
+        'product_card_pdf.html',
+        product=product,
+        now=now,
+        logo_base64=logo_base64  # Przekazujemy zakodowane logo
+    )
     
-    # Renderujemy szablon HTML, który posłuży jako wzór dla PDF
-    rendered = render_template('product_card_pdf.html', product=product)
+    options = {"enable-local-file-access": ""}
     
-    # Opcje dla pdfkit, aby poprawnie ładował zasoby (np. obrazy z URL)
-    options = {
-        "enable-local-file-access": ""
-    }
-    
-    # Tworzymy PDF z wyrenderowanego HTML
     pdf = pdfkit.from_string(rendered, False, configuration=config_pdf, options=options)
     
-    # Przygotowujemy odpowiedź HTTP z plikiem PDF
     response = make_response(pdf)
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = f'inline; filename=karta_produktu_{product.name.replace(" ", "_")}.pdf'
@@ -3017,4 +3032,83 @@ def materials_management():
         fabrics=all_fabrics, 
         materials=all_materials
     )
+
+# app/routes.py
+
+# ... (na końcu pliku, po ostatniej funkcji)
+
+# ### NOWA TRASA DO GENEROWANIA PDF Z ZESTAWIENIA PRODUKCJI ###
+@app.route('/api/monthly_production_pdf/<int:year>/<int:month>')
+def monthly_production_pdf(year, month):
+    """Generuje plik PDF z podsumowaniem produkcji dla danego miesiąca."""
+    # Używamy tej samej logiki grupowania, co w orders_history
+    grouping_date = db.case(
+        (Order.production_month != None, func.date(Order.production_month + '-01')),
+        else_=func.date(Order.sewing_finished_at)
+    )
+
+    orders_in_month = Order.query.filter(
+        extract('year', grouping_date) == year,
+        extract('month', grouping_date) == month,
+        Order.status == 'ZREALIZOWANE',
+        Order.sewing_finished_at.isnot(None)
+    ).options(joinedload(Order.order_items).joinedload(OrderItem.product)).all()
+
+    product_details = defaultdict(lambda: {
+        'quantity': 0,
+        'total_value': 0.0,
+        'price': 0.0,
+        'order_codes': set()
+    })
+
+    for order in orders_in_month:
+        for item in order.order_items:
+            product_name = item.product.name
+            price = item.product.production_price or 0.0
+            quantity = item.quantity
+
+            product_details[product_name]['quantity'] += quantity
+            product_details[product_name]['total_value'] += quantity * price
+            product_details[product_name]['price'] = price
+            product_details[product_name]['order_codes'].add(order.order_code.split('-')[-1])
+
+    details_list = sorted([
+        {
+            'name': name,
+            'quantity': data['quantity'],
+            'price': data['price'],
+            'total_value': data['total_value'],
+            'order_codes': sorted(list(data['order_codes']), key=int)
+        }
+        for name, data in product_details.items()
+    ], key=lambda x: x['name'])
+
+    # Oblicz sumy
+    total_quantity = sum(item['quantity'] for item in details_list)
+    total_value = sum(item['total_value'] for item in details_list)
+
+    # Renderuj szablon HTML dla PDF
+    rendered = render_template(
+        'production_summary_pdf.html',
+        details=details_list,
+        year=year,
+        month=month,
+        total_quantity=total_quantity,
+        total_value=total_value
+    )
+
+    # Opcje dla pdfkit
+    options = {
+        "enable-local-file-access": ""
+    }
+
+    # Konwertuj HTML do PDF
+    pdf = pdfkit.from_string(rendered, False, configuration=config_pdf, options=options)
+
+    # Przygotuj odpowiedź
+    response = make_response(pdf)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'inline; filename=produkcja_{year}_{month:02d}.pdf'
+
+    return response
     

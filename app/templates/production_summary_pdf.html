@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Zestawienie Produkcji</title>
+    <style>
+        body { font-family: Arial, sans-serif; font-size: 10px; margin: 20px; }
+        h1 { text-align: center; font-size: 16px; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .text-right { text-align: right; }
+        .total-row { font-weight: bold; background-color: #e9e9e9; }
+        .order-codes { font-size: 8px; color: #555; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <h1>Zestawienie Produkcji za {{ month }}/{{ year }}</h1>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Nazwa Produktu</th>
+                <th class="text-right">Ilość</th>
+                <th class="text-right">Cena</th>
+                <th class="text-right">Wartość</th>
+                <th>Numery Zleceń</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in details %}
+            <tr>
+                <td>{{ item.name }}</td>
+                <td class="text-right">{{ item.quantity }} szt.</td>
+                <td class="text-right">{{ "%.2f zł"|format(item.price) }}</td>
+                <td class="text-right">{{ "%.2f zł"|format(item.total_value) }}</td>
+                <td class="order-codes">{{ item.order_codes|join(', ') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="total-row">
+                <td><strong>SUMA</strong></td>
+                <td class="text-right"><strong>{{ total_quantity }} szt.</strong></td>
+                <td colspan="1"></td>
+                <td class="text-right"><strong>{{ "%.2f zł"|format(total_value) }}</strong></td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+</body>
+</html>

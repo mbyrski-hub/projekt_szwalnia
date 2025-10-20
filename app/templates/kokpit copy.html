@@ -1,0 +1,885 @@
+{% extends "base.html" %}
+{% block title %}Kokpit - Panel Szwalni{% endblock %}
+
+{% block head %}
+<style>
+    /* ### ZMIANY ### - Dodana ogólna reguła zmniejszająca bazowy rozmiar czcionki dla całego kokpitu */
+    .compact-kokpit {
+        font-size: 0.9rem; /* Zmniejsza domyślną czcionkę, co wpłynie na większość tekstów */
+    }
+    .info-card {
+        background-color: var(--card-bg);
+        border: none;
+        border-radius: 15px;
+        color: var(--text-color);
+        margin-bottom: 10px;
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex; /* <-- DODAJ TĘ LINIĘ */
+        align-items: center; /* <-- I TĘ LINIĘ */
+    }
+    .info-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+    }
+    .info-card .card-body {
+        display: flex;
+        align-items: center;
+        padding: 0.8rem 1rem; /* ### ZMIANA ### - Mniejszy padding */
+    }
+    .info-card .icon {
+        font-size: 2.2rem; /* ### ZMIANA ### - Mniejsza ikona */
+        margin-right: 15px; /* ### ZMIANA ### - Mniejszy margines */
+        width: 60px; /* ### ZMIANA ### - Mniejsza szerokość */
+        text-align: center;
+        animation: pulse-icon 2s infinite;
+    }
+    .info-card .icon-new { color: var(--primary-color); }
+    .info-card .icon-progress { color: var(--accent-color); }
+    .info-card .icon-done { color: #28a745; }
+    
+    .info-card .stat-number {
+        font-size: 1.8rem; /* ### ZMIANA ### - Mniejsza liczba */
+        font-weight: 600;
+        line-height: 1.1;
+    }
+    .info-card .stat-label {
+        font-size: 0.85rem; /* ### ZMIANA ### - Mniejsza etykieta */
+        color: #aaa;
+    }
+    .timeline {
+        list-style: none;
+        padding: 0;
+    }
+    .timeline-item {
+        position: relative;
+        padding-bottom: 20px;
+        padding-left: 30px;
+        border-left: 2px solid var(--border-color);
+    }
+    .timeline-item:before {
+        content: '';
+        position: absolute;
+        left: -11px;
+        top: 0;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background-color: var(--accent-color);
+    }
+
+    @keyframes pulse-icon {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+
+    .production-value-card {
+        border-width: 2px;
+        animation: pulse-border 2s infinite;
+    }
+
+    .production-value-card .stat-number {
+        font-size: 2.5rem; /* ### ZMIANA ### - Mniejsza liczba */
+    }
+
+    @keyframes pulse-border {
+        0% {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 0 rgba(255, 153, 0, 0.7);
+        }
+        70% {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 10px 15px rgba(255, 153, 0, 0);
+        }
+        100% {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 0 rgba(255, 153, 0, 0);
+        }
+    }
+
+    .weather-widget {
+        display: flex;
+        gap: 10px; /* ### ZMIANA ### - Mniejszy odstęp */
+        align-items: center;
+    }
+    .weather-day {
+        background-color: var(--card-bg);
+        border-radius: 8px;
+        padding: 4px; /* ### ZMIANA ### - Mniejszy padding */
+        text-align: center;
+        min-width: 70px; /* ### ZMIANA ### - Mniejsza szerokość */
+        border: 1px solid var(--border-color);
+        transition: all 0.2s ease-in-out;
+    }
+    .weather-day.weather-today {
+        transform: scale(1.05); /* ### ZMIANA ### - Mniejsze powiększenie */
+        border: 2px solid var(--accent-color);
+        padding: 6px;
+    }
+    .weather-day .date-display {
+        font-size: 0.8rem; /* ### ZMIANA ### - Mniejsza data */
+        font-weight: 600;
+        color: var(--text-color);
+    }
+    .weather-day img {
+        width: 35px; /* ### ZMIANA ### - Mniejsza ikona pogody */
+        height: 35px;
+        margin-top: -5px;
+        margin-bottom: -5px;
+    }
+    .weather-day .temp {
+        font-size: 1rem; /* ### ZMIANA ### - Mniejsza temperatura */
+        font-weight: 600;
+    }
+    .weather-day.weather-today .temp {
+        font-size: 1.1rem;
+    }
+    .status-indicator-kokpit {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .status-indicator {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 0;
+        border-left: 1px solid var(--border-color);
+        padding-left: 15px;
+    }
+    
+    #trigger-sync-btn {
+        color: var(--text-muted-color);
+    }
+    #trigger-sync-btn:hover {
+        color: var(--text-color);
+    }
+
+    .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: #dc3545; /* Czerwony - offline */
+        transition: background-color 0.5s;
+    }
+
+    .status-dot.online {
+        background-color: #28a745; /* Zielony - online */
+    }
+    
+    .card-title {
+        font-size: 1.1rem;
+    }
+    .theme-switcher-container {
+        text-align: center;
+        display: flex; 
+        align-items: center; 
+    }
+    .theme-switch {
+        display: inline-block;
+        height: 24px;
+        position: relative;
+        width: 50px;
+        margin: 0 5px; 
+    }
+    .theme-switch input {
+        display:none;
+    }
+    .slider {
+        background-color: #555;
+        bottom: 0;
+        cursor: pointer;
+        left: 0;
+        position: absolute;
+        right: 0;
+        top: 0;
+        transition: .4s;
+        border-radius: 34px;
+    }
+    .slider:before {
+        background-color: #fff;
+        bottom: 4px;
+        content: "";
+        height: 16px;
+        left: 4px;
+        position: absolute;
+        transition: .4s;
+        width: 16px;
+        border-radius: 50%;
+    }
+    input:checked + .slider {
+        background-color: var(--primary-color);
+    }
+    input:checked + .slider:before {
+        transform: translateX(26px);
+    }
+    .theme-switcher-container .fa-sun, .theme-switcher-container .fa-moon {
+        color: var(--text-muted-color); 
+        vertical-align: middle;
+        font-size: 1.1rem;
+    }
+    
+    .card-list-scrollable {
+        max-height: 280px; 
+        overflow-y: auto;
+        padding-right: 10px; 
+    }
+    .card-list-scrollable::-webkit-scrollbar {
+      width: 6px;
+    }
+    .card-list-scrollable::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .card-list-scrollable::-webkit-scrollbar-thumb {
+      background-color: var(--border-color);
+      border-radius: 10px;
+    }
+    
+    .in-progress-card {
+        background-color: var(--card-bg) !important;
+        border: 1px solid var(--border-color);
+    }
+    
+    /* ### NOWY KOD - Poprawka koloru tekstu w "Aktualny stan produkcji" dla motywu jasnego ### */
+    .in-progress-card .text-white, 
+    .in-progress-card .text-light {
+        color: var(--text-color) !important;
+    }
+    .in-progress-card .text-muted {
+        color: var(--text-muted-color) !important;
+    }
+    /* === POCZĄTEK NOWEGO KODU CSS legenda do uwag === */
+    .comment-legend {
+        display: none; /* Domyślnie ukryta */
+        font-size: 0.8rem;
+        margin-left: 15px;
+        color: #007bff;
+        font-weight: 500;
+        /* === POCZĄTEK ZMIANY === */
+        animation: blink-animation 1.5s linear infinite; /* Dodajemy animację migotania */
+        /* === KONIEC ZMIANY === */
+    }
+    .comment-legend .blue-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        background-color: #007bff;
+        border-radius: 50%;
+        margin-right: 5px;
+        vertical-align: middle;
+    }
+    
+    /* === POCZĄTEK NOWEGO KODU CSS === */
+    @keyframes blink-animation {
+        50% {
+            opacity: 0.5;
+        }
+    }
+    /* === KONIEC NOWEGO KODU CSS === */
+
+    .comment-indicator {
+        display: none; position: absolute; top: 8px; right: 8px; width: 20px; height: 20px;
+        background-color: #007bff; color: white; border-radius: 50%; text-align: center;
+        font-size: 12px; line-height: 20px; font-family: "Font Awesome 5 Free";
+        content: "\f4ad"; font-weight: 900; cursor: pointer; z-index: 10;
+        animation: pulse-blue 2s infinite;
+    }
+    .in-progress-card.has-new-comment .comment-indicator { display: block; }
+    @keyframes pulse-blue {
+        0% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(0, 123, 255, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="compact-kokpit"> 
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="status-indicator-kokpit">
+            <h4 id="current-datetime" class="text-muted mb-0" style="font-size: 1rem;"></h4>
+            <div class="status-indicator">
+                <div id="print-server-status" class="status-dot"></div>
+                <span>Serwer Druku</span>
+            </div>
+            <div class="status-indicator">
+                <div id="sync-server-status" class="status-dot"></div>
+                <span>Synchronizator</span>
+                <a href="#" id="trigger-sync-btn" class="ml-auto" title="Uruchom pełną synchronizację cen">
+                    <i class="fas fa-play-circle"></i>
+                </a>
+            </div>
+        </div>
+        
+        <div class="d-flex align-items-center">
+            <div class="theme-switcher-container mr-4">
+                <i class="fas fa-sun"></i>
+                <label class="theme-switch">
+                    <input type="checkbox" id="theme-toggle">
+                    <span class="slider"></span>
+                </label>
+                <i class="fas fa-moon"></i>
+            </div>
+            
+            {% if weather_forecast %}
+            <div>
+                <h6 class="text-muted text-center mb-2" style="font-weight: 600; font-size: 0.8rem;">Pogoda: Bielsko-Biała</h6>
+                <div class="weather-widget">
+                {% for day in weather_forecast %}
+                <div class="weather-day {% if day.is_today %}weather-today{% endif %}">
+                    <div class="date-display">{{ day.date }}</div>
+                    <div class="day-name text-muted" style="font-size: 0.7rem; font-weight: 500;">{{ day.day_name }}</div>
+                    <img src="{{ url_for('static', filename='images/weather/' + day.icon) }}" title="{{ day.description }}">
+                    <div class="temp">{{ day.temp }}°C</div>
+                </div>
+                {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-2">
+            <div class="h-100 d-flex flex-column">
+                <div class="info-card flex-fill mb-2">
+                    <div class="card-body">
+                        <div class="icon icon-new"><i class="fas fa-plus-circle"></i></div>
+                        <div>
+                            <div class="stat-number">{{ stats.nowe }}</div>
+                            <div class="stat-label">Nowe zlecenia</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="info-card flex-fill mb-2">
+                    <div class="card-body">
+                        <div class="icon icon-progress"><i class="fas fa-tasks"></i></div>
+                        <div>
+                            <div class="stat-number">{{ stats.w_realizacji }}</div>
+                            <div class="stat-label">W realizacji</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="info-card flex-fill">
+                    <div class="card-body">
+                        <div class="icon icon-done"><i class="fas fa-check-circle"></i></div>
+                        <div>
+                            <div class="stat-number">{{ stats.zrealizowane }}</div>
+                            <div class="stat-label">Zrealizowane</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-10">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center"> <h5 class="card-title mb-0">Aktualny stan produkcji</h5>
+                        
+                        <small id="comment-legend" class="comment-legend">
+                            <span class="blue-dot"></span> Nowa uwaga z krojowni
+                        </small>
+                    </div>
+                    {% include '_in_progress_strip.html' %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="row mt-4">
+        
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100 production-value-card">
+                <div class="card-body d-flex flex-column justify-content-center">
+                    <h5 class="card-title text-center">Obrót w tym miesiącu</h5>
+                    <div class="text-center">
+                        <div class="stat-number" id="animated-value" data-value="{{ monthly_turnover }}">0,00 zł</div>
+                        <div class="production-history mt-2" style="font-size: 0.85rem;">
+                            <strong>Poprzednie miesiące (obrót):</strong><br>
+                            {% for month_data in last_months_turnover %}
+                                {{ month_data.year }}-{{ "%02d"|format(month_data.month) }}: <strong>{{ "{:,.2f}".format(month_data.value).replace(",", " ").replace(".", ",") }} zł</strong>
+                                {% if not loop.last %}<br>{% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header"><h5 class="card-title mb-0">Top 5 dochodowych produktów</h5></div>
+                <div class="card-body" style="position: relative; height: 250px;">
+                    <canvas id="mostProfitableChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header"><h5 class="card-title mb-0">Zużycie tkanin</h5></div>
+                <div class="card-body" style="position: relative; height: 250px;">
+                    <canvas id="fabricUsageChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">Ostatnie aktywności</h5>
+                    <ul class="list-group list-group-flush card-list-scrollable flex-grow-1">
+                        {% for order in recent_activities %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Zlecenie #{{ order.order_code }} dla {{ order.client.name }}
+                            <span class="badge badge-primary badge-pill">{{ order.status }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">Nadchodzące terminy (7 dni)</h5>
+                     <ul class="list-group list-group-flush card-list-scrollable flex-grow-1">
+                        {% for order in upcoming_deadlines %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ order.order_code }} - {{ order.client.name }}
+                            <span class="badge badge-danger">{{ order.deadline.strftime('%Y-%m-%d') }}</span>
+                        </li>
+                        {% else %}
+                        <li class="list-group-item">Brak nadchodzących terminów.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-history mr-2"></i> Ostatnie aktualizacje cen</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_price_updates %}
+                        <ul class="list-group list-group-flush card-list-scrollable">
+                            {% for update in recent_price_updates %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ update.item_name }}</strong> ({{ update.item_type }})
+                                        <small class="d-block text-muted">
+                                            {{ update.changed_at.strftime('%Y-%m-%d %H:%M') }}
+                                        </small>
+                                    </div>
+                                    <div>
+                                        <span class="text-danger"><del>{{ "%.2f zł"|format(update.old_price) if update.old_price is not none else 'Brak' }}</del></span>
+                                        <i class="fas fa-long-arrow-alt-right mx-2"></i>
+                                        <span class="text-success font-weight-bold">{{ "%.2f zł"|format(update.new_price) }}</span>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted">Brak zarejestrowanych aktualizacji cen.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-trophy mr-2"></i> Top Klienci</h5>
+                </div>
+                <div class="card-body card-list-scrollable">
+                    <h6 class="text-muted" style="font-size: 0.85rem;">W tym miesiącu</h6>
+                    {% if top_clients_month %}
+                        <ul class="list-group list-group-flush mb-3">
+                            {% for client, count in top_clients_month %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-1">
+                                    <div><i class="fas fa-user-tie mr-2 text-muted"></i><strong>{{ client }}</strong></div>
+                                    <span class="badge badge-success badge-pill" style="font-size: 0.9rem;">{{ count }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="small text-muted mb-3">Brak zleceń w tym miesiącu.</p>
+                    {% endif %}
+                    
+                    <hr>
+                    
+                    <h6 class="text-muted" style="font-size: 0.85rem;">W tym roku</h6>
+                     {% if top_clients_year %}
+                        <ul class="list-group list-group-flush">
+                            {% for client, count in top_clients_year %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-1">
+                                    <div><i class="fas fa-user-tie mr-2 text-muted"></i><strong>{{ client }}</strong></div>
+                                    <span class="badge badge-primary badge-pill" style="font-size: 0.9rem;">{{ count }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="small text-muted">Brak zleceń w tym roku.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+<div class="modal fade" id="uwagiModal" tabindex="-1" role="dialog" aria-labelledby="uwagiModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="uwagiModalLabel"><i class="fas fa-cut"></i> Uwagi z Krojowni</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body" id="uwagiModalBody">
+        </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Zamknij</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    
+    // =======================================================
+    // ===                 ZMIENIONY KOD                   ===
+    // =======================================================
+    let fabricChart = null;
+    let profitableChart = null;
+
+    const themeToggle = document.getElementById('theme-toggle');
+    const htmlEl = document.documentElement;
+
+    if (htmlEl.classList.contains('dark-mode')) {
+        themeToggle.checked = true;
+    }
+
+    themeToggle.addEventListener('change', () => {
+        if (themeToggle.checked) {
+            htmlEl.classList.add('dark-mode');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            htmlEl.classList.remove('dark-mode');
+            localStorage.setItem('theme', 'light');
+        }
+        // Przerenderuj wykresy po zmianie motywu, aby dostosować kolory
+        setTimeout(() => {
+            renderAllCharts();
+        }, 50);
+    });
+
+    // Funkcja do renderowania wszystkich wykresów
+    function renderAllCharts() {
+        renderFabricChart();
+        renderProfitableChart();
+    }
+
+    // Funkcja do renderowania wykresu zużycia tkanin
+    function renderFabricChart() {
+        const chartTextColor = getComputedStyle(document.body).getPropertyValue('--text-color').trim();
+        const fabricCtx = document.getElementById('fabricUsageChart');
+        const fabricData = {{ fabric_summary | tojson }};
+
+        if (fabricCtx && fabricData && Object.keys(fabricData).length > 0) {
+            if(fabricChart) fabricChart.destroy(); 
+            fabricChart = new Chart(fabricCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(fabricData),
+                    datasets: [{
+                        label: 'Zużycie w metrach',
+                        data: Object.values(fabricData),
+                        backgroundColor: ['#007bff', '#ff9900', '#28a745', '#dc3545', '#17a2b8', '#6f42c1'],
+                        borderColor: 'rgba(44, 44, 44, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { color: chartTextColor, padding: 10, boxWidth: 20, font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        } else if (fabricCtx) {
+            fabricCtx.parentElement.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><p>Brak danych o zużyciu tkanin.</p></div>';
+        }
+    }
+
+    // Funkcja do renderowania wykresu dochodowych produktów
+    function renderProfitableChart() {
+        const chartTextColor = getComputedStyle(document.body).getPropertyValue('--text-color').trim();
+        const chartGridColor = getComputedStyle(document.body).getPropertyValue('--border-color').trim();
+        const profitableCtx = document.getElementById('mostProfitableChart');
+        const profitableData = {{ most_profitable_products | tojson }};
+
+        if (profitableCtx && profitableData && profitableData.length > 0) {
+            if(profitableChart) profitableChart.destroy(); 
+            profitableChart = new Chart(profitableCtx, {
+                type: 'bar',
+                data: {
+                    labels: profitableData.map(item => item[0]),
+                    datasets: [{
+                        label: 'Wartość produkcji w zł',
+                        data: profitableData.map(item => item[1]),
+                        backgroundColor: 'rgba(255, 153, 0, 0.7)',
+                        borderColor: 'rgba(255, 153, 0, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { beginAtZero: true, ticks: { color: chartTextColor, font: { size: 10 } }, grid: { color: chartGridColor } },
+                        y: { ticks: { color: chartTextColor, font: { size: 10 } }, grid: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        } else if (profitableCtx) {
+            profitableCtx.parentElement.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><p>Brak danych o dochodowych produktach.</p></div>';
+        }
+    }
+
+    // Wywołaj renderowanie wykresów po załadowaniu strony
+    renderAllCharts();
+
+    // Reszta skryptów (zegar, statusy serwerów, etc.)
+    const printStatusDot = document.getElementById('print-server-status');
+    const syncStatusDot = document.getElementById('sync-server-status');
+    function checkServerStatus(url, dotElement) {
+        if (!dotElement) return;
+        fetch(url, {cache: "no-cache"}).then(response => {
+            dotElement.classList.toggle('online', response.ok);
+        }).catch(() => {
+            dotElement.classList.remove('online');
+        });
+    }
+    const checkAllStatuses = () => {
+        checkServerStatus('http://localhost:5001/status', printStatusDot);
+        checkServerStatus('http://localhost:5002/status', syncStatusDot);
+    };
+    checkAllStatuses();
+    setInterval(checkAllStatuses, 60000);
+
+    const dateTimeElement = document.getElementById('current-datetime');
+    function updateDateTime() {
+        if (!dateTimeElement) return;
+        const now = new Date();
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+        let formatted = now.toLocaleDateString('pl-PL', options);
+        formatted = formatted.replace(' o ', ', godz. '); 
+        dateTimeElement.textContent = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    }
+    setInterval(updateDateTime, 1000);
+    updateDateTime();
+
+    const animatedValue = document.getElementById('animated-value');
+    if (animatedValue) {
+        const targetValue = parseFloat(animatedValue.dataset.value);
+        if (!isNaN(targetValue)) {
+            let start = 0;
+            const duration = 1000;
+            const step = (timestamp) => {
+                if (!start) start = timestamp;
+                const progress = Math.min((timestamp - start) / duration, 1);
+                const currentValue = progress * targetValue;
+                animatedValue.textContent = `${currentValue.toLocaleString('pl-PL', {minimumFractionDigits: 2, maximumFractionDigits: 2})} zł`;
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                } else {
+                    animatedValue.textContent = `${targetValue.toLocaleString('pl-PL', {minimumFractionDigits: 2, maximumFractionDigits: 2})} zł`;
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+    }
+
+    const triggerSyncBtn = document.getElementById('trigger-sync-btn');
+    if (triggerSyncBtn) {
+        triggerSyncBtn.addEventListener('click', async function(event) {
+            event.preventDefault();
+            let syncServerIp = localStorage.getItem('syncServerIp');
+            if (!syncServerIp) {
+                const { value: ip } = await Swal.fire({
+                    title: 'Konfiguracja serwera synchronizacji',
+                    input: 'text',
+                    inputLabel: 'Wpisz adres IP lokalnego serwera Synchronizatora',
+                    inputValue: 'http://localhost:5002',
+                    showCancelButton: true,
+                    cancelButtonText: 'Anuluj',
+                    inputValidator: (value) => !value && 'Musisz podać adres!'
+                });
+                if (ip) {
+                    syncServerIp = ip;
+                    localStorage.setItem('syncServerIp', syncServerIp);
+                } else { return; }
+            }
+            const confirmResult = await Swal.fire({
+                title: 'Czy chcesz uruchomić synchronizację?',
+                html: `Serwer: <strong>${syncServerIp}</strong>.<br>Upewnij się, że aplikacja jest uruchomiona.`,
+                icon: 'question',
+                showCancelButton: true,
+                cancelButtonText: 'Anuluj',
+                confirmButtonText: 'Tak, uruchom!'
+            });
+            if (confirmResult.isConfirmed) {
+                runSync(syncServerIp);
+            }
+        });
+    }
+
+    function runSync(ip) {
+        const syncIcon = triggerSyncBtn.querySelector('i');
+        const startTime = new Date().toISOString();
+        Swal.fire({
+            title: 'Rozpoczynam synchronizację...',
+            text: 'Wysyłam polecenie do lokalnej aplikacji...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+                syncIcon.classList.remove('fa-play-circle');
+                syncIcon.classList.add('fa-spinner', 'fa-spin');
+            }
+        });
+        fetch(`${ip}/trigger-sync`, {
+            method: 'POST',
+            headers: { 'X-API-KEY': '{{ api_key }}' }
+        })
+        .then(response => response.json().then(data => ({ ok: response.ok, body: data })))
+        .then(({ ok, body }) => {
+            if (!ok) throw new Error(body.error || 'Lokalny serwer zwrócił błąd.');
+            return new Promise(resolve => setTimeout(resolve, 1500)).then(() => 
+                fetch(`/api/v1/get-recent-price-updates?since=${startTime}`)
+            );
+        })
+        .then(response => response.json())
+        .then(updates => {
+            syncIcon.classList.remove('fa-spinner', 'fa-spin');
+            syncIcon.classList.add('fa-play-circle');
+            let updatesHtml = '<p>Proces zakończył się pomyślnie.</p>';
+            if (updates && updates.length > 0) {
+                updatesHtml += '<h5 class="mt-4 text-left" style="font-size: 1rem;">Podsumowanie zmian:</h5>';
+                updatesHtml += '<ul class="list-group text-left" style="font-size: 0.85rem; max-height: 200px; overflow-y: auto;">';
+                updates.forEach(update => {
+                    const oldPrice = update.old_price !== null ? `${update.old_price.toFixed(2)} zł` : 'Brak';
+                    updatesHtml += `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <strong>${update.item_name}</strong>
+                            <span><del>${oldPrice}</del> → <span class="text-success font-weight-bold">${update.new_price.toFixed(2)} zł</span></span>
+                        </li>
+                    `;
+                });
+                updatesHtml += '</ul>';
+            } else if (updates) {
+                updatesHtml += '<p class="mt-3">Nie wykryto żadnych zmian cen.</p>';
+            }
+            Swal.fire({
+                title: 'Synchronizacja zakończona!',
+                html: updatesHtml,
+                icon: 'success'
+            });
+            setTimeout(() => location.reload(), 3000);
+        })
+        .catch(error => {
+            console.error('Fetch error:', error);
+            syncIcon.classList.remove('fa-spinner', 'fa-spin');
+            syncIcon.classList.add('fa-play-circle');
+            Swal.fire({
+                title: 'Błąd synchronizacji',
+                html: `Wystąpił błąd: <br><strong>${error.message}</strong>`,
+                icon: 'error',
+                showDenyButton: true,
+                denyButtonText: 'Zmień adres IP'
+            }).then((result) => {
+                if (result.isDenied) {
+                    localStorage.removeItem('syncServerIp');
+                    triggerSyncBtn.click();
+                }
+            });
+        });
+    }
+
+    // =======================================================
+    // === KOD DO OBSŁUGI POWIADOMIEŃ O UWAGACH (bez zmian) ===
+    // =======================================================
+    function updateLegendVisibility() {
+        const legend = document.getElementById('comment-legend');
+        const hasNewComments = document.querySelector('.in-progress-card.has-new-comment');
+        if (legend) {
+            legend.style.display = hasNewComments ? 'inline-block' : 'none';
+        }
+    }
+
+    function checkForNewNotes() {
+        fetch('/api/recent_cutting_notes')
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(note => {
+                    const card = document.querySelector(`.in-progress-card[data-order-id="${note.order_id}"]`);
+                    if (card && !card.classList.contains('has-new-comment')) {
+                        card.classList.add('has-new-comment');
+                        const indicator = card.querySelector('.comment-indicator');
+                        if (indicator) {
+                            indicator.dataset.comment = note.uwagi;
+                        }
+                    }
+                });
+                updateLegendVisibility();
+            });
+    }
+
+    const inProgressStrip = document.querySelector('.in-progress-strip');
+    if (inProgressStrip) {
+        inProgressStrip.addEventListener('click', function(e) {
+            if (e.target.classList.contains('comment-indicator')) {
+                e.preventDefault(); 
+                e.stopPropagation();
+
+                const commentText = e.target.dataset.comment;
+                const card = e.target.closest('.in-progress-card');
+
+                document.getElementById('uwagiModalBody').textContent = commentText;
+                $('#uwagiModal').modal('show');
+
+                card.classList.remove('has-new-comment');
+
+                updateLegendVisibility();
+            }
+        });
+    }
+
+    setInterval(checkForNewNotes, 30000);
+    checkForNewNotes();
+});
+
+</script>
+{% endblock %}

@@ -98,7 +98,8 @@
 </div>
 
 <div class="modal fade" id="detailsModal" tabindex="-1" role="dialog" aria-labelledby="detailsModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-xl" role="document"> <div class="modal-content">
+  <div class="modal-dialog modal-xl" role="document">
+    <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="detailsModalLabel">Szczegóły Produkcji</h5>
         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
@@ -111,8 +112,8 @@
                 <tr>
                     <th class="small">Nr Zlecenia</th>
                     <th>Produkt</th>
-                    <th>Ilość</th>
-                    <th>Cena Produkcji</th>
+                    <th class="text-right">Ilość</th>
+                    <th class="text-right">Cena Produkcji</th>
                     <th class="text-right">Wartość</th>
                 </tr>
             </thead>
@@ -121,11 +122,15 @@
         </table>
       </div>
       <div class="modal-footer">
+        <a href="#" id="generatePdfLink" class="btn btn-danger" target="_blank" style="display: none;" title="Pobierz jako PDF">
+            <i class="fas fa-file-pdf"></i> PDF
+        </a>
         <button type="button" class="btn btn-secondary" data-dismiss="modal">Zamknij</button>
       </div>
     </div>
   </div>
 </div>
+
 <div class="modal fade" id="managePeriodModal" tabindex="-1" role="dialog" aria-labelledby="managePeriodModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
@@ -150,14 +155,16 @@
 {{ super() }}
 <script>
 $(document).ready(function() {
-    // --- Logika dla modala SZCZEGÓŁÓW ---
+    // ### SKRYPT DLA MODALA SZCZEGÓŁÓW (BEZ ZMIAN) ###
     $('.btn-show-details').on('click', function() {
         var year = $(this).data('year');
         var month = $(this).data('month');
         var modalTableBody = $('#modal-table-body');
-        
+        var pdfLink = $('#generatePdfLink');
+
         $('#detailsModalLabel').text(`Szczegóły Produkcji dla ${year}-${String(month).padStart(2, '0')}`);
-        modalTableBody.html('<tr><td colspan="5" class="text-center">Ładowanie...</td></tr>'); // Zmieniono colspan na 5
+        modalTableBody.html('<tr><td colspan="5" class="text-center">Ładowanie...</td></tr>');
+        pdfLink.hide();
         $('#detailsModal').modal('show');
 
         $.ajax({
@@ -167,17 +174,15 @@ $(document).ready(function() {
                 var tableContent = '';
                 var totalValue = 0;
                 data.forEach(function(item) {
-                    // ### POCZĄTEK ZMIANY: JAVASCRIPT ###
                     tableContent += `
                         <tr>
                             <td style="font-size: 0.8em; word-break: break-all;">${item.order_codes.join(', ')}</td>
                             <td>${item.name}</td>
-                            <td>${item.quantity}</td>
-                            <td>${item.price.toFixed(2)} zł</td>
+                            <td class="text-right">${item.quantity}</td>
+                            <td class="text-right">${item.price.toFixed(2)} zł</td>
                             <td class="text-right">${item.total_value.toFixed(2)} zł</td>
                         </tr>
                     `;
-                    // ### KONIEC ZMIANY: JAVASCRIPT ###
                     totalValue += item.total_value;
                 });
                 tableContent += `
@@ -185,16 +190,19 @@ $(document).ready(function() {
                         <td colspan="4" class="text-right"><strong>Suma:</strong></td>
                         <td class="text-right"><strong>${totalValue.toFixed(2)} zł</strong></td>
                     </tr>
-                `; // Zmieniono colspan na 4
+                `;
                 modalTableBody.html(tableContent);
+                
+                pdfLink.attr('href', `/api/monthly_production_pdf/${year}/${month}`);
+                pdfLink.show();
             },
             error: function() {
-                modalTableBody.html('<tr><td colspan="5" class="text-center text-danger">Błąd ładowania danych.</td></tr>'); // Zmieniono colspan na 5
+                modalTableBody.html('<tr><td colspan="5" class="text-center text-danger">Błąd ładowania danych.</td></tr>');
             }
         });
     });
 
-    // --- Logika dla modala ZARZĄDZANIA OKRESEM (bez zmian) ---
+    // --- Logika dla modala ZARZĄDZANIA OKRESEM (oryginalna, bez zmian) ---
     var currentYear, currentMonth;
     $('.manage-period-btn').on('click', function() {
         currentYear = $(this).data('year');
