@@ -14,7 +14,7 @@ import re
 from datetime import datetime, date, timedelta
 import pdfkit
 import imgkit
-from sqlalchemy import extract, func, distinct, desc
+from sqlalchemy import extract, func, distinct, desc, or_
 from app.doc_generator import save_order_as_word
 import platform
 from PIL import Image
@@ -3112,3 +3112,357 @@ def monthly_production_pdf(year, month):
 
     return response
     
+
+@app.route('/mobile/admin')
+def mobile_admin():
+    """Wyświetla główną aplikację mobilną dla admina."""
+    return render_template('admin_mobile.html')
+
+# --- API DLA ADMIN MOBILE ---
+
+@app.route('/api/admin/kpi')
+def api_admin_kpi():
+    """Zwraca kluczowe wskaźniki dla kokpitu admina."""
+    try:
+        current_month = datetime.utcnow().month
+        current_year = datetime.utcnow().year
+
+        # Używamy tej samej logiki co w /kokpit do liczenia obrotu
+        completed_orders_this_month = Order.query.filter(
+            Order.status == 'ZREALIZOWANE',
+            extract('month', Order.created_at) == current_month,
+            extract('year', Order.created_at) == current_year
+        ).options(
+            joinedload(Order.order_items).joinedload(OrderItem.product).options(
+                joinedload(Product.fabrics_needed).joinedload(ProductFabric.fabric),
+                joinedload(Product.materials_needed).joinedload(ProductMaterial.material)
+            ),
+            joinedload(Order.fabrics).joinedload(OrderFabric.fabric)
+        ).all()
+
+        monthly_turnover = 0.0
+        for order in completed_orders_this_month:
+            cost_details = calculate_order_total_cost(order)
+            monthly_turnover += cost_details.get('total_cost', 0.0)
+
+        stats = {
+            'nowe': Order.query.filter_by(status='NOWE').count(),
+            'w_realizacji': Order.query.filter_by(status='W REALIZACJI').count()
+        }
+
+        return jsonify({
+            'monthly_turnover': round(monthly_turnover, 2),
+            'stats_nowe': stats['nowe'],
+            'stats_w_realizacji': stats['w_realizacji']
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/production_overview')
+def api_admin_production_overview():
+    """Zwraca zlecenia w krojowni i w szwalni (Twoja prośba nr 1)"""
+    orders_in_progress = Order.query.filter(
+        Order.status.in_(['NOWE', 'W REALIZACJI'])
+    ).order_by(Order.created_at.desc()).all()
+
+    krojownia_list = []
+    szwalnia_list = []
+
+    for order in orders_in_progress:
+        order_data = {
+            'id': order.id,
+            'order_code': order.order_code,
+            'client_name': order.client.name,
+            'cutting_table': order.cutting_table,
+            'assigned_team': order.assigned_team
+        }
+        # To co w krojowni (jeszcze nie skrojone)
+        if order.cutting_table is None or order.cutting_table != 'skrojone':
+            krojownia_list.append(order_data)
+        # To co w szwalni (skrojone, ale jeszcze nie ZREALIZOWANE)
+        elif order.cutting_table == 'skrojone':
+            szwalnia_list.append(order_data)
+
+    return jsonify({
+        'krojownia': krojownia_list,
+        'szwalnia': szwalnia_list
+    })
+
+
+@app.route('/api/admin/order_history')
+def api_admin_order_history():
+    """Zwraca listę zleceń zrealizowanych z paginacją (Twoja prośba nr 2)"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 20 # 20 zleceń na stronę
+
+    orders_page = Order.query.filter_by(status='ZREALIZOWANE') \
+        .order_by(Order.sewing_finished_at.desc().nullslast(), Order.created_at.desc()) \
+        .paginate(page=page, per_page=per_page, error_out=False)
+
+    orders_list = [{
+        'id': order.id,
+        'order_code': order.order_code,
+        'client_name': order.client.name,
+        'finished_date': order.sewing_finished_at.strftime('%Y-%m-%d') if order.sewing_finished_at else 'B/D'
+    } for order in orders_page.items]
+
+    return jsonify({
+        'orders': orders_list,
+        'has_next_page': orders_page.has_next,
+        'current_page': orders_page.page
+    })
+
+@app.route('/api/admin/templates')
+def api_admin_get_templates():
+    """Zwraca listę szablonów do formularza dodawania."""
+    templates = OrderTemplate.query.order_by(OrderTemplate.template_name).all()
+    templates_list = [{
+        'id': t.id,
+        'name': t.template_name,
+        'client_name': t.client_name,
+        'description': t.description
+    } for t in templates]
+    return jsonify(templates_list)
+
+
+@app.route('/api/admin/new_order', methods=['POST'])
+def api_admin_create_order():
+    """Tworzy nowe, uproszczone zlecenie (Twoja prośba nr 3)"""
+    data = request.get_json()
+    if not data or 'client_name' not in data or 'description' not in data or 'deadline' not in data:
+        return jsonify({'error': 'Brak wymaganych danych'}), 400
+
+    try:
+        client_name = data['client_name'].strip().upper()
+        client = Client.query.filter_by(name=client_name).first()
+        if not client:
+            client = Client(name=client_name)
+            db.session.add(client)
+            db.session.flush()
+
+        order = Order(
+            client_id=client.id,
+            description=data['description'].strip().upper(),
+            deadline=datetime.strptime(data['deadline'], '%Y-%m-%d').date(),
+            zlecajacy=data.get('zlecajacy', 'ADMIN').upper(),
+            status='NOWE'
+        )
+        db.session.add(order)
+        db.session.flush() # Potrzebujemy ID
+        
+        # Wygeneruj order_code
+        today = date.today()
+        order.order_code = f"{today.year}/{today.month:02d}/{today.day:02d}-{order.id}"
+        
+        db.session.commit()
+        
+        # Wyślij powiadomienia (tak jak w /orders/new)
+        send_push_notification(
+            title="Nowe zlecenie w systemie!",
+            body=f"Dodano zlecenie {order.order_code} dla {client.name} (z mobile).",
+            target_url=url_for('show_order', order_id=order.id, _external=False),
+            app_context='krojownia'
+        )
+
+        return jsonify({'success': True, 'order_code': order.order_code}), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/material_search')
+def api_admin_material_search():
+    """Przeszukuje tkaniny i materiały (Moja propozycja)"""
+    query = request.args.get('q', '').strip().upper()
+    if len(query) < 2:
+        return jsonify([]) # Nie szukaj dla mniej niż 2 znaków
+
+    fabrics = Fabric.query.filter(Fabric.name.ilike(f'%{query}%')).limit(10).all()
+    materials = Material.query.filter(Material.name.ilike(f'%{query}%')).limit(10).all()
+
+    results = []
+    for f in fabrics:
+        results.append({'id': f.id, 'name': f.name, 'price': f.price, 'type': 'Tkanina'})
+    for m in materials:
+        results.append({'id': m.id, 'name': m.name, 'price': m.price, 'type': 'Materiał'})
+
+    return jsonify(sorted(results, key=lambda x: x['name']))
+
+@app.route('/api/admin/order_details/<int:order_id>')
+def api_admin_order_details(order_id):
+    """Zwraca pełne szczegóły zlecenia dla mobilnego admina."""
+    try:
+        # Używamy joinedload, aby od razu pobrać powiązane dane jednym zapytaniem
+        order = Order.query.options(
+            joinedload(Order.client),
+            joinedload(Order.order_items).joinedload(OrderItem.product)
+        ).get_or_404(order_id)
+
+        # Przygotowanie listy produktów
+        products_list = []
+        total_quantity = 0
+        for item in order.order_items:
+            products_list.append({
+                'name': item.product.name,
+                'size': item.size,
+                'quantity': item.quantity
+            })
+            total_quantity += item.quantity
+
+        # Przygotowanie listy tkanin (jeśli są dodane ręcznie)
+        fabrics_list = [
+            f"{of.fabric.name} ({of.usage_meters}m)" 
+            for of in order.fabrics if of.fabric
+        ]
+
+        details = {
+            'id': order.id,
+            'order_code': order.order_code,
+            'client_name': order.client.name,
+            'description': order.description,
+            'deadline': order.deadline.strftime('%Y-%m-%d'),
+            'status': order.status,
+            'total_quantity': total_quantity,
+            
+            # Uwagi
+            'uwagi': order.uwagi,
+            'uwagi_krojowni': order.uwagi_krojowni,
+            
+            # Listy
+            'products': products_list,
+            'fabrics': fabrics_list,
+            
+            # Status produkcji
+            'cutting_table': order.cutting_table,
+            'assigned_team': order.assigned_team,
+            'cutting_finished_at': order.cutting_finished_at.strftime('%Y-%m-%d %H:%M') if order.cutting_finished_at else None,
+            'sewing_finished_at': order.sewing_finished_at.strftime('%Y-%m-%d %H:%M') if order.sewing_finished_at else None
+        }
+        return jsonify(details)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
+@app.route('/api/admin/product_search')
+def api_admin_product_search():
+    """Wyszukuje produkty po nazwie dla admin_mobile."""
+    query = request.args.get('q', '').strip().upper()
+    if len(query) < 3: # Wyszukuj dopiero od 3 znaków
+        return jsonify([]) 
+
+    # Wyszukuj produkty, których nazwa zawiera zapytanie
+    products = Product.query.filter(
+        Product.name.ilike(f'%{query}%')
+    ).order_by(Product.name).limit(15).all() # Limit wyników
+
+    results = [{'id': p.id, 'name': p.name} for p in products]
+    return jsonify(results)
+
+
+@app.route('/api/admin/product/<int:product_id>/upload_image', methods=['POST'])
+def api_admin_product_upload_image(product_id):
+    """Odbiera przetworzone zdjęcie z admin_mobile i wgrywa na Drive."""
+    product = Product.query.get_or_404(product_id)
+
+    if 'product_image' not in request.files:
+        return jsonify({'error': 'Brak pliku obrazu w zapytaniu'}), 400
+
+    uploaded_files = request.files.getlist('product_image')
+    uploaded_ids = []
+    errors = []
+
+    for file in uploaded_files:
+        if file and file.filename:
+             # Sprawdzenie typu MIME dla bezpieczeństwa (powinien być image/jpeg z JS)
+            if file.mimetype != 'image/jpeg':
+                 errors.append(f"Nieprawidłowy typ pliku dla {file.filename}: {file.mimetype}")
+                 continue
+            
+            # Zmień nazwę pliku, aby była unikalna i powiązana z produktem
+            timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            # Używamy oryginalnej nazwy produktu dla lepszej identyfikacji
+            safe_product_name = "".join(c if c.isalnum() else "_" for c in product.name)
+            filename = f"{safe_product_name}_{timestamp}.jpg" 
+            
+            # Musimy opakować plik w FileStorage, bo fetch wysyła Blob
+            # Nadajemy mu nową, bezpieczną nazwę
+            image_file_storage = FileStorage(
+                stream=file.stream,
+                filename=filename,
+                content_type='image/jpeg' # Ustawiamy poprawny typ MIME
+            )
+
+            try:
+                drive_image_id = upload_image_to_drive(image_file_storage)
+                if drive_image_id:
+                    # Zapisz obraz w bazie danych jako 'original'
+                    new_image = ProductImage(image_id=drive_image_id, product_id=product.id, image_type='original')
+                    db.session.add(new_image)
+                    uploaded_ids.append(drive_image_id)
+                else:
+                    errors.append(f"Nie udało się wgrać pliku {filename} na Google Drive.")
+            except Exception as e:
+                errors.append(f"Błąd podczas przetwarzania pliku {filename}: {str(e)}")
+        else:
+             errors.append("Otrzymano pusty plik.")
+
+
+    if errors:
+        # Jeśli były błędy, zapiszmy to co się udało i zwróćmy informację
+        db.session.commit()
+        return jsonify({
+            'warning': 'Wystąpiły błędy podczas przesyłania.', 
+            'uploaded_ids': uploaded_ids,
+            'errors': errors
+        }), 207 # Multi-Status
+    elif not uploaded_ids:
+         return jsonify({'error': 'Nie przesłano żadnych poprawnych plików.'}), 400
+    else:
+        # Jeśli wszystko OK
+        db.session.commit()
+        # Możesz tutaj dodać logikę uruchamiania zadania AI, jeśli chcesz
+        # np. jeśli wgrano tylko jedno zdjęcie, uruchom AI
+        if len(uploaded_ids) == 1:
+             base_image_id = uploaded_ids[0]
+             new_task = AiImageTask(product_id=product.id, original_image_id=base_image_id, status='pending')
+             db.session.add(new_task)
+             db.session.commit()
+             print(f"Uruchomiono zadanie AI dla produktu {product.id} z obrazem {base_image_id}")
+
+
+        return jsonify({
+            'success': True, 
+            'message': f'Pomyślnie wgrano {len(uploaded_ids)} zdjęć.',
+            'uploaded_ids': uploaded_ids
+        }), 201
+
+@app.route('/api/admin/product_categories')
+def api_admin_get_product_categories():
+    """Zwraca listę wszystkich kategorii produktów."""
+    try:
+        categories = ProductCategory.query.order_by(ProductCategory.name).all()
+        # Dodajemy opcję "Wszystkie" na początek
+        categories_list = [{'id': 0, 'name': 'Wszystkie Produkty'}] 
+        categories_list.extend([{'id': c.id, 'name': c.name} for c in categories])
+        return jsonify(categories_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/products_by_category/<int:category_id>')
+def api_admin_get_products_by_category(category_id):
+    """Zwraca listę produktów dla danej kategorii (lub wszystkie, jeśli category_id=0)."""
+    try:
+        query = Product.query
+        if category_id != 0: # Filtruj, jeśli wybrano konkretną kategorię
+            query = query.filter_by(category_id=category_id)
+        
+        products = query.order_by(Product.name).all()
+        products_list = [{'id': p.id, 'name': p.name} for p in products]
+        return jsonify(products_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# --- KONIEC NOWEGO API ---

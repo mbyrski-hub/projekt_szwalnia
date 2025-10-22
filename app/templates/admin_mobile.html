@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="pl" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin - Szwalnia</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="manifest" href="{{ url_for('static', filename='mobile_assets/manifest_admin.json') }}">
+    <meta name="theme-color" content="#ffc107">
+    <style>
+        body { padding-bottom: 70px; } /* Miejsce na dolne menu */
+        .nav-link { font-size: 0.75rem; }
+    </style>
+</head>
+<body>
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
+    <div id="updateToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
+        <div class="toast-header">
+            <strong class="me-auto text-dark"><i class="bi bi-arrow-down-circle-fill text-success"></i> Dostępna aktualizacja</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body text-dark">
+            Nowa wersja aplikacji jest gotowa. Odśwież, aby załadować.
+            <button class="btn btn-success btn-sm w-100 mt-2" id="refresh-button">Odśwież teraz</button>
+        </div>
+    </div>
+</div>
+    
+    <div class="container-fluid mt-3" id="app-content">
+        </div>
+
+    <nav class="navbar navbar-dark bg-dark fixed-bottom">
+        <div class="container-fluid d-flex justify-content-around">
+            <a class="nav-link text-warning active" href="#" id="nav-kokpit"><i class="bi bi-speedometer2 d-block fs-3"></i>Kokpit</a>
+            <a class="nav-link text-white" href="#" id="nav-produkcja"><i class="bi bi-diagram-3 d-block fs-3"></i>Produkcja</a>
+            <a class="nav-link text-white" href="#" id="nav-historia"><i class="bi bi-archive d-block fs-3"></i>Historia</a>
+            <a class="nav-link text-white" href="#" id="nav-dodaj"><i class="bi bi-plus-circle d-block fs-3"></i>Dodaj</a>
+            <a class="nav-link text-white" href="#" id="nav-ceny"><i class="bi bi-tags d-block fs-3"></i>Ceny</a>
+            <a class="nav-link text-white" href="#" id="nav-produkty"><i class="bi bi-box-seam d-block fs-3"></i>Produkty</a>
+        </div>
+    </nav>
+
+    <div class="modal fade" id="orderDetailsModal" tabindex="-1" aria-labelledby="orderDetailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="orderDetailsModalLabel">Ładowanie...</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="orderDetailsModalBody">
+                    <p class="text-center">Ładowanie szczegółów...</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zamknij</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+document.addEventListener('DOMContentLoaded', () => {
+    
+const content = document.getElementById('app-content');
+    const navLinks = document.querySelectorAll('.nav-link');
+    const navKokpit = document.getElementById('nav-kokpit');
+    const navProdukcja = document.getElementById('nav-produkcja');
+    const navHistoria = document.getElementById('nav-historia');
+    const navDodaj = document.getElementById('nav-dodaj');
+    const navCeny = document.getElementById('nav-ceny');
+    const navProdukty = document.getElementById('nav-produkty'); // Nowy link
+
+    const detailsModal = new bootstrap.Modal(document.getElementById('orderDetailsModal'));
+    const modalTitle = document.getElementById('orderDetailsModalLabel');
+    const modalBody = document.getElementById('orderDetailsModalBody');
+
+    let templatesCache = [];
+    let historyPage = 1;
+    let historyLoading = false;
+
+    // Zmienne dla zakładki Produkty
+    let currentProductId = null;
+    let imagesToUpload = []; // Tablica na przetworzone Bloby
+
+    // --- NAWIGACJA ---
+    function setActiveNav(activeLink) {
+        navLinks.forEach(link => {
+            link.classList.remove('active', 'text-warning');
+            link.classList.add('text-white');
+        });
+        activeLink.classList.add('active', 'text-warning');
+        activeLink.classList.remove('text-white');
+    }
+
+    navKokpit.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navKokpit); loadKokpit(); });
+    navProdukcja.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navProdukcja); loadProdukcja(); });
+    navHistoria.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navHistoria); loadHistoria(true); });
+    navDodaj.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navDodaj); loadDodaj(); });
+    navCeny.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navCeny); loadCeny(); });
+    navProdukty.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navProdukty); loadProdukty(); }); // Nowy listener
+
+    // --- OBSŁUGA KLIKNIĘĆ W ZLECENIA (bez zmian) ---
+    document.body.addEventListener('click', (e) => {
+        const orderCard = e.target.closest('[data-order-id]');
+        if (orderCard) {
+            e.preventDefault();
+            const orderId = orderCard.dataset.orderId;
+            showOrderDetails(orderId);
+        }
+    });
+
+    // --- FUNKCJA POBIERANIA SZCZEGÓŁÓW (bez zmian) ---
+    async function showOrderDetails(orderId) {
+        modalTitle.textContent = 'Ładowanie...';
+        modalBody.innerHTML = '<p class="text-center">Pobieranie danych...</p>';
+        detailsModal.show();
+
+        try {
+            const response = await fetch(`/api/admin/order_details/${orderId}`);
+            if (!response.ok) throw new Error('Błąd sieci lub serwera');
+            const data = await response.json();
+
+            modalTitle.textContent = `Szczegóły: ${data.order_code}`;
+            
+            let productsHtml = data.products.length > 0 ? '' : '<p>Brak produktów na tym zleceniu.</p>';
+            data.products.forEach(p => {
+                productsHtml += `<li class="list-group-item d-flex justify-content-between">
+                                    <span>${p.name} [${p.size}]</span>
+                                    <span class="badge bg-primary rounded-pill">${p.quantity} szt.</span>
+                                 </li>`;
+            });
+
+            let fabricsHtml = data.fabrics.length > 0 ? '' : '<p class="text-muted small">Brak tkanin dodanych ręcznie.</p>';
+            data.fabrics.forEach(f => {
+                fabricsHtml += `<li class="list-group-item">${f}</li>`;
+            });
+
+            modalBody.innerHTML = `
+                <p>
+                    <strong>Klient:</strong> ${data.client_name}<br>
+                    <strong>Status:</strong> <span class="badge bg-info">${data.status}</span><br>
+                    <strong>Termin:</strong> ${data.deadline}<br>
+                    <strong>Suma sztuk:</strong> ${data.total_quantity}
+                </p>
+                <hr>
+                <h5>Opis zlecenia</h5>
+                <p>${data.description || 'Brak opisu.'}</p>
+                
+                <h5 class="mt-3">Uwagi (biuro)</h5>
+                <div class="card card-body bg-secondary text-white small">
+                    ${data.uwagi || 'Brak uwag.'}
+                </div>
+
+                <h5 class="mt-3">Uwagi (krojownia)</h5>
+                <div class="card card-body bg-dark text-white small">
+                    ${data.uwagi_krojowni || 'Brak uwag.'}
+                </div>
+
+                <h5 class="mt-3">Produkty</h5>
+                <ul class="list-group list-group-flush">${productsHtml}</ul>
+
+                <h5 class="mt-3">Tkaniny ręczne</h5>
+                <ul class="list-group list-group-flush small">${fabricsHtml}</ul>
+            `;
+
+        } catch (err) {
+            modalTitle.textContent = 'Błąd';
+            modalBody.innerHTML = `<div class="alert alert-danger">Nie udało się załadować szczegółów: ${err.message}</div>`;
+        }
+    }
+
+
+    // --- WIDOKI (wszystkie 5 funkcji bez zmian) ---
+
+    // 1. KOKPIT (bez zmian)
+    async function loadKokpit() {
+        content.innerHTML = `<h2 class="text-warning">Kokpit 📈</h2><p>Ładowanie...</p>`;
+        try {
+            const response = await fetch('/api/admin/kpi');
+            const data = await response.json();
+            
+            content.innerHTML = `
+                <h2 class="text-warning mb-4">Kokpit 📈</h2>
+                <div class="card text-bg-light mb-3">
+                    <div class="card-header">Obrót w tym miesiącu</div>
+                    <div class="card-body">
+                        <h class="card-title fs-3">${data.monthly_turnover.toFixed(2)} zł</h3>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-6">
+                        <div class="card text-bg-primary mb-3">
+                            <div class="card-header">Nowe zlecenia</div>
+                            <div class="card-body">
+                                <h class="card-title fs-3">${data.stats_nowe}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-bg-info mb-3">
+                            <div class="card-header">W realizacji</div>
+                            <div class="card-body">
+                                <h class="card-title fs-3">${data.stats_w_realizacji}</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } catch (err) {
+            content.innerHTML = `<div class="alert alert-danger">Błąd ładowania danych kokpitu.</div>`;
+        }
+    }
+
+    // 2. PRODUKCJA (bez zmian)
+    async function loadProdukcja() {
+        content.innerHTML = `<h2 class="text-warning">Produkcja 🏭</h2><p>Ładowanie...</p>`;
+        try {
+            const response = await fetch('/api/admin/production_overview');
+            const data = await response.json();
+            
+            let html = `<h2 class="text-warning mb-4">Produkcja 🏭</h2>`;
+            
+            html += `<h4>W Krojowni (${data.krojownia.length})</h4>`;
+            if (data.krojownia.length > 0) {
+                html += `<div class="list-group mb-4">`;
+                data.krojownia.forEach(o => {
+                    html += `<a href="#" class="list-group-item list-group-item-action" data-order-id="${o.id}">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">${o.order_code}</h6>
+                                    <small><span class="badge bg-secondary">${o.cutting_table || 'NOWE'}</span></small>
+                                </div>
+                                <p class="mb-1 small">${o.client_name}</p>
+                             </a>`;
+                });
+                html += `</div>`;
+            } else {
+                html += `<p class="text-muted">Krojownia jest pusta.</p>`;
+            }
+
+            html += `<h4>W Szwalni (${data.szwalnia.length})</h4>`;
+            if (data.szwalnia.length > 0) {
+                html += `<div class="list-group mb-4">`;
+                data.szwalnia.forEach(o => {
+                    html += `<a href="#" class="list-group-item list-group-item-action" data-order-id="${o.id}">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">${o.order_code}</h6>
+                                    <small><span class="badge bg-info">${o.assigned_team || 'Czeka'}</span></small>
+                                </div>
+                                <p class="mb-1 small">${o.client_name}</p>
+                             </a>`;
+                });
+                html += `</div>`;
+            } else {
+                html += `<p class="text-muted">Szwalnia czeka na zlecenia.</p>`;
+            }
+            content.innerHTML = html;
+        } catch (err) {
+            content.innerHTML = `<div class="alert alert-danger">Błąd ładowania danych o produkcji.</div>`;
+        }
+    }
+
+    // 3. HISTORIA (bez zmian)
+    async function loadHistoria(reload = false) {
+        if (reload) {
+            historyPage = 1;
+            content.innerHTML = `<h2 class="text-warning">Historia 📂</h2><div id="history-list" class="list-group"></div><p id="history-loader">Ładowanie...</p>`;
+        }
+        if (historyLoading) return;
+        historyLoading = true;
+
+        const loader = document.getElementById('history-loader');
+        loader.style.display = 'block';
+
+        try {
+            const response = await fetch(`/api/admin/order_history?page=${historyPage}`);
+            const data = await response.json();
+            
+            const list = document.getElementById('history-list');
+            data.orders.forEach(o => {
+                list.innerHTML += `<a href="#" class="list-group-item list-group-item-action" data-order-id="${o.id}">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1">${o.order_code}</h6>
+                                        <small class="text-muted">${o.finished_date}</small>
+                                    </div>
+                                    <p class="mb-1 small">${o.client_name}</p>
+                                   </a>`;
+            });
+            
+            if (data.has_next_page) {
+                historyPage++;
+                loader.innerHTML = '';
+                if (!document.getElementById('load-more-btn')) {
+                    content.insertAdjacentHTML('beforeend', `<button id="load-more-btn" class="btn btn-outline-warning w-100 mt-3">Wczytaj więcej</button>`);
+                    document.getElementById('load-more-btn').addEventListener('click', () => loadHistoria(false));
+                }
+            } else {
+                loader.innerHTML = '<p class="text-center text-muted mt-3">Koniec listy.</p>';
+                const btn = document.getElementById('load-more-btn');
+                if (btn) btn.remove();
+            }
+        } catch (err) {
+            loader.innerHTML = `<div class="alert alert-danger">Błąd ładowania historii.</div>`;
+        }
+        historyLoading = false;
+    }
+
+    // 4. DODAJ ZLECENIE (bez zmian)
+    async function loadDodaj() {
+        content.innerHTML = `<h2 class="text-warning mb-4">Dodaj Zlecenie ⚡</h2>`;
+        
+        if (templatesCache.length === 0) {
+            try {
+                const response = await fetch('/api/admin/templates');
+                templatesCache = await response.json();
+            } catch (err) {
+                content.innerHTML += `<div class="alert alert-danger">Błąd ładowania szablonów.</div>`;
+                return;
+            }
+        }
+        
+        const templateOptions = templatesCache.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+
+        content.innerHTML += `
+            <div class="alert alert-info small">
+                Szybkie dodawanie zlecenia. Produkty i tkaniny dodasz później na komputerze.
+            </div>
+            
+            <form id="new-order-form">
+                <div class="mb-3">
+                    <label for="template-select" class="form-label">Użyj szablonu (zalecane)</label>
+                    <select class="form-select" id="template-select">
+                        <option value="0">--- Nowe zlecenie (ręcznie) ---</option>
+                        ${templateOptions}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="client-name" class="form-label">Nazwa Klienta</label>
+                    <input type="text" class="form-control" id="client-name" required>
+                </div>
+                <div class="mb-3">
+                    <label for="description" class="form-label">Opis</label>
+                    <textarea class="form-control" id="description" rows="3" required></textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="deadline" class="form-label">Termin</label>
+                    <input type="date" class="form-control" id="deadline" required>
+                </div>
+                <div class="mb-3">
+                    <label for="zlecajacy" class="form-label">Zlecający</label>
+                    <select class="form-select" id="zlecajacy">
+                        <option value="ADMIN">ADMIN</option>
+                        <option value="SZEF">SZEF</option>
+                        <option value="JOLA">JOLA</option>
+                        <option value="ANIA">ANIA</option>
+                        <option value_l="MATEUSZ">MATEUSZ</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-warning w-100">Dodaj zlecenie</button>
+            </form>
+            <div id="form-message" class="mt-3"></div>
+        `;
+
+        document.getElementById('template-select').addEventListener('change', (e) => {
+            const templateId = parseInt(e.target.value, 10);
+            const clientInput = document.getElementById('client-name');
+            const descInput = document.getElementById('description');
+            
+            if (templateId === 0) {
+                clientInput.value = '';
+                descInput.value = '';
+                clientInput.readOnly = false;
+            } else {
+                const template = templatesCache.find(t => t.id === templateId);
+                if (template) {
+                    clientInput.value = template.client_name;
+                    descInput.value = template.description;
+                    clientInput.readOnly = true;
+                }
+            }
+        });
+
+        document.getElementById('new-order-form').addEventListener('submit', handleNewOrderSubmit);
+    }
+    
+    async function handleNewOrderSubmit(e) {
+        e.preventDefault();
+        const msgDiv = document.getElementById('form-message');
+        msgDiv.innerHTML = `<div class="alert alert-info">Wysyłanie...</div>`;
+
+        const data = {
+            client_name: document.getElementById('client-name').value,
+            description: document.getElementById('description').value,
+            deadline: document.getElementById('deadline').value,
+            zlecajacy: document.getElementById('zlecajacy').value,
+        };
+        
+        try {
+            const response = await fetch('/api/admin/new_order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+            
+            if (response.ok) {
+                msgDiv.innerHTML = `<div class="alert alert-success">Sukces! Dodano zlecenie ${result.order_code}.</div>`;
+                e.target.reset();
+            } else {
+                throw new Error(result.error || 'Nieznany błąd');
+            }
+        } catch (err) {
+            msgDiv.innerHTML = `<div class="alert alert-danger">Błąd: ${err.message}</div>`;
+        }
+    }
+
+    // 5. WYSZUKIWARKA CEN (bez zmian)
+    async function loadCeny() {
+        content.innerHTML = `
+            <h2 class="text-warning mb-4">Wyszukiwarka Cen 💸</h2>
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" placeholder="Wpisz nazwę tkaniny/materiału..." id="price-search-input">
+                <button class="btn btn-outline-warning" type="button" id="price-search-btn"><i class="bi bi-search"></i></button>
+            </div>
+            <div id="price-results"></div>
+        `;
+        
+        const input = document.getElementById('price-search-input');
+        const btn = document.getElementById('price-search-btn');
+        const resultsDiv = document.getElementById('price-results');
+
+        async function performSearch() {
+            const query = input.value;
+            if (query.length < 2) {
+                resultsDiv.innerHTML = '';
+                return;
+            }
+            resultsDiv.innerHTML = `<p>Szukam...</p>`;
+            try {
+                const response = await fetch(`/api/admin/material_search?q=${encodeURIComponent(query)}`);
+                const results = await response.json();
+                
+                if (results.length === 0) {
+                    resultsDiv.innerHTML = `<p class="text-muted">Nic nie znaleziono.</p>`;
+                    return;
+                }
+                
+                let html = `<ul class="list-group">`;
+                results.forEach(r => {
+                    html += `<li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div><strong>${r.name}</strong><br><small>${r.type}</small></div>
+                                <span class="badge bg-warning text-dark">${r.price ? r.price.toFixed(2) + ' zł' : 'Brak Ceny'}</span>
+                             </li>`;
+                });
+                html += `</ul>`;
+                resultsDiv.innerHTML = html;
+            } catch (err) {
+                resultsDiv.innerHTML = `<div class="alert alert-danger">Błąd wyszukiwania.</div>`;
+            }
+        }
+        
+        btn.addEventListener('click', performSearch);
+        input.addEventListener('keyup', (e) => {
+             if (e.key === 'Enter') performSearch();
+        });
+    }
+// --- ZAKTUALIZOWANA ZAKŁADKA: PRODUKTY ---
+    function loadProdukty() {
+        currentProductId = null; 
+        imagesToUpload = [];     
+        content.innerHTML = `
+            <h2 class="text-warning mb-4">Zdjęcia Produktów 📸</h2>
+            
+            <div id="category-filter-step">
+                <h5>Wybierz kategorię:</h5>
+                <div id="category-buttons" class="d-grid gap-2 d-md-block mb-3">
+                    <p>Ładowanie kategorii...</p> 
+                </div>
+                <hr>
+                <div id="product-list-container" style="display: none;">
+                    <h5>Wybierz produkt:</h5>
+                    <div id="product-list" class="list-group">
+                        </div>
+                </div>
+            </div>
+
+            <div id="product-photo-step" style="display: none;">
+                <h5 id="selected-product-name"></h5>
+                <input type="file" accept="image/*" capture="environment" id="photo-input" style="display: none;" multiple>
+                <button class="btn btn-primary w-100 my-3" id="add-photo-btn"><i class="bi bi-camera-fill"></i> Zrób/Dodaj zdjęcie</button>
+                
+                <div id="photo-previews" class="mb-3 d-flex flex-wrap gap-2"></div>
+
+                <button class="btn btn-success w-100" id="upload-photos-btn" disabled><i class="bi bi-cloud-arrow-up-fill"></i> Wyślij zdjęcia</button>
+                <button class="btn btn-secondary w-100 mt-2" id="back-to-categories-btn">Wróć do wyboru kategorii</button> 
+                <div id="upload-status" class="mt-3"></div>
+            </div>
+        `;
+
+        const categoryButtonsDiv = document.getElementById('category-buttons');
+        const productListContainer = document.getElementById('product-list-container');
+        const productListDiv = document.getElementById('product-list');
+        
+        const photoStepDiv = document.getElementById('product-photo-step');
+        const categoryFilterStepDiv = document.getElementById('category-filter-step'); // Zmieniona nazwa diva
+        const selectedProductNameH5 = document.getElementById('selected-product-name');
+        const photoInput = document.getElementById('photo-input');
+        const addPhotoBtn = document.getElementById('add-photo-btn');
+        const previewsDiv = document.getElementById('photo-previews');
+        const uploadBtn = document.getElementById('upload-photos-btn');
+        const backBtn = document.getElementById('back-to-categories-btn'); // Zmienione ID przycisku
+        const uploadStatusDiv = document.getElementById('upload-status');
+
+        // --- Nowa Logika ---
+
+        // 1. Ładowanie kategorii
+        async function loadCategories() {
+            try {
+                const response = await fetch('/api/admin/product_categories');
+                const categories = await response.json();
+                
+                categoryButtonsDiv.innerHTML = ''; // Wyczyść loader
+                categories.forEach(cat => {
+                    const button = document.createElement('button');
+                    button.classList.add('btn', 'btn-outline-warning', 'mb-2');
+                    button.textContent = cat.name;
+                    button.dataset.categoryId = cat.id;
+                    button.addEventListener('click', () => {
+                        // Dezaktywuj inne przyciski, aktywuj kliknięty
+                        categoryButtonsDiv.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+                        button.classList.add('active');
+                        // Załaduj produkty dla tej kategorii
+                        loadProductsInCategory(cat.id);
+                    });
+                    categoryButtonsDiv.appendChild(button);
+                });
+            } catch (err) {
+                categoryButtonsDiv.innerHTML = '<div class="alert alert-danger">Błąd ładowania kategorii.</div>';
+            }
+        }
+
+        // 2. Ładowanie produktów dla kategorii
+        async function loadProductsInCategory(categoryId) {
+            productListContainer.style.display = 'block';
+            productListDiv.innerHTML = '<p>Ładowanie produktów...</p>';
+            try {
+                const response = await fetch(`/api/admin/products_by_category/${categoryId}`);
+                const products = await response.json();
+
+                if (products.length === 0) {
+                    productListDiv.innerHTML = '<p class="text-muted">Brak produktów w tej kategorii.</p>';
+                    return;
+                }
+
+                let html = '';
+                products.forEach(p => {
+                    html += `<a href="#" class="list-group-item list-group-item-action product-select-item" data-product-id="${p.id}" data-product-name="${p.name}">
+                                ${p.name}
+                             </a>`;
+                });
+                productListDiv.innerHTML = html;
+
+                // Dodaj listenery do nowo załadowanych produktów
+                document.querySelectorAll('.product-select-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        currentProductId = item.dataset.productId;
+                        selectedProductNameH5.textContent = `Produkt: ${item.dataset.productName}`;
+                        categoryFilterStepDiv.style.display = 'none'; // Ukryj filtry
+                        photoStepDiv.style.display = 'block';     // Pokaż krok zdjęć
+                        uploadStatusDiv.innerHTML = ''; 
+                        previewsDiv.innerHTML = ''; 
+                        imagesToUpload = []; 
+                        uploadBtn.disabled = true; 
+                    });
+                });
+
+            } catch (err) {
+                productListDiv.innerHTML = '<div class="alert alert-danger">Błąd ładowania produktów.</div>';
+            }
+        }
+
+        // --- Koniec Nowej Logiki ---
+
+        // Logika dodawania zdjęć
+        addPhotoBtn.addEventListener('click', () => {
+            photoInput.click(); // Wywołaj kliknięcie na ukrytym inpucie
+        });
+
+        photoInput.addEventListener('change', async (event) => {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            addPhotoBtn.disabled = true; // Zablokuj przycisk podczas przetwarzania
+            uploadStatusDiv.innerHTML = '<div class="alert alert-info">Przetwarzanie zdjęć...</div>';
+
+            for (const file of files) {
+                try {
+                    // Przetwarzanie obrazu
+                    const processedBlob = await processImage(file, 1080, 1080, 0.9); // Max 1080p, 90% jakości
+                    imagesToUpload.push(processedBlob);
+
+                    // Wyświetlanie miniaturki
+                    const previewUrl = URL.createObjectURL(processedBlob);
+                    const imgElement = document.createElement('img');
+                    imgElement.src = previewUrl;
+                    imgElement.style.width = '80px';
+                    imgElement.style.height = '80px';
+                    imgElement.style.objectFit = 'cover';
+                    imgElement.style.borderRadius = '5px';
+                    previewsDiv.appendChild(imgElement);
+
+                } catch (error) {
+                    console.error('Błąd przetwarzania obrazu:', error);
+                    uploadStatusDiv.innerHTML = `<div class="alert alert-danger">Błąd przetwarzania zdjęcia: ${file.name}. Spróbuj ponownie.</div>`;
+                    addPhotoBtn.disabled = false;
+                    return; // Przerwij przetwarzanie reszty
+                }
+            }
+            
+            // Czyszczenie inputu, aby można było dodać ten sam plik ponownie
+            photoInput.value = ''; 
+            
+            addPhotoBtn.disabled = false; // Odblokuj przycisk
+            uploadBtn.disabled = imagesToUpload.length === 0; // Odblokuj wysyłanie, jeśli są zdjęcia
+            if(imagesToUpload.length > 0) {
+                 uploadStatusDiv.innerHTML = `<div class="alert alert-secondary">Gotowe do wysłania ${imagesToUpload.length} zdjęć.</div>`;
+            } else {
+                 uploadStatusDiv.innerHTML = '';
+            }
+        });
+        
+        // Logika wysyłania zdjęć
+        uploadBtn.addEventListener('click', async () => {
+            if (!currentProductId || imagesToUpload.length === 0) return;
+
+            uploadBtn.disabled = true;
+            backBtn.disabled = true;
+            uploadStatusDiv.innerHTML = `<div class="alert alert-info">Wysyłanie ${imagesToUpload.length} zdjęć...</div>`;
+
+            const formData = new FormData();
+            imagesToUpload.forEach((blob, index) => {
+                // Ważne: Nadaj plikowi nazwę, serwer jej użyje
+                formData.append('product_image', blob, `upload_${index + 1}.jpg`); 
+            });
+
+            try {
+                const response = await fetch(`/api/admin/product/${currentProductId}/upload_image`, {
+                    method: 'POST',
+                    body: formData 
+                    // Nie ustawiamy 'Content-Type', przeglądarka zrobi to sama dla FormData
+                });
+
+                const result = await response.json();
+
+                if (response.ok || response.status === 207) { // 201 lub 207 (Multi-Status)
+                     let message = result.message || '';
+                     if (result.warning) {
+                          message += ` ${result.warning}`;
+                          result.errors.forEach(err => message += `<br>- ${err}`);
+                     }
+                    uploadStatusDiv.innerHTML = `<div class="alert alert-success">${message}</div>`;
+                    // Reset po sukcesie
+                    imagesToUpload = [];
+                    previewsDiv.innerHTML = '';
+                } else {
+                    throw new Error(result.error || `Błąd serwera: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Błąd wysyłania zdjęć:', error);
+                uploadStatusDiv.innerHTML = `<div class="alert alert-danger">Błąd wysyłania: ${error.message}</div>`;
+            } finally {
+                uploadBtn.disabled = imagesToUpload.length === 0; // Zablokuj jeśli pusto
+                backBtn.disabled = false;
+            }
+        });
+
+// Powrót do wyboru kategorii (zamiast do wyszukiwania)
+        backBtn.addEventListener('click', () => {
+            photoStepDiv.style.display = 'none';
+            categoryFilterStepDiv.style.display = 'block'; // Pokaż widok kategorii
+            currentProductId = null;
+            imagesToUpload = [];
+            previewsDiv.innerHTML = '';
+            uploadStatusDiv.innerHTML = '';
+             // Opcjonalnie: Zresetuj aktywny przycisk kategorii i listę produktów
+             categoryButtonsDiv.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+             productListContainer.style.display = 'none';
+             productListDiv.innerHTML = '';
+        });
+        
+        // Inicjalizacja: Załaduj kategorie na start
+        loadCategories(); 
+    }
+
+    // --- FUNKCJA PRZETWARZANIA OBRAZU ---
+    /**
+     * Przetwarza plik obrazu (z inputu) do zadanej rozdzielczości i jakości.
+     * @param {File} file Plik obrazu.
+     * @param {number} maxWidth Maksymalna szerokość.
+     * @param {number} maxHeight Maksymalna wysokość.
+     * @param {number} quality Jakość JPEG (0.0 - 1.0).
+     * @returns {Promise<Blob>} Obietnica zwracająca przetworzony obraz jako Blob.
+     */
+    function processImage(file, maxWidth, maxHeight, quality) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    let width = img.width;
+                    let height = img.height;
+
+                    // Oblicz nowe wymiary z zachowaniem proporcji
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height = Math.round(height * (maxWidth / width));
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width = Math.round(width * (maxHeight / height));
+                            height = maxHeight;
+                        }
+                    }
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    canvas.toBlob(
+                        (blob) => {
+                            if (blob) {
+                                console.log(`Obraz przetworzony: ${width}x${height}, rozmiar: ${Math.round(blob.size / 1024)} KB`);
+                                resolve(blob);
+                            } else {
+                                reject(new Error('Nie udało się utworzyć Bloba z canvasa.'));
+                            }
+                        },
+                        'image/jpeg',
+                        quality
+                    );
+                };
+                img.onerror = (error) => reject(error);
+                img.src = event.target.result; 
+            };
+            reader.onerror = (error) => reject(error);
+            reader.readAsDataURL(file); 
+        });
+    }
+
+    // --- Inicjalizacja Aplikacji ---
+    loadKokpit(); 
+
+    
+    // --- POCZĄTEK ZAKTUALIZOWANEGO BLOKU ---
+    // Cała logika rejestracji SW i aktualizacji jest teraz tutaj
+    
+    let serviceWorkerRegistration; // Zmienna do przechowywania rejestracji SW
+
+    // Pobieramy elementy Toastu
+    const updateToastElement = document.getElementById('updateToast');
+    const updateToast = new bootstrap.Toast(updateToastElement);
+    const refreshButton = document.getElementById('refresh-button');
+
+    // Funkcja do rejestracji Service Workera
+    function registerServiceWorker() {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register("{{ url_for('service_worker') }}")
+                .then(registration => {
+                    console.log('[PWA] Service Worker zarejestrowany pomyślnie:', registration);
+                    serviceWorkerRegistration = registration; // Zapisujemy rejestrację
+
+                    // Nasłuchuj na zdarzenie 'updatefound'
+                    registration.onupdatefound = () => {
+                        const installingWorker = registration.installing;
+                        if (installingWorker) {
+                            console.log('[PWA] Znaleziono nowego Service Workera, instalowanie...');
+                            // Nasłuchuj na zmianę stanu nowego SW
+                            installingWorker.onstatechange = () => {
+                                if (installingWorker.state === 'installed') {
+                                    if (navigator.serviceWorker.controller) {
+                                        // Jeśli jest już aktywny SW, to znaczy, że to jest AKTUALIZACJA
+                                        console.log('[PWA] Nowy Service Worker zainstalowany. Pokazywanie powiadomienia.');
+                                        // Pokaż powiadomienie (Toast)
+                                        updateToast.show();
+                                    } else {
+                                        // To jest pierwsza instalacja
+                                        console.log('[PWA] Service Worker zainstalowany po raz pierwszy.');
+                                    }
+                                }
+                            };
+                        }
+                    };
+                })
+                .catch(error => {
+                    console.log('[PWA] Rejestracja Service Workera nie powiodła się:', error);
+                });
+
+            // Obsługa przeładowania strony po aktywacji nowego SW
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) {
+                    console.log('[PWA] Kontroler się zmienił, przeładowywanie strony!');
+                    window.location.reload();
+                    refreshing = true;
+                }
+            });
+        }
+    }
+
+    // Kliknięcie przycisku "Odśwież"
+    refreshButton.addEventListener('click', () => {
+        console.log('[PWA] Użytkownik kliknął "Odśwież".');
+        updateToast.hide();
+        // Po prostu przeładuj stronę. Nowy SW (już aktywowany przez skipWaiting)
+        // przejmie kontrolę podczas przeładowania.
+        window.location.reload();
+    });
+
+    // Wywołanie rejestracji SW
+    registerServiceWorker(); 
+    
+    // --- KONIEC ZAKTUALIZOWANEGO BLOKU ---
+    
+}); // Koniec DOMContentLoaded
+
+// (Usunęliśmy stąd stary blok rejestracji SW)
+
+    </script>
+</body>
+</html>
