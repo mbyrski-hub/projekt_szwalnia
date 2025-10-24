@@ -9,18 +9,34 @@
     <link rel="manifest" href="{{ url_for('static', filename='mobile_assets/manifest_admin.json') }}">
     <meta name="theme-color" content="#ffc107">
     <style>
+     
+    
         body { padding-bottom: 70px; } /* Miejsce na dolne menu */
         .nav-link { font-size: 0.75rem; }
+
+        /* --- POCZĄTEK NOWEGO KODU --- */
+        /* Centrowanie ikon i tekstu w linkach nawigacji dolnej */
+        .navbar.fixed-bottom .nav-link {
+            text-align: center; /* Centruje zawartość (ikonę i tekst) wewnątrz linku */
+            width: auto;        /* Pozwala linkowi dopasować szerokość do zawartości */
+            flex-grow: 1;       /* Pozwala linkom równomiernie zająć przestrzeń */
+        }
+        /* --- KONIEC NOWEGO KODU --- */
+
     </style>
 </head>
 <body>
+    <div class="header bg-dark text-white p-3 text-center fs-5 position-sticky top-0" style="z-index: 1000;">
+        Admin
+        <span id="app-version" style="font-size: 0.6em; opacity: 0.8; font-weight: normal;"></span>
+    </div>
     <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
     <div id="updateToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
         <div class="toast-header">
             <strong class="me-auto text-dark"><i class="bi bi-arrow-down-circle-fill text-success"></i> Dostępna aktualizacja</strong>
             <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
-        <div class="toast-body text-dark">
+        <div class="toast-body text-info">
             Nowa wersja aplikacji jest gotowa. Odśwież, aby załadować.
             <button class="btn btn-success btn-sm w-100 mt-2" id="refresh-button">Odśwież teraz</button>
         </div>
@@ -36,6 +52,7 @@
             <a class="nav-link text-white" href="#" id="nav-produkcja"><i class="bi bi-diagram-3 d-block fs-3"></i>Produkcja</a>
             <a class="nav-link text-white" href="#" id="nav-historia"><i class="bi bi-archive d-block fs-3"></i>Historia</a>
             <a class="nav-link text-white" href="#" id="nav-dodaj"><i class="bi bi-plus-circle d-block fs-3"></i>Dodaj</a>
+            <a class="nav-link text-white" href="#" id="nav-kalkulator"><i class="bi bi-calculator d-block fs-3"></i>Kalkulator</a>
             <a class="nav-link text-white" href="#" id="nav-ceny"><i class="bi bi-tags d-block fs-3"></i>Ceny</a>
             <a class="nav-link text-white" href="#" id="nav-produkty"><i class="bi bi-box-seam d-block fs-3"></i>Produkty</a>
         </div>
@@ -57,7 +74,22 @@
             </div>
         </div>
     </div>
-
+<template id="calc-fabric-row-template">
+        <div class="row gx-2 align-items-center mb-2 calc-fabric-row" data-price="0.0">
+            <div class="col-5"><select class="form-select form-select-sm calc-item-select"></select></div>
+            <div class="col-4"><select class="form-select form-select-sm calc-supplier-select" disabled><option value="default">-- Dostawca --</option></select></div>
+            <div class="col-2"><input type="number" class="form-control form-control-sm calc-item-usage calc-calc-input" placeholder="m" value="0.0" step="0.01"></div>
+            <div class="col-1"><button type="button" class="btn btn-danger btn-sm calc-remove-btn p-1"><i class="bi bi-trash"></i></button></div>
+        </div>
+    </template>
+    <template id="calc-material-row-template">
+         <div class="row gx-2 align-items-center mb-2 calc-material-row" data-price="0.0">
+            <div class="col-5"><select class="form-select form-select-sm calc-item-select"></select></div>
+            <div class="col-4"><select class="form-select form-select-sm calc-supplier-select" disabled><option value="default">-- Dostawca --</option></select></div>
+            <div class="col-2"><input type="text" class="form-control form-control-sm calc-item-usage calc-calc-input" placeholder="Ilość" value="1"></div>
+            <div class="col-1"><button type="button" class="btn btn-danger btn-sm calc-remove-btn p-1"><i class="bi bi-trash"></i></button></div>
+        </div>
+    </template>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -69,7 +101,8 @@ const content = document.getElementById('app-content');
     const navHistoria = document.getElementById('nav-historia');
     const navDodaj = document.getElementById('nav-dodaj');
     const navCeny = document.getElementById('nav-ceny');
-    const navProdukty = document.getElementById('nav-produkty'); // Nowy link
+    const navProdukty = document.getElementById('nav-produkty'); 
+    const navKalkulator = document.getElementById('nav-kalkulator');
 
     const detailsModal = new bootstrap.Modal(document.getElementById('orderDetailsModal'));
     const modalTitle = document.getElementById('orderDetailsModalLabel');
@@ -79,9 +112,28 @@ const content = document.getElementById('app-content');
     let historyPage = 1;
     let historyLoading = false;
 
+    // Nasłuchuj wiadomości od Service Workera (wersja)
+    navigator.serviceWorker.addEventListener('message', event => {
+        if (event.data && event.data.type === 'VERSION_RESPONSE') {
+            console.log('[PWA] Otrzymano odpowiedź z wersją:', event.data.version);
+            const versionSpan = document.getElementById('app-version');
+            if (versionSpan) {
+                versionSpan.textContent = `${event.data.version}`;
+            }
+        }
+    });
+
+    // Poproś o wersję, gdy SW będzie gotowy
+    navigator.serviceWorker.ready.then(readyReg => {
+        if (readyReg.active) {
+            console.log('[PWA] Wysyłanie zapytania o wersję do SW...');
+            readyReg.active.postMessage({ type: 'GET_VERSION' });
+        }
+    });
+
     // Zmienne dla zakładki Produkty
     let currentProductId = null;
-    let imagesToUpload = []; // Tablica na przetworzone Bloby
+    let imagesToUpload = []; 
 
     // --- NAWIGACJA ---
     function setActiveNav(activeLink) {
@@ -98,9 +150,10 @@ const content = document.getElementById('app-content');
     navHistoria.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navHistoria); loadHistoria(true); });
     navDodaj.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navDodaj); loadDodaj(); });
     navCeny.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navCeny); loadCeny(); });
-    navProdukty.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navProdukty); loadProdukty(); }); // Nowy listener
+    navProdukty.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navProdukty); loadProdukty(); }); 
+    navKalkulator.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navKalkulator); loadKalkulator(); });
 
-    // --- OBSŁUGA KLIKNIĘĆ W ZLECENIA (bez zmian) ---
+    // --- OBSŁUGA KLIKNIĘĆ W ZLECENIA ---
     document.body.addEventListener('click', (e) => {
         const orderCard = e.target.closest('[data-order-id]');
         if (orderCard) {
@@ -110,7 +163,7 @@ const content = document.getElementById('app-content');
         }
     });
 
-    // --- FUNKCJA POBIERANIA SZCZEGÓŁÓW (bez zmian) ---
+    // --- FUNKCJA POBIERANIA SZCZEGÓŁÓW ZLECENIA ---
     async function showOrderDetails(orderId) {
         modalTitle.textContent = 'Ładowanie...';
         modalBody.innerHTML = '<p class="text-center">Pobieranie danych...</p>';
@@ -125,10 +178,7 @@ const content = document.getElementById('app-content');
             
             let productsHtml = data.products.length > 0 ? '' : '<p>Brak produktów na tym zleceniu.</p>';
             data.products.forEach(p => {
-                productsHtml += `<li class="list-group-item d-flex justify-content-between">
-                                    <span>${p.name} [${p.size}]</span>
-                                    <span class="badge bg-primary rounded-pill">${p.quantity} szt.</span>
-                                 </li>`;
+                productsHtml += `<li class="list-group-item d-flex justify-content-between"><span>${p.name} [${p.size}]</span><span class="badge bg-primary rounded-pill">${p.quantity} szt.</span></li>`;
             });
 
             let fabricsHtml = data.fabrics.length > 0 ? '' : '<p class="text-muted small">Brak tkanin dodanych ręcznie.</p>';
@@ -137,32 +187,12 @@ const content = document.getElementById('app-content');
             });
 
             modalBody.innerHTML = `
-                <p>
-                    <strong>Klient:</strong> ${data.client_name}<br>
-                    <strong>Status:</strong> <span class="badge bg-info">${data.status}</span><br>
-                    <strong>Termin:</strong> ${data.deadline}<br>
-                    <strong>Suma sztuk:</strong> ${data.total_quantity}
-                </p>
-                <hr>
-                <h5>Opis zlecenia</h5>
-                <p>${data.description || 'Brak opisu.'}</p>
-                
-                <h5 class="mt-3">Uwagi (biuro)</h5>
-                <div class="card card-body bg-secondary text-white small">
-                    ${data.uwagi || 'Brak uwag.'}
-                </div>
-
-                <h5 class="mt-3">Uwagi (krojownia)</h5>
-                <div class="card card-body bg-dark text-white small">
-                    ${data.uwagi_krojowni || 'Brak uwag.'}
-                </div>
-
-                <h5 class="mt-3">Produkty</h5>
-                <ul class="list-group list-group-flush">${productsHtml}</ul>
-
-                <h5 class="mt-3">Tkaniny ręczne</h5>
-                <ul class="list-group list-group-flush small">${fabricsHtml}</ul>
-            `;
+                <p><strong>Klient:</strong> ${data.client_name}<br><strong>Status:</strong> <span class="badge bg-info">${data.status}</span><br><strong>Termin:</strong> ${data.deadline}<br><strong>Suma sztuk:</strong> ${data.total_quantity}</p><hr>
+                <h5>Opis zlecenia</h5><p>${data.description || 'Brak opisu.'}</p>
+                <h5 class="mt-3">Uwagi (biuro)</h5><div class="card card-body bg-secondary text-white small">${data.uwagi || 'Brak uwag.'}</div>
+                <h5 class="mt-3">Uwagi (krojownia)</h5><div class="card card-body bg-dark text-white small">${data.uwagi_krojowni || 'Brak uwag.'}</div>
+                <h5 class="mt-3">Produkty</h5><ul class="list-group list-group-flush">${productsHtml}</ul>
+                <h5 class="mt-3">Tkaniny ręczne</h5><ul class="list-group list-group-flush small">${fabricsHtml}</ul>`;
 
         } catch (err) {
             modalTitle.textContent = 'Błąd';
@@ -170,325 +200,710 @@ const content = document.getElementById('app-content');
         }
     }
 
+    // --- WIDOKI ---
 
-    // --- WIDOKI (wszystkie 5 funkcji bez zmian) ---
-
-    // 1. KOKPIT (bez zmian)
+// 1. KOKPIT
     async function loadKokpit() {
         content.innerHTML = `<h2 class="text-warning">Kokpit 📈</h2><p>Ładowanie...</p>`;
         try {
             const response = await fetch('/api/admin/kpi');
+            if (!response.ok) {
+                throw new Error(`Błąd sieci: ${response.status}`);
+            }
             const data = await response.json();
-            
+
+            // Funkcja pomocnicza do renderowania rozwijanej listy zleceń
+            function renderCollapsibleOrderList(orders, cardElementId, listId, initialVisible = 5) { // Zwiększono domyślną liczbę widocznych do 5
+                const cardBody = document.getElementById(cardElementId);
+                if (!cardBody || !orders) return;
+
+                // Używamy flexbox dla lepszego dopasowania
+                let listHtml = `<div class="mt-2 pt-2 border-top border-white border-opacity-25 order-list-container small">`;
+
+                if (orders.length > 0) {
+                    listHtml += `<ul class="list-unstyled mb-0" id="${listId}">`;
+                    orders.forEach((o, index) => {
+                        const hiddenClass = index >= initialVisible ? 'd-none' : '';
+                        // Usunięto text-truncate, dodano flexbox i ikonę linku
+                        listHtml += `
+                            <li class="${hiddenClass}">
+                                <a href="#" class="text-white text-decoration-none d-flex justify-content-between align-items-center py-1 kokpit-order-link" data-order-id="${o.id}" title="${o.code || ''} - ${o.client || ''}">
+                                    <span class="flex-grow-1 me-2">${o.code || 'Brak kodu'} - ${o.client || 'Brak klienta'}</span>
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                </a>
+                            </li>`;
+                    });
+                    listHtml += `</ul>`;
+                    if (orders.length > initialVisible) {
+                        listHtml += `<button class="btn btn-sm btn-outline-light w-100 mt-2 toggle-order-list-btn" data-target="${listId}" data-visible="${initialVisible}">Pokaż więcej (${orders.length - initialVisible})</button>`;
+                    }
+                } else {
+                    listHtml += `<p class="text-white-50 small mb-0">Brak zleceń.</p>`;
+                }
+                listHtml += `</div>`;
+                cardBody.insertAdjacentHTML('beforeend', listHtml);
+            }
+
+            // Główny HTML kokpitu
             content.innerHTML = `
                 <h2 class="text-warning mb-4">Kokpit 📈</h2>
                 <div class="card text-bg-light mb-3">
                     <div class="card-header">Obrót w tym miesiącu</div>
                     <div class="card-body">
-                        <h class="card-title fs-3">${data.monthly_turnover.toFixed(2)} zł</h3>
+                        <h class="card-title fs-3">${data.monthly_turnover !== undefined ? data.monthly_turnover.toFixed(2) : 'B/D'} zł</h3>
                     </div>
                 </div>
-                <div class="row">
-                    <div class="col-6">
-                        <div class="card text-bg-primary mb-3">
-                            <div class="card-header">Nowe zlecenia</div>
-                            <div class="card-body">
-                                <h class="card-title fs-3">${data.stats_nowe}</h3>
-                            </div>
+                
+                <div class="col-12 mb-3">
+                    <div class="card text-bg-info">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span>Nowe zlecenia</span>
+                            <span class="badge bg-light text-primary rounded-pill">${data.stats_nowe !== undefined ? data.stats_nowe : '?'}</span>
                         </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="card text-bg-info mb-3">
-                            <div class="card-header">W realizacji</div>
-                            <div class="card-body">
-                                <h class="card-title fs-3">${data.stats_w_realizacji}</h3>
+                        <div class="card-body pt-2" id="new-orders-card-body">
                             </div>
-                        </div>
                     </div>
                 </div>
-            `;
+                <div class="col-12 mb-3">
+                    <div class="card text-bg-success">
+                         <div class="card-header d-flex justify-content-between align-items-center">
+                            <span>W realizacji</span>
+                            <span class="badge bg-light text-info rounded-pill">${data.stats_w_realizacji !== undefined ? data.stats_w_realizacji : '?'}</span>
+                        </div>
+                        <div class="card-body pt-2" id="in-progress-orders-card-body">
+                            </div>
+                    </div>
+                </div>
+                `;
+
+            // Wywołaj funkcje renderujące listy (bez zmian)
+            renderCollapsibleOrderList(data.new_orders || [], 'new-orders-card-body', 'kokpit-new-orders-list');
+            renderCollapsibleOrderList(data.in_progress_orders || [], 'in-progress-orders-card-body', 'kokpit-in-progress-orders-list');
+
+            // Obsługa przycisków "Pokaż więcej/mniej" (bez zmian)
+            document.querySelectorAll('.toggle-order-list-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const targetListId = this.dataset.target;
+                    const list = document.getElementById(targetListId);
+                    const initialVisible = parseInt(this.dataset.visible, 10);
+                    const items = list.querySelectorAll('li');
+                    let isExpanded = this.textContent.startsWith('Pokaż mniej');
+                    items.forEach((item, index) => {
+                        if (index >= initialVisible) {
+                            item.classList.toggle('d-none', isExpanded);
+                        }
+                    });
+                    if (isExpanded) { this.textContent = `Pokaż więcej (${items.length - initialVisible})`; }
+                    else { this.textContent = 'Pokaż mniej'; }
+                    // Usunięto scrollIntoView, bo może być irytujące przy dwóch listach
+                    // this.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                });
+            });
+
+             // Obsługa linków do zleceń (bez zmian)
+             document.querySelectorAll('.kokpit-order-link').forEach(link => {
+                 link.addEventListener('click', function(e) {
+                     e.preventDefault();
+                     const orderId = this.dataset.orderId;
+                     showOrderDetails(orderId);
+                 });
+             });
+
         } catch (err) {
-            content.innerHTML = `<div class="alert alert-danger">Błąd ładowania danych kokpitu.</div>`;
+            console.error("Błąd ładowania danych kokpitu:", err);
+            content.innerHTML = `<div class="alert alert-danger">Błąd ładowania danych kokpitu: ${err.message}</div>`;
         }
     }
 
-    // 2. PRODUKCJA (bez zmian)
+    // 2. PRODUKCJA 
     async function loadProdukcja() {
         content.innerHTML = `<h2 class="text-warning">Produkcja 🏭</h2><p>Ładowanie...</p>`;
         try {
             const response = await fetch('/api/admin/production_overview');
             const data = await response.json();
-            
-            let html = `<h2 class="text-warning mb-4">Produkcja 🏭</h2>`;
-            
-            html += `<h4>W Krojowni (${data.krojownia.length})</h4>`;
+            let html = `<h2 class="text-warning mb-4">Produkcja 🏭</h2><h4>W Krojowni (${data.krojownia.length})</h4>`;
             if (data.krojownia.length > 0) {
                 html += `<div class="list-group mb-4">`;
-                data.krojownia.forEach(o => {
-                    html += `<a href="#" class="list-group-item list-group-item-action" data-order-id="${o.id}">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <h6 class="mb-1">${o.order_code}</h6>
-                                    <small><span class="badge bg-secondary">${o.cutting_table || 'NOWE'}</span></small>
-                                </div>
-                                <p class="mb-1 small">${o.client_name}</p>
-                             </a>`;
-                });
+                data.krojownia.forEach(o => { html += `<a href="#" class="list-group-item list-group-item-action" data-order-id="${o.id}"><div class="d-flex w-100 justify-content-between"><h6 class="mb-1">${o.order_code}</h6><small><span class="badge bg-secondary">${o.cutting_table || 'NOWE'}</span></small></div><p class="mb-1 small">${o.client_name}</p></a>`; });
                 html += `</div>`;
-            } else {
-                html += `<p class="text-muted">Krojownia jest pusta.</p>`;
-            }
-
+            } else { html += `<p class="text-muted">Krojownia jest pusta.</p>`; }
             html += `<h4>W Szwalni (${data.szwalnia.length})</h4>`;
             if (data.szwalnia.length > 0) {
                 html += `<div class="list-group mb-4">`;
-                data.szwalnia.forEach(o => {
-                    html += `<a href="#" class="list-group-item list-group-item-action" data-order-id="${o.id}">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <h6 class="mb-1">${o.order_code}</h6>
-                                    <small><span class="badge bg-info">${o.assigned_team || 'Czeka'}</span></small>
-                                </div>
-                                <p class="mb-1 small">${o.client_name}</p>
-                             </a>`;
-                });
+                data.szwalnia.forEach(o => { html += `<a href="#" class="list-group-item list-group-item-action" data-order-id="${o.id}"><div class="d-flex w-100 justify-content-between"><h6 class="mb-1">${o.order_code}</h6><small><span class="badge bg-info">${o.assigned_team || 'Czeka'}</span></small></div><p class="mb-1 small">${o.client_name}</p></a>`; });
                 html += `</div>`;
-            } else {
-                html += `<p class="text-muted">Szwalnia czeka na zlecenia.</p>`;
-            }
+            } else { html += `<p class="text-muted">Szwalnia czeka na zlecenia.</p>`; }
             content.innerHTML = html;
         } catch (err) {
             content.innerHTML = `<div class="alert alert-danger">Błąd ładowania danych o produkcji.</div>`;
         }
     }
 
-    // 3. HISTORIA (bez zmian)
-    async function loadHistoria(reload = false) {
+ // 3. HISTORIA (z filtrowaniem - POPRAWIONA)
+    async function loadHistoria(reload = false, year = null, month = null) {
+        const historyListContainerId = 'history-list';
+        const loaderContainerId = 'history-loader';
+        const yearFilterId = 'historyYearFilter';
+        const monthFilterId = 'historyMonthFilter';
+        const filterBtnId = 'history-filter-btn';
+        const loadMoreBtnId = 'load-more-history-btn';
+
+        // --- ZMIANA: Przeniesiono pobieranie wartości filtrów na początek dla akcji 'Filtruj' ---
+        let currentYear = year;
+        let currentMonth = month;
+
+        // Jeśli to jest akcja filtrowania (reload=true) LUB pierwsze ładowanie (year/month=null),
+        // odczytaj wartości z dropdownów, jeśli istnieją.
+        if ((reload || (year === null && month === null)) && !historyLoading) {
+            const yearFilterElement = document.getElementById(yearFilterId);
+            const monthFilterElement = document.getElementById(monthFilterId);
+            // Odczytaj tylko jeśli elementy istnieją (nie przy pierwszym ładowaniu strony)
+            if (yearFilterElement) {
+                currentYear = yearFilterElement.value;
+            }
+            if (monthFilterElement) {
+                currentMonth = monthFilterElement.value;
+            }
+        }
+        // Ustaw domyślne, jeśli nadal null (tylko przy pierwszym ładowaniu zakładki)
+        if (currentYear === null) currentYear = new Date().getFullYear();
+        if (currentMonth === null) currentMonth = new Date().getMonth() + 1;
+        // --- KONIEC ZMIANY ---
+
+
         if (reload) {
             historyPage = 1;
-            content.innerHTML = `<h2 class="text-warning">Historia 📂</h2><div id="history-list" class="list-group"></div><p id="history-loader">Ładowanie...</p>`;
+            content.innerHTML = `
+                <h2 class="text-warning mb-3">Historia 📂</h2>
+                <div class="row gx-2 mb-3 align-items-end">
+                    <div class="col">
+                        <label for="${yearFilterId}" class="form-label form-label-sm">Rok:</label>
+                        <select id="${yearFilterId}" class="form-select form-select-sm">
+                            <option value="0">Wszystkie</option>
+                            </select>
+                    </div>
+                    <div class="col">
+                        <label for="${monthFilterId}" class="form-label form-label-sm">Miesiąc:</label>
+                        <select id="${monthFilterId}" class="form-select form-select-sm">
+                            <option value="0">Wszystkie</option>
+                            ${[...Array(12).keys()].map(i => `<option value="${i+1}">${String(i+1).padStart(2, '0')}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <button id="${filterBtnId}" class="btn btn-warning btn-sm">Filtruj</button>
+                    </div>
+                </div>
+                <div id="${historyListContainerId}" class="list-group"></div>
+                <div id="${loaderContainerId}" class="text-center py-3"><p>Ładowanie...</p></div>`;
+
+            // *** ZMIANA: Przeniesiono listener przycisku "Filtruj" TUTAJ ***
+             // Upewnij się, że przycisk istnieje przed dodaniem listenera
+             const filterButton = document.getElementById(filterBtnId);
+             if (filterButton) {
+                 // Usuń stary listener, jeśli istniał, aby uniknąć duplikatów
+                 filterButton.replaceWith(filterButton.cloneNode(true));
+                 document.getElementById(filterBtnId).addEventListener('click', () => {
+                     // Wywołaj loadHistoria z reload=true, ale year i month ustawione na null,
+                     // aby odczytało wartości z nowo ustawionych dropdownów
+                     loadHistoria(true, null, null);
+                 });
+             }
+             // *** KONIEC ZMIANY ***
         }
+
         if (historyLoading) return;
         historyLoading = true;
 
-        const loader = document.getElementById('history-loader');
-        loader.style.display = 'block';
+        const loaderContainer = document.getElementById(loaderContainerId);
+        if (loaderContainer) loaderContainer.style.display = 'block';
+
+        const apiUrl = `/api/admin/order_history?page=${historyPage}&year=${currentYear}&month=${currentMonth}`;
 
         try {
-            const response = await fetch(`/api/admin/order_history?page=${historyPage}`);
+            console.log(`Ładowanie historii: ${apiUrl}`);
+            const response = await fetch(apiUrl);
+            if (!response.ok) { throw new Error(`Błąd sieci: ${response.status}`); }
             const data = await response.json();
-            
-            const list = document.getElementById('history-list');
-            data.orders.forEach(o => {
-                list.innerHTML += `<a href="#" class="list-group-item list-group-item-action" data-order-id="${o.id}">
-                                    <div class="d-flex w-100 justify-content-between">
-                                        <h6 class="mb-1">${o.order_code}</h6>
-                                        <small class="text-muted">${o.finished_date}</small>
-                                    </div>
-                                    <p class="mb-1 small">${o.client_name}</p>
-                                   </a>`;
-            });
-            
+
+            const listContainer = document.getElementById(historyListContainerId);
+            const yearSelect = document.getElementById(yearFilterId);
+            const monthSelect = document.getElementById(monthFilterId);
+
+             // Wypełnij listę lat tylko przy pierwszym ładowaniu (reload=true) LUB jeśli select jest pusty
+             if (yearSelect && (reload || yearSelect.options.length <= 1) && data.available_years) {
+                 const currentSelectedYear = yearSelect.value; // Zapamiętaj co było wybrane
+                 yearSelect.innerHTML = '<option value="0">Wszystkie</option>';
+                 data.available_years.forEach(y => {
+                      // Użyj currentYear (odczytanego na początku) do ustawienia 'selected'
+                     yearSelect.innerHTML += `<option value="${y}" ${y == currentYear ? 'selected' : ''}>${y}</option>`;
+                 });
+                 // Jeśli odczytany rok nie był na liście z API, dodaj go jako wybraną opcję
+                 if (currentYear != 0 && !data.available_years.includes(parseInt(currentYear))) {
+                      yearSelect.innerHTML += `<option value="${currentYear}" selected>${currentYear}</option>`;
+                 }
+                 // Jeśli nie udało się ustawić selected w pętli (np. currentYear=0), ustaw teraz
+                 if (yearSelect.value !== String(currentYear)) {
+                     yearSelect.value = currentYear;
+                 }
+            } else if (yearSelect && yearSelect.value !== String(currentYear)) {
+                 // Jeśli nie przeładowujemy, ale wartość się zmieniła (np. przez API domyślnie), zaktualizuj
+                 yearSelect.value = currentYear;
+            }
+
+            // Ustaw wybrany miesiąc (zawsze aktualizuj)
+            if (monthSelect && monthSelect.value !== String(currentMonth)) {
+                 monthSelect.value = currentMonth;
+            }
+
+
+            if (listContainer && historyPage === 1) { listContainer.innerHTML = ''; }
+
+            if (listContainer && data.orders.length > 0) {
+                 data.orders.forEach(o => { listContainer.innerHTML += `<a href="#" class="list-group-item list-group-item-action" data-order-id="${o.id}"><div class="d-flex w-100 justify-content-between"><h6 class="mb-1">${o.order_code}</h6><small class="text-muted">${o.finished_date}</small></div><p class="mb-1 small">${o.client_name}</p></a>`; });
+            } else if (listContainer && historyPage === 1) {
+                 listContainer.innerHTML = '<p class="text-center text-muted mt-3">Brak zleceń spełniających kryteria.</p>';
+            }
+
+            const oldLoadMoreBtn = document.getElementById(loadMoreBtnId);
+            if (oldLoadMoreBtn) oldLoadMoreBtn.remove();
+
             if (data.has_next_page) {
                 historyPage++;
-                loader.innerHTML = '';
-                if (!document.getElementById('load-more-btn')) {
-                    content.insertAdjacentHTML('beforeend', `<button id="load-more-btn" class="btn btn-outline-warning w-100 mt-3">Wczytaj więcej</button>`);
-                    document.getElementById('load-more-btn').addEventListener('click', () => loadHistoria(false));
-                }
+                if (loaderContainer) loaderContainer.innerHTML = '';
+                 listContainer.insertAdjacentHTML('afterend', `<button id="${loadMoreBtnId}" class="btn btn-outline-warning w-100 mt-3" data-year="${currentYear}" data-month="${currentMonth}">Wczytaj więcej</button>`);
+                document.getElementById(loadMoreBtnId).addEventListener('click', (e) => {
+                    const btn = e.target;
+                    loadHistoria(false, btn.dataset.year, btn.dataset.month);
+                });
             } else {
-                loader.innerHTML = '<p class="text-center text-muted mt-3">Koniec listy.</p>';
-                const btn = document.getElementById('load-more-btn');
-                if (btn) btn.remove();
+                 if (loaderContainer) loaderContainer.innerHTML = historyPage === 1 && data.orders.length === 0 ? '' : '<p class="text-center text-muted mt-3">Koniec listy.</p>';
             }
+
         } catch (err) {
-            loader.innerHTML = `<div class="alert alert-danger">Błąd ładowania historii.</div>`;
+            console.error("Błąd ładowania historii:", err);
+            const loaderContainer = document.getElementById(loaderContainerId);
+             if (loaderContainer) loaderContainer.innerHTML = `<div class="alert alert-danger">Błąd ładowania historii: ${err.message}</div>`;
+             const listContainer = document.getElementById(historyListContainerId);
+             if (listContainer) listContainer.innerHTML = '';
+        } finally {
+             historyLoading = false;
         }
-        historyLoading = false;
     }
 
-    // 4. DODAJ ZLECENIE (bez zmian)
+    // 4. DODAJ ZLECENIE 
     async function loadDodaj() {
         content.innerHTML = `<h2 class="text-warning mb-4">Dodaj Zlecenie ⚡</h2>`;
-        
         if (templatesCache.length === 0) {
-            try {
-                const response = await fetch('/api/admin/templates');
-                templatesCache = await response.json();
-            } catch (err) {
-                content.innerHTML += `<div class="alert alert-danger">Błąd ładowania szablonów.</div>`;
-                return;
-            }
+            try { templatesCache = await (await fetch('/api/admin/templates')).json(); } 
+            catch (err) { content.innerHTML += `<div class="alert alert-danger">Błąd ładowania szablonów.</div>`; return; }
         }
-        
         const templateOptions = templatesCache.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
-
         content.innerHTML += `
-            <div class="alert alert-info small">
-                Szybkie dodawanie zlecenia. Produkty i tkaniny dodasz później na komputerze.
-            </div>
-            
+            <div class="alert alert-info small">Szybkie dodawanie zlecenia. Produkty i tkaniny dodasz później na komputerze.</div>
             <form id="new-order-form">
-                <div class="mb-3">
-                    <label for="template-select" class="form-label">Użyj szablonu (zalecane)</label>
-                    <select class="form-select" id="template-select">
-                        <option value="0">--- Nowe zlecenie (ręcznie) ---</option>
-                        ${templateOptions}
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label for="client-name" class="form-label">Nazwa Klienta</label>
-                    <input type="text" class="form-control" id="client-name" required>
-                </div>
-                <div class="mb-3">
-                    <label for="description" class="form-label">Opis</label>
-                    <textarea class="form-control" id="description" rows="3" required></textarea>
-                </div>
-                <div class="mb-3">
-                    <label for="deadline" class="form-label">Termin</label>
-                    <input type="date" class="form-control" id="deadline" required>
-                </div>
-                <div class="mb-3">
-                    <label for="zlecajacy" class="form-label">Zlecający</label>
-                    <select class="form-select" id="zlecajacy">
-                        <option value="ADMIN">ADMIN</option>
-                        <option value="SZEF">SZEF</option>
-                        <option value="JOLA">JOLA</option>
-                        <option value="ANIA">ANIA</option>
-                        <option value_l="MATEUSZ">MATEUSZ</option>
-                    </select>
-                </div>
+                <div class="mb-3"><label for="template-select" class="form-label">Użyj szablonu (zalecane)</label><select class="form-select" id="template-select"><option value="0">--- Nowe zlecenie (ręcznie) ---</option>${templateOptions}</select></div>
+                <div class="mb-3"><label for="client-name" class="form-label">Nazwa Klienta</label><input type="text" class="form-control" id="client-name" required></div>
+                <div class="mb-3"><label for="description" class="form-label">Opis</label><textarea class="form-control" id="description" rows="3" required></textarea></div>
+                <div class="mb-3"><label for="deadline" class="form-label">Termin</label><input type="date" class="form-control" id="deadline" required></div>
+                <div class="mb-3"><label for="zlecajacy" class="form-label">Zlecający</label><select class="form-select" id="zlecajacy"><option value="ADMIN">ADMIN</option><option value="SZEF">SZEF</option><option value="JOLA">JOLA</option><option value="ANIA">ANIA</option><option value_l="MATEUSZ">MATEUSZ</option></select></div>
                 <button type="submit" class="btn btn-warning w-100">Dodaj zlecenie</button>
-            </form>
-            <div id="form-message" class="mt-3"></div>
-        `;
-
+            </form><div id="form-message" class="mt-3"></div>`;
         document.getElementById('template-select').addEventListener('change', (e) => {
             const templateId = parseInt(e.target.value, 10);
             const clientInput = document.getElementById('client-name');
             const descInput = document.getElementById('description');
-            
-            if (templateId === 0) {
-                clientInput.value = '';
-                descInput.value = '';
-                clientInput.readOnly = false;
-            } else {
-                const template = templatesCache.find(t => t.id === templateId);
-                if (template) {
-                    clientInput.value = template.client_name;
-                    descInput.value = template.description;
-                    clientInput.readOnly = true;
-                }
-            }
+            if (templateId === 0) { clientInput.value = ''; descInput.value = ''; clientInput.readOnly = false; } 
+            else { const template = templatesCache.find(t => t.id === templateId); if (template) { clientInput.value = template.client_name; descInput.value = template.description; clientInput.readOnly = true; } }
         });
-
         document.getElementById('new-order-form').addEventListener('submit', handleNewOrderSubmit);
     }
-    
     async function handleNewOrderSubmit(e) {
         e.preventDefault();
         const msgDiv = document.getElementById('form-message');
         msgDiv.innerHTML = `<div class="alert alert-info">Wysyłanie...</div>`;
-
-        const data = {
-            client_name: document.getElementById('client-name').value,
-            description: document.getElementById('description').value,
-            deadline: document.getElementById('deadline').value,
-            zlecajacy: document.getElementById('zlecajacy').value,
-        };
-        
+        const data = { client_name: document.getElementById('client-name').value, description: document.getElementById('description').value, deadline: document.getElementById('deadline').value, zlecajacy: document.getElementById('zlecajacy').value };
         try {
-            const response = await fetch('/api/admin/new_order', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
+            const response = await fetch('/api/admin/new_order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
             const result = await response.json();
-            
-            if (response.ok) {
-                msgDiv.innerHTML = `<div class="alert alert-success">Sukces! Dodano zlecenie ${result.order_code}.</div>`;
-                e.target.reset();
-            } else {
-                throw new Error(result.error || 'Nieznany błąd');
-            }
-        } catch (err) {
-            msgDiv.innerHTML = `<div class="alert alert-danger">Błąd: ${err.message}</div>`;
-        }
+            if (response.ok) { msgDiv.innerHTML = `<div class="alert alert-success">Sukces! Dodano zlecenie ${result.order_code}.</div>`; e.target.reset(); } 
+            else { throw new Error(result.error || 'Nieznany błąd'); }
+        } catch (err) { msgDiv.innerHTML = `<div class="alert alert-danger">Błąd: ${err.message}</div>`; }
     }
 
-    // 5. WYSZUKIWARKA CEN (bez zmian)
+    // 5. WYSZUKIWARKA CEN 
     async function loadCeny() {
         content.innerHTML = `
             <h2 class="text-warning mb-4">Wyszukiwarka Cen 💸</h2>
-            <div class="input-group mb-3">
-                <input type="text" class="form-control" placeholder="Wpisz nazwę tkaniny/materiału..." id="price-search-input">
-                <button class="btn btn-outline-warning" type="button" id="price-search-btn"><i class="bi bi-search"></i></button>
-            </div>
-            <div id="price-results"></div>
-        `;
-        
+            <div class="input-group mb-3"><input type="text" class="form-control" placeholder="Wpisz nazwę tkaniny/materiału..." id="price-search-input"><button class="btn btn-outline-warning" type="button" id="price-search-btn"><i class="bi bi-search"></i></button></div>
+            <div id="price-results"></div>`;
         const input = document.getElementById('price-search-input');
         const btn = document.getElementById('price-search-btn');
         const resultsDiv = document.getElementById('price-results');
-
         async function performSearch() {
             const query = input.value;
-            if (query.length < 2) {
-                resultsDiv.innerHTML = '';
-                return;
-            }
+            if (query.length < 2) { resultsDiv.innerHTML = ''; return; }
             resultsDiv.innerHTML = `<p>Szukam...</p>`;
             try {
                 const response = await fetch(`/api/admin/material_search?q=${encodeURIComponent(query)}`);
                 const results = await response.json();
-                
-                if (results.length === 0) {
-                    resultsDiv.innerHTML = `<p class="text-muted">Nic nie znaleziono.</p>`;
-                    return;
-                }
-                
+                if (results.length === 0) { resultsDiv.innerHTML = `<p class="text-muted">Nic nie znaleziono.</p>`; return; }
                 let html = `<ul class="list-group">`;
-                results.forEach(r => {
-                    html += `<li class="list-group-item d-flex justify-content-between align-items-center">
-                                <div><strong>${r.name}</strong><br><small>${r.type}</small></div>
-                                <span class="badge bg-warning text-dark">${r.price ? r.price.toFixed(2) + ' zł' : 'Brak Ceny'}</span>
-                             </li>`;
-                });
+                results.forEach(r => { html += `<li class="list-group-item d-flex justify-content-between align-items-center"><div><strong>${r.name}</strong><br><small>${r.type}</small></div><span class="badge bg-warning text-dark">${r.price ? r.price.toFixed(2) + ' zł' : 'Brak Ceny'}</span></li>`; });
                 html += `</ul>`;
                 resultsDiv.innerHTML = html;
+            } catch (err) { resultsDiv.innerHTML = `<div class="alert alert-danger">Błąd wyszukiwania.</div>`; }
+        }
+        btn.addEventListener('click', performSearch);
+        input.addEventListener('keyup', (e) => { if (e.key === 'Enter') performSearch(); });
+    }
+
+// --- POCZĄTEK NOWEGO KODU: KALKULATOR ---
+
+    // Zmienne globalne dla danych kalkulatora (aby nie pobierać za każdym razem)
+    let calculatorData = {
+        products: null,
+        fabrics: null,
+        materials: null,
+        categories: null // Dodajemy kategorie
+    };
+
+    async function fetchCalculatorDataIfNeeded() {
+        if (!calculatorData.products || !calculatorData.fabrics || !calculatorData.materials || !calculatorData.categories) {
+            console.log("Pobieranie danych dla kalkulatora...");
+            try {
+                // Użyjemy Promise.all do równoległego pobierania
+                const [productsRes, fabricsRes, materialsRes, categoriesRes] = await Promise.all([
+                    fetch('/api/admin/calculator/products'),
+                    fetch('/api/admin/calculator/fabrics'),
+                    fetch('/api/admin/calculator/materials'),
+                    fetch('/api/admin/calculator/categories') // Nowe zapytanie o kategorie
+                ]);
+
+                if (!productsRes.ok || !fabricsRes.ok || !materialsRes.ok || !categoriesRes.ok) {
+                    throw new Error('Błąd sieci podczas pobierania danych kalkulatora');
+                }
+
+                calculatorData.products = await productsRes.json();
+                calculatorData.fabrics = await fabricsRes.json();
+                calculatorData.materials = await materialsRes.json();
+                calculatorData.categories = await categoriesRes.json(); // Zapisz kategorie
+
+                console.log("Dane kalkulatora pobrane pomyślnie.");
             } catch (err) {
-                resultsDiv.innerHTML = `<div class="alert alert-danger">Błąd wyszukiwania.</div>`;
+                console.error("Błąd pobierania danych kalkulatora:", err);
+                content.innerHTML += `<div class="alert alert-danger">Nie udało się załadować danych kalkulatora. Odśwież stronę.</div>`;
+                // Rzuć błąd dalej, aby przerwać ładowanie widoku kalkulatora
+                throw err;
             }
         }
-        
-        btn.addEventListener('click', performSearch);
-        input.addEventListener('keyup', (e) => {
-             if (e.key === 'Enter') performSearch();
-        });
     }
-// --- ZAKTUALIZOWANA ZAKŁADKA: PRODUKTY ---
+
+
+    async function loadKalkulator() {
+         content.innerHTML = `<h2 class="text-warning mb-4">Kalkulator Kosztów 📱</h2><p>Ładowanie danych...</p>`;
+         try {
+             // Pobierz dane, jeśli jeszcze ich nie ma
+             await fetchCalculatorDataIfNeeded();
+
+             // Generowanie opcji dla kategorii
+             const categoryOptions = calculatorData.categories.map(cat => `<option value="${cat.id}">${cat.name}</option>`).join('');
+
+             // Generowanie opcji dla produktów
+             const productOptions = Object.entries(calculatorData.products)
+                                 .sort(([,a], [,b]) => a.name.localeCompare(b.name)) // Sortuj alfabetycznie wg nazwy
+                                 .map(([id, p]) => `<option value="${id}" data-category-id="${p.category_id || 'all'}">${p.name}</option>`).join('');
+
+             // Struktura HTML kalkulatora (uproszczona, jednokolumnowa)
+             content.innerHTML = `
+                 <h2 class="text-warning mb-4">Kalkulator Kosztów 📱</h2>
+
+                 <div class="card mb-3">
+                     <div class="card-header">Wybierz Produkt</div>
+                     <div class="card-body">
+                          <div class="mb-3">
+                             <label for="calcCategoryFilter" class="form-label">Filtruj po kategorii:</label>
+                             <select id="calcCategoryFilter" class="form-select">
+                                 <option value="all">-- Pokaż wszystkie --</option>
+                                 ${categoryOptions}
+                             </select>
+                         </div>
+                         <div class="mb-3">
+                             <label for="calcProductSelector" class="form-label">Wybierz produkt:</label>
+                             <select id="calcProductSelector" class="form-select">
+                                 <option value="custom" data-category-id="all">-- Produkt niestandardowy --</option>
+                                 ${productOptions}
+                             </select>
+                         </div>
+                     </div>
+                 </div>
+
+                 <div class="card mb-3">
+                     <div class="card-header">Składniki i Koszty</div>
+                     <div class="card-body">
+                         <h6><i class="bi bi-scissors"></i> Tkaniny</h6>
+                         <div id="calc-fabrics-list" class="mb-2"></div>
+                         <button type="button" class="btn btn-sm btn-secondary" id="calc-add-fabric-btn"><i class="bi bi-plus-circle"></i> Dodaj tkaninę</button>
+                         <hr>
+                         <h6><i class="bi bi-box-seam"></i> Materiały Dodatkowe</h6>
+                         <div id="calc-materials-list" class="mb-2"></div>
+                         <button type="button" class="btn btn-sm btn-secondary" id="calc-add-material-btn"><i class="bi bi-plus-circle"></i> Dodaj materiał</button>
+                         <hr>
+                         <h6><i class="bi bi-currency-euro"></i> Koszty Produkcji</h6>
+                         <div class="mb-2">
+                             <label for="calcProductionPrice" class="form-label">Cena Produkcji (robocizna) [zł]</label>
+                             <input type="number" id="calcProductionPrice" class="form-control form-control-sm calc-calc-input" value="0.0" step="0.01">
+                         </div>
+                     </div>
+                 </div>
+
+                 <div class="card bg-light text-dark mb-3">
+                     <div class="card-header">Wynik</div>
+                     <div class="card-body text-center">
+                         <h5 class="card-title">Sugerowana Cena Netto</h5>
+                         <p class="display-6 fw-bold text-success mb-2" id="calcFinalPrice">0.00 zł</p>
+                         <hr>
+                         <div class="text-start small">
+                             Koszt tkanin: <strong class="float-end" id="calcFabricCost">0.00 zł</strong><br>
+                             Koszt materiałów: <strong class="float-end" id="calcMaterialsCost">0.00 zł</strong><br>
+                             Koszt produkcji (przel.): <strong class="float-end" id="calcProdCost">0.00 zł</strong><br>
+                             <hr class="my-1">
+                             <strong>Koszt całkowity: <span class="float-end" id="calcTotalCost">0.00 zł</span></strong>
+                         </div>
+                     </div>
+                 </div>
+
+                 <template id="calc-fabric-row-template">
+                     <div class="row gx-2 align-items-center mb-2 calc-fabric-row" data-price="0.0">
+                         <div class="col-5"><select class="form-select form-select-sm calc-item-select"></select></div>
+                         <div class="col-4"><select class="form-select form-select-sm calc-supplier-select" disabled><option value="default">-- Dostawca --</option></select></div>
+                         <div class="col-2"><input type="number" class="form-control form-control-sm calc-item-usage calc-calc-input" placeholder="m" value="0.0" step="0.01"></div>
+                         <div class="col-1"><button type="button" class="btn btn-danger btn-sm calc-remove-btn p-1"><i class="bi bi-trash"></i></button></div>
+                     </div>
+                 </template>
+                 <template id="calc-material-row-template">
+                      <div class="row gx-2 align-items-center mb-2 calc-material-row" data-price="0.0">
+                         <div class="col-5"><select class="form-select form-select-sm calc-item-select"></select></div>
+                         <div class="col-4"><select class="form-select form-select-sm calc-supplier-select" disabled><option value="default">-- Dostawca --</option></select></div>
+                         <div class="col-2"><input type="text" class="form-control form-control-sm calc-item-usage calc-calc-input" placeholder="Ilość" value="1"></div>
+                         <div class="col-1"><button type="button" class="btn btn-danger btn-sm calc-remove-btn p-1"><i class="bi bi-trash"></i></button></div>
+                     </div>
+                 </template>
+             `;
+
+             // --- Logika kalkulatora (adaptacja z calculator.html) ---
+             setupCalculatorLogic();
+
+         } catch (err) {
+              // Błąd został już obsłużony w fetchCalculatorDataIfNeeded lub wystąpił podczas renderowania
+              console.error("Błąd ładowania widoku kalkulatora:", err);
+              // Opcjonalnie: pokaż błąd w interfejsie
+              content.innerHTML = `<h2 class="text-warning mb-4">Kalkulator Kosztów 📱</h2><div class="alert alert-danger">Nie udało się załadować kalkulatora. Spróbuj ponownie później.</div>`;
+         }
+    }
+
+    function setupCalculatorLogic() {
+         // DOM Elements dla kalkulatora
+         const calcCategoryFilter = document.getElementById('calcCategoryFilter');
+         const calcProductSelector = document.getElementById('calcProductSelector');
+         const calcProductOptions = Array.from(calcProductSelector.options);
+         const calcProductionPrice = document.getElementById('calcProductionPrice');
+         const calcFabricsList = document.getElementById('calc-fabrics-list');
+         const calcMaterialsList = document.getElementById('calc-materials-list');
+         const calcAddFabricBtn = document.getElementById('calc-add-fabric-btn');
+         const calcAddMaterialBtn = document.getElementById('calc-add-material-btn');
+         const calcFabricRowTemplate = document.getElementById('calc-fabric-row-template');
+         const calcMaterialRowTemplate = document.getElementById('calc-material-row-template');
+         const calcFinalPriceEl = document.getElementById('calcFinalPrice');
+         const calcFabricCostEl = document.getElementById('calcFabricCost');
+         const calcMaterialsCostEl = document.getElementById('calcMaterialsCost');
+         const calcProdCostEl = document.getElementById('calcProdCost');
+         const calcTotalCostEl = document.getElementById('calcTotalCost');
+
+         // Podstawowa funkcja kalkulacji
+         function calculateMobile() {
+             let totalFabricCost = 0;
+             document.querySelectorAll('.calc-fabric-row').forEach(row => {
+                 totalFabricCost += (parseFloat(row.dataset.price) || 0) * (parseFloat(row.querySelector('.calc-item-usage').value) || 0);
+             });
+
+             let totalMaterialsCost = 0;
+             document.querySelectorAll('.calc-material-row').forEach(row => {
+                 const quantityText = (row.querySelector('.calc-item-usage').value || '0').replace(',', '.');
+                 const amount = parseFloat(quantityText.match(/(\d+\.?\d*)/)?.[0] || '0'); // Wyciąga liczbę
+                 totalMaterialsCost += (parseFloat(row.dataset.price) || 0) * amount;
+             });
+
+             const rawProdPrice = parseFloat(calcProductionPrice.value) || 0;
+             const adjustedProdPrice = rawProdPrice > 0 ? (rawProdPrice * 2.5) + 2 : 0; // Użyj tej samej logiki co w web
+             const baseSubtotal = adjustedProdPrice + totalFabricCost + totalMaterialsCost;
+             const finalPrice = baseSubtotal * 1.15; // Użyj tej samej logiki co w web
+
+             calcFabricCostEl.textContent = `${totalFabricCost.toFixed(2)} zł`;
+             calcMaterialsCostEl.textContent = `${totalMaterialsCost.toFixed(2)} zł`;
+             calcProdCostEl.textContent = `${adjustedProdPrice.toFixed(2)} zł`;
+             calcTotalCostEl.textContent = `${baseSubtotal.toFixed(2)} zł`;
+             calcFinalPriceEl.textContent = `${finalPrice.toFixed(2)} zł`;
+         }
+
+         // Aktualizacja ceny wiersza na podstawie wybranego dostawcy
+         function updatePriceMobile(row) {
+             const itemSelect = row.querySelector('.calc-item-select');
+             const supplierSelect = row.querySelector('.calc-supplier-select');
+             const itemId = itemSelect.value;
+             const itemType = row.classList.contains('calc-fabric-row') ? 'fabrics' : 'materials';
+             const itemsData = calculatorData[itemType]; // Użyj pobranych danych
+             const item = itemsData[itemId];
+
+             let price = item ? (item.default_price || 0.0) : 0.0; // Użyj default_price z danych
+             if (supplierSelect.value !== "default" && item && item.prices) {
+                 const supplierPrice = item.prices.find(p => p.supplier_id === parseInt(supplierSelect.value));
+                 if (supplierPrice) price = supplierPrice.price;
+             }
+             row.dataset.price = price;
+             calculateMobile();
+         }
+
+          // Wypełnianie listy dostawców dla wiersza
+          function populateSuppliersMobile(row) {
+             const itemSelect = row.querySelector('.calc-item-select');
+             const supplierSelect = row.querySelector('.calc-supplier-select');
+             const itemId = itemSelect.value;
+             if (!itemId || itemId === '0') {
+                 supplierSelect.innerHTML = '<option value="default">-- Dostawca --</option>';
+                 supplierSelect.disabled = true; updatePriceMobile(row); return;
+             }
+             const itemType = row.classList.contains('calc-fabric-row') ? 'fabrics' : 'materials';
+             const itemsData = calculatorData[itemType];
+             const item = itemsData[itemId];
+             supplierSelect.innerHTML = '<option value="default" style="font-weight: bold; color: #0d6efd;">-- Domyślna (Ostatnia) --</option>'; // Zmieniono kolor
+             if (item && item.prices && item.prices.length > 0) {
+                 item.prices.forEach(p => {
+                     const style = p.is_default ? 'style="font-weight: bold; color: #0d6efd;"' : '';
+                     const defaultIndicator = p.is_default ? ' (Ostatnia)' : '';
+                     supplierSelect.innerHTML += `<option value="${p.supplier_id}" ${style}>${p.supplier_name}${defaultIndicator} (${p.price.toFixed(2)})</option>`;
+                 });
+                 supplierSelect.disabled = false;
+             } else { supplierSelect.disabled = true; }
+             updatePriceMobile(row);
+          }
+
+
+        // Tworzenie nowego wiersza tkaniny/materiału
+         function createRowMobile(type, itemId = null, usage = null) {
+             const template = type === 'fabric' ? calcFabricRowTemplate : calcMaterialRowTemplate;
+             const list = type === 'fabric' ? calcFabricsList : calcMaterialsList;
+             const newRow = template.content.cloneNode(true).firstElementChild;
+             const itemSelect = newRow.querySelector('.calc-item-select');
+
+              // Wypełnij select dla tkanin lub materiałów
+             const itemsData = calculatorData[type === 'fabric' ? 'fabrics' : 'materials'];
+             itemSelect.innerHTML = `<option value="0">-- Wybierz ${type === 'fabric' ? 'tkaninę' : 'materiał'} --</option>`;
+             Object.entries(itemsData)
+                   .sort(([,a], [,b]) => a.name.localeCompare(b.name)) // Sortuj alfabetycznie
+                   .forEach(([id, item]) => {
+                       itemSelect.innerHTML += `<option value="${id}">${item.name}</option>`;
+                   });
+
+             if (itemId) itemSelect.value = itemId;
+             if (usage) newRow.querySelector('.calc-item-usage').value = usage;
+
+             list.appendChild(newRow);
+             // Dodaj listenery do nowego wiersza
+             itemSelect.addEventListener('change', () => populateSuppliersMobile(newRow));
+             newRow.querySelector('.calc-supplier-select').addEventListener('change', () => updatePriceMobile(newRow));
+             newRow.querySelector('.calc-item-usage').addEventListener('input', calculateMobile);
+             newRow.querySelector('.calc-remove-btn').addEventListener('click', () => { newRow.remove(); calculateMobile(); });
+
+             // Wypełnij dostawców, jeśli produkt jest wybrany
+             if (itemId) populateSuppliersMobile(newRow);
+         }
+
+         // Ładowanie danych produktu do kalkulatora
+         function loadProductDataMobile(productId) {
+             calcFabricsList.innerHTML = '';
+             calcMaterialsList.innerHTML = '';
+             const data = calculatorData.products[productId]; // Użyj pobranych danych
+
+             if (!data || productId === 'custom') {
+                 calcProductionPrice.value = "0.0";
+                 createRowMobile('fabric'); // Dodaj pusty wiersz tkaniny
+             } else {
+                 calcProductionPrice.value = data.production_price || 0.0;
+                 // Upewnij się, że fabrics_needed i materials_needed istnieją
+                 (data.fabrics_needed || []).forEach(f => createRowMobile('fabric', f.id, f.usage));
+                 (data.materials_needed || []).forEach(m => createRowMobile('material', m.id, m.quantity));
+                 // Jeśli po załadowaniu nie ma żadnej tkaniny, dodaj pusty wiersz
+                 if (calcFabricsList.children.length === 0) createRowMobile('fabric');
+             }
+             calculateMobile();
+         }
+
+         // Filtrowanie listy produktów
+         function filterProductsMobile() {
+             const selectedCategoryId = calcCategoryFilter.value;
+             let isSelectedVisible = false;
+
+             calcProductOptions.forEach(option => {
+                 const isCustom = option.value === 'custom';
+                 const productData = calculatorData.products[option.value];
+                 const categoryId = productData ? String(productData.category_id || 'all') : 'all'; // Pobierz category_id z danych
+                 const isMatch = selectedCategoryId === 'all' || categoryId === selectedCategoryId;
+
+                 // Użyj 'd-none' Bootstrapa zamiast 'hidden'
+                 option.classList.toggle('d-none', !isCustom && !isMatch);
+                 if(option.selected && (isMatch || isCustom)) isSelectedVisible = true;
+             });
+
+              // Jeśli aktualnie wybrana opcja została ukryta, wybierz "Produkt niestandardowy"
+             if (!isSelectedVisible && calcProductSelector.value !== 'custom') {
+                  calcProductSelector.value = 'custom';
+             }
+             loadProductDataMobile(calcProductSelector.value); // Przeładuj dane dla (potencjalnie) nowego wyboru
+         }
+
+         // Event Listeners dla kalkulatora
+         calcCategoryFilter.addEventListener('change', filterProductsMobile);
+         calcProductSelector.addEventListener('change', () => loadProductDataMobile(calcProductSelector.value));
+         calcAddFabricBtn.addEventListener('click', () => createRowMobile('fabric'));
+         calcAddMaterialBtn.addEventListener('click', () => createRowMobile('material'));
+         calcProductionPrice.addEventListener('input', calculateMobile); // Dodano listener dla ceny produkcji
+
+         // Inicjalizacja
+         filterProductsMobile(); // Wywołaj filtrowanie i ładowanie danych na starcie
+    }
+
+    // --- KONIEC NOWEGO KODU: KALKULATOR ---
+
+
+    // --- ZAKŁADKA: PRODUKTY ---
     function loadProdukty() {
         currentProductId = null; 
         imagesToUpload = [];     
         content.innerHTML = `
             <h2 class="text-warning mb-4">Zdjęcia Produktów 📸</h2>
-            
             <div id="category-filter-step">
                 <h5>Wybierz kategorię:</h5>
-                <div id="category-buttons" class="d-grid gap-2 d-md-block mb-3">
-                    <p>Ładowanie kategorii...</p> 
-                </div>
+                <div id="category-buttons" class="d-grid gap-2 d-md-block mb-3"><p>Ładowanie kategorii...</p></div>
                 <hr>
                 <div id="product-list-container" style="display: none;">
                     <h5>Wybierz produkt:</h5>
-                    <div id="product-list" class="list-group">
-                        </div>
+                    <div id="product-list" class="list-group"></div>
                 </div>
             </div>
-
+            
             <div id="product-photo-step" style="display: none;">
                 <h5 id="selected-product-name"></h5>
+                
+                <h6>Istniejące zdjęcia:</h6>
+                <div id="existing-photos-container" class="mb-3 d-flex flex-wrap gap-2" style="min-height: 50px; background-color: #343a40; border-radius: 5px; padding: 5px;">
+                    <p class="text-muted small m-2">Ładowanie...</p> 
+                </div>
+                <hr> 
+                
                 <input type="file" accept="image/*" capture="environment" id="photo-input" style="display: none;" multiple>
                 <button class="btn btn-primary w-100 my-3" id="add-photo-btn"><i class="bi bi-camera-fill"></i> Zrób/Dodaj zdjęcie</button>
                 
+                <h6>Nowe zdjęcia (podgląd):</h6> 
                 <div id="photo-previews" class="mb-3 d-flex flex-wrap gap-2"></div>
 
                 <button class="btn btn-success w-100" id="upload-photos-btn" disabled><i class="bi bi-cloud-arrow-up-fill"></i> Wyślij zdjęcia</button>
@@ -502,246 +917,223 @@ const content = document.getElementById('app-content');
         const productListDiv = document.getElementById('product-list');
         
         const photoStepDiv = document.getElementById('product-photo-step');
-        const categoryFilterStepDiv = document.getElementById('category-filter-step'); // Zmieniona nazwa diva
+        const categoryFilterStepDiv = document.getElementById('category-filter-step'); 
         const selectedProductNameH5 = document.getElementById('selected-product-name');
         const photoInput = document.getElementById('photo-input');
         const addPhotoBtn = document.getElementById('add-photo-btn');
         const previewsDiv = document.getElementById('photo-previews');
         const uploadBtn = document.getElementById('upload-photos-btn');
-        const backBtn = document.getElementById('back-to-categories-btn'); // Zmienione ID przycisku
+        const backBtn = document.getElementById('back-to-categories-btn'); 
         const uploadStatusDiv = document.getElementById('upload-status');
 
-        // --- Nowa Logika ---
-
-        // 1. Ładowanie kategorii
+        // Ładowanie kategorii
         async function loadCategories() {
             try {
                 const response = await fetch('/api/admin/product_categories');
                 const categories = await response.json();
-                
-                categoryButtonsDiv.innerHTML = ''; // Wyczyść loader
+                categoryButtonsDiv.innerHTML = ''; 
                 categories.forEach(cat => {
                     const button = document.createElement('button');
                     button.classList.add('btn', 'btn-outline-warning', 'mb-2');
                     button.textContent = cat.name;
                     button.dataset.categoryId = cat.id;
                     button.addEventListener('click', () => {
-                        // Dezaktywuj inne przyciski, aktywuj kliknięty
                         categoryButtonsDiv.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
                         button.classList.add('active');
-                        // Załaduj produkty dla tej kategorii
                         loadProductsInCategory(cat.id);
                     });
                     categoryButtonsDiv.appendChild(button);
                 });
-            } catch (err) {
-                categoryButtonsDiv.innerHTML = '<div class="alert alert-danger">Błąd ładowania kategorii.</div>';
-            }
+            } catch (err) { categoryButtonsDiv.innerHTML = '<div class="alert alert-danger">Błąd ładowania kategorii.</div>'; }
         }
 
-        // 2. Ładowanie produktów dla kategorii
+        // Ładowanie produktów dla kategorii
         async function loadProductsInCategory(categoryId) {
             productListContainer.style.display = 'block';
             productListDiv.innerHTML = '<p>Ładowanie produktów...</p>';
             try {
                 const response = await fetch(`/api/admin/products_by_category/${categoryId}`);
                 const products = await response.json();
-
-                if (products.length === 0) {
-                    productListDiv.innerHTML = '<p class="text-muted">Brak produktów w tej kategorii.</p>';
-                    return;
-                }
-
+                if (products.length === 0) { productListDiv.innerHTML = '<p class="text-muted">Brak produktów w tej kategorii.</p>'; return; }
                 let html = '';
-                products.forEach(p => {
-                    html += `<a href="#" class="list-group-item list-group-item-action product-select-item" data-product-id="${p.id}" data-product-name="${p.name}">
-                                ${p.name}
-                             </a>`;
-                });
+                products.forEach(p => { html += `<a href="#" class="list-group-item list-group-item-action product-select-item" data-product-id="${p.id}" data-product-name="${p.name}">${p.name}</a>`; });
                 productListDiv.innerHTML = html;
-
-                // Dodaj listenery do nowo załadowanych produktów
+                
+                // Dodaj listenery do produktów
                 document.querySelectorAll('.product-select-item').forEach(item => {
-                    item.addEventListener('click', (e) => {
+                    item.addEventListener('click', (e) => { 
                         e.preventDefault();
-                        currentProductId = item.dataset.productId;
+                        const productIdValue = item.dataset.productId; 
+                        if (!productIdValue) { 
+                            console.error("Błąd krytyczny: Atrybut data-product-id nie został znaleziony!", item);
+                            alert("Wystąpił błąd: Nie można zidentyfikować produktu.");
+                            return; 
+                        }
+                        const productId = productIdValue; 
+                        currentProductId = productId; 
                         selectedProductNameH5.textContent = `Produkt: ${item.dataset.productName}`;
-                        categoryFilterStepDiv.style.display = 'none'; // Ukryj filtry
-                        photoStepDiv.style.display = 'block';     // Pokaż krok zdjęć
+                        categoryFilterStepDiv.style.display = 'none'; 
+                        photoStepDiv.style.display = 'block';       
                         uploadStatusDiv.innerHTML = ''; 
                         previewsDiv.innerHTML = ''; 
                         imagesToUpload = []; 
                         uploadBtn.disabled = true; 
+                        console.log("Wywołuję loadAndDisplayExistingPhotos z productId:", productId); 
+                        loadAndDisplayExistingPhotos(productId); 
                     });
                 });
+            } catch (err) { productListDiv.innerHTML = '<div class="alert alert-danger">Błąd ładowania produktów.</div>'; }
+        }
 
-            } catch (err) {
-                productListDiv.innerHTML = '<div class="alert alert-danger">Błąd ładowania produktów.</div>';
+        // *** POPRAWKA: Definicja funkcji przeniesiona poza pętlę ***
+        // Funkcja do ładowania i wyświetlania istniejących zdjęć
+        async function loadAndDisplayExistingPhotos(productId) {
+            const container = document.getElementById('existing-photos-container');
+            container.innerHTML = '<p class="text-muted small m-2">Ładowanie istniejących zdjęć...</p>'; 
+
+            try {
+                console.log(`Pobieranie zdjęć dla productId: ${productId} z URL: /api/admin/product/${productId}/images`); 
+                const response = await fetch(`/api/admin/product/${productId}/images`);
+                console.log(`Odpowiedź z API: Status ${response.status}`); 
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error(`Błąd API: ${response.status}`, errorText);
+                    throw new Error(`Błąd serwera: ${response.status}`);
+                }
+                const imageIds = await response.json();
+                console.log("Otrzymano imageIds:", imageIds); 
+                container.innerHTML = ''; 
+                if (!Array.isArray(imageIds)) {
+                     console.error("Błąd: Odpowiedź API nie jest tablicą!", imageIds);
+                     throw new Error("Nieprawidłowy format danych z API.");
+                }
+                if (imageIds.length === 0) {
+                    console.log("Produkt nie ma jeszcze zdjęć.");
+                    container.innerHTML = '<p class="text-muted small m-2">Ten produkt nie ma jeszcze zdjęć.</p>';
+                } else {
+                    console.log(`Znaleziono ${imageIds.length} zdjęć. Renderowanie...`);
+                    imageIds.forEach(imageId => {
+                        console.log(` - Tworzenie img dla imageId: ${imageId}, URL: https://drive.google.com/thumbnail?id=${imageId}&sz=w100`);
+                        const imgElement = document.createElement('img');
+                        imgElement.src = `https://drive.google.com/thumbnail?id=${imageId}&sz=w100`; 
+                        imgElement.style.width = '70px'; 
+                        imgElement.style.height = '70px';
+                        imgElement.style.objectFit = 'cover';
+                        imgElement.style.borderRadius = '5px';
+                        imgElement.style.cursor = 'pointer'; 
+                        imgElement.alt = 'Istniejące zdjęcie produktu';
+                        imgElement.onerror = () => {
+                             console.error(`Nie udało się załadować obrazka z URL: ${imgElement.src}`);
+                             imgElement.alt = 'Błąd ładowania';
+                        };
+                        // *** NOWY KOD: Otwieranie obrazka w modalu ***
+                        imgElement.addEventListener('click', () => {
+                            // Znajdź element img wewnątrz modala
+                            const fullImageElement = document.getElementById('fullImage');
+                            // Ustaw źródło obrazu na wersję w większej rozdzielczości (np. sz=w1200)
+                            // Możesz dostosować rozmiar 'sz=w...' lub użyć 'sz=s0' dla potencjalnie oryginalnego rozmiaru (ale może być duży)
+                            fullImageElement.src = `https://drive.google.com/thumbnail?id=${imageId}&sz=w1200`; 
+                            
+                            // Pobierz instancję modala Bootstrapa (upewnij się, że masz bootstrap.Modal załadowane)
+                            const imageModal = new bootstrap.Modal(document.getElementById('imageModal'));
+                            // Pokaż modal
+                            imageModal.show();
+                        });
+                        container.appendChild(imgElement);
+                    });
+                    console.log("Zakończono renderowanie zdjęć.");
+                }
+            } catch (error) {
+                console.error('Błąd w funkcji loadAndDisplayExistingPhotos:', error); 
+                container.innerHTML = `<p class="text-danger small m-2">Błąd ładowania zdjęć: ${error.message}</p>`;
             }
         }
 
-        // --- Koniec Nowej Logiki ---
-
         // Logika dodawania zdjęć
-        addPhotoBtn.addEventListener('click', () => {
-            photoInput.click(); // Wywołaj kliknięcie na ukrytym inpucie
-        });
-
+        addPhotoBtn.addEventListener('click', () => { photoInput.click(); });
         photoInput.addEventListener('change', async (event) => {
             const files = event.target.files;
             if (!files || files.length === 0) return;
-
-            addPhotoBtn.disabled = true; // Zablokuj przycisk podczas przetwarzania
+            addPhotoBtn.disabled = true; 
             uploadStatusDiv.innerHTML = '<div class="alert alert-info">Przetwarzanie zdjęć...</div>';
-
             for (const file of files) {
                 try {
-                    // Przetwarzanie obrazu
-                    const processedBlob = await processImage(file, 1080, 1080, 0.9); // Max 1080p, 90% jakości
+                    const processedBlob = await processImage(file, 1080, 1080, 0.9); 
                     imagesToUpload.push(processedBlob);
-
-                    // Wyświetlanie miniaturki
                     const previewUrl = URL.createObjectURL(processedBlob);
                     const imgElement = document.createElement('img');
                     imgElement.src = previewUrl;
-                    imgElement.style.width = '80px';
-                    imgElement.style.height = '80px';
-                    imgElement.style.objectFit = 'cover';
-                    imgElement.style.borderRadius = '5px';
+                    imgElement.style.width = '80px'; imgElement.style.height = '80px'; imgElement.style.objectFit = 'cover'; imgElement.style.borderRadius = '5px';
                     previewsDiv.appendChild(imgElement);
-
                 } catch (error) {
                     console.error('Błąd przetwarzania obrazu:', error);
-                    uploadStatusDiv.innerHTML = `<div class="alert alert-danger">Błąd przetwarzania zdjęcia: ${file.name}. Spróbuj ponownie.</div>`;
+                    uploadStatusDiv.innerHTML = `<div class="alert alert-danger">Błąd przetwarzania zdjęcia: ${file.name}.</div>`;
                     addPhotoBtn.disabled = false;
-                    return; // Przerwij przetwarzanie reszty
+                    return; 
                 }
             }
-            
-            // Czyszczenie inputu, aby można było dodać ten sam plik ponownie
             photoInput.value = ''; 
-            
-            addPhotoBtn.disabled = false; // Odblokuj przycisk
-            uploadBtn.disabled = imagesToUpload.length === 0; // Odblokuj wysyłanie, jeśli są zdjęcia
-            if(imagesToUpload.length > 0) {
-                 uploadStatusDiv.innerHTML = `<div class="alert alert-secondary">Gotowe do wysłania ${imagesToUpload.length} zdjęć.</div>`;
-            } else {
-                 uploadStatusDiv.innerHTML = '';
-            }
+            addPhotoBtn.disabled = false; 
+            uploadBtn.disabled = imagesToUpload.length === 0; 
+            if(imagesToUpload.length > 0) { uploadStatusDiv.innerHTML = `<div class="alert alert-secondary">Gotowe do wysłania ${imagesToUpload.length} zdjęć.</div>`; } 
+            else { uploadStatusDiv.innerHTML = ''; }
         });
         
         // Logika wysyłania zdjęć
         uploadBtn.addEventListener('click', async () => {
             if (!currentProductId || imagesToUpload.length === 0) return;
-
-            uploadBtn.disabled = true;
-            backBtn.disabled = true;
+            uploadBtn.disabled = true; backBtn.disabled = true;
             uploadStatusDiv.innerHTML = `<div class="alert alert-info">Wysyłanie ${imagesToUpload.length} zdjęć...</div>`;
-
             const formData = new FormData();
-            imagesToUpload.forEach((blob, index) => {
-                // Ważne: Nadaj plikowi nazwę, serwer jej użyje
-                formData.append('product_image', blob, `upload_${index + 1}.jpg`); 
-            });
-
+            imagesToUpload.forEach((blob, index) => { formData.append('product_image', blob, `upload_${index + 1}.jpg`); });
             try {
-                const response = await fetch(`/api/admin/product/${currentProductId}/upload_image`, {
-                    method: 'POST',
-                    body: formData 
-                    // Nie ustawiamy 'Content-Type', przeglądarka zrobi to sama dla FormData
-                });
-
+                const response = await fetch(`/api/admin/product/${currentProductId}/upload_image`, { method: 'POST', body: formData });
                 const result = await response.json();
-
-                if (response.ok || response.status === 207) { // 201 lub 207 (Multi-Status)
+                if (response.ok || response.status === 207) { 
                      let message = result.message || '';
-                     if (result.warning) {
-                          message += ` ${result.warning}`;
-                          result.errors.forEach(err => message += `<br>- ${err}`);
-                     }
+                     if (result.warning) { message += ` ${result.warning}`; result.errors.forEach(err => message += `<br>- ${err}`); }
                     uploadStatusDiv.innerHTML = `<div class="alert alert-success">${message}</div>`;
-                    // Reset po sukcesie
-                    imagesToUpload = [];
-                    previewsDiv.innerHTML = '';
-                } else {
-                    throw new Error(result.error || `Błąd serwera: ${response.status}`);
-                }
+                    imagesToUpload = []; previewsDiv.innerHTML = '';
+                    // *** DODANO: Odśwież listę istniejących zdjęć po wysłaniu ***
+                    loadAndDisplayExistingPhotos(currentProductId); 
+                } else { throw new Error(result.error || `Błąd serwera: ${response.status}`); }
             } catch (error) {
                 console.error('Błąd wysyłania zdjęć:', error);
                 uploadStatusDiv.innerHTML = `<div class="alert alert-danger">Błąd wysyłania: ${error.message}</div>`;
-            } finally {
-                uploadBtn.disabled = imagesToUpload.length === 0; // Zablokuj jeśli pusto
-                backBtn.disabled = false;
-            }
+            } finally { uploadBtn.disabled = imagesToUpload.length === 0; backBtn.disabled = false; }
         });
 
-// Powrót do wyboru kategorii (zamiast do wyszukiwania)
+        // Powrót do wyboru kategorii
         backBtn.addEventListener('click', () => {
             photoStepDiv.style.display = 'none';
-            categoryFilterStepDiv.style.display = 'block'; // Pokaż widok kategorii
-            currentProductId = null;
-            imagesToUpload = [];
-            previewsDiv.innerHTML = '';
-            uploadStatusDiv.innerHTML = '';
-             // Opcjonalnie: Zresetuj aktywny przycisk kategorii i listę produktów
+            categoryFilterStepDiv.style.display = 'block'; 
+            currentProductId = null; imagesToUpload = []; previewsDiv.innerHTML = ''; uploadStatusDiv.innerHTML = '';
              categoryButtonsDiv.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
-             productListContainer.style.display = 'none';
-             productListDiv.innerHTML = '';
+             productListContainer.style.display = 'none'; productListDiv.innerHTML = '';
         });
         
-        // Inicjalizacja: Załaduj kategorie na start
+        // Inicjalizacja: Załaduj kategorie
         loadCategories(); 
     }
 
     // --- FUNKCJA PRZETWARZANIA OBRAZU ---
-    /**
-     * Przetwarza plik obrazu (z inputu) do zadanej rozdzielczości i jakości.
-     * @param {File} file Plik obrazu.
-     * @param {number} maxWidth Maksymalna szerokość.
-     * @param {number} maxHeight Maksymalna wysokość.
-     * @param {number} quality Jakość JPEG (0.0 - 1.0).
-     * @returns {Promise<Blob>} Obietnica zwracająca przetworzony obraz jako Blob.
-     */
     function processImage(file, maxWidth, maxHeight, quality) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (event) => {
                 const img = new Image();
                 img.onload = () => {
-                    let width = img.width;
-                    let height = img.height;
-
-                    // Oblicz nowe wymiary z zachowaniem proporcji
-                    if (width > height) {
-                        if (width > maxWidth) {
-                            height = Math.round(height * (maxWidth / width));
-                            width = maxWidth;
-                        }
-                    } else {
-                        if (height > maxHeight) {
-                            width = Math.round(width * (maxHeight / height));
-                            height = maxHeight;
-                        }
-                    }
-
+                    let width = img.width, height = img.height;
+                    if (width > height) { if (width > maxWidth) { height = Math.round(height * (maxWidth / width)); width = maxWidth; } } 
+                    else { if (height > maxHeight) { width = Math.round(width * (maxHeight / height)); height = maxHeight; } }
                     const canvas = document.createElement('canvas');
-                    canvas.width = width;
-                    canvas.height = height;
+                    canvas.width = width; canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
-
-                    canvas.toBlob(
-                        (blob) => {
-                            if (blob) {
-                                console.log(`Obraz przetworzony: ${width}x${height}, rozmiar: ${Math.round(blob.size / 1024)} KB`);
-                                resolve(blob);
-                            } else {
-                                reject(new Error('Nie udało się utworzyć Bloba z canvasa.'));
-                            }
-                        },
-                        'image/jpeg',
-                        quality
-                    );
+                    canvas.toBlob( (blob) => {
+                        if (blob) { console.log(`Obraz przetworzony: ${width}x${height}, rozmiar: ${Math.round(blob.size / 1024)} KB`); resolve(blob); } 
+                        else { reject(new Error('Nie udało się utworzyć Bloba.')); }
+                    }, 'image/jpeg', quality );
                 };
                 img.onerror = (error) => reject(error);
                 img.src = event.target.result; 
@@ -753,82 +1145,59 @@ const content = document.getElementById('app-content');
 
     // --- Inicjalizacja Aplikacji ---
     loadKokpit(); 
-
     
-    // --- POCZĄTEK ZAKTUALIZOWANEGO BLOKU ---
-    // Cała logika rejestracji SW i aktualizacji jest teraz tutaj
-    
-    let serviceWorkerRegistration; // Zmienna do przechowywania rejestracji SW
-
-    // Pobieramy elementy Toastu
+    // --- Logika Service Workera ---
+    let serviceWorkerRegistration; 
     const updateToastElement = document.getElementById('updateToast');
     const updateToast = new bootstrap.Toast(updateToastElement);
     const refreshButton = document.getElementById('refresh-button');
 
-    // Funkcja do rejestracji Service Workera
     function registerServiceWorker() {
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register("{{ url_for('service_worker') }}")
                 .then(registration => {
                     console.log('[PWA] Service Worker zarejestrowany pomyślnie:', registration);
-                    serviceWorkerRegistration = registration; // Zapisujemy rejestrację
-
-                    // Nasłuchuj na zdarzenie 'updatefound'
+                    serviceWorkerRegistration = registration; 
                     registration.onupdatefound = () => {
                         const installingWorker = registration.installing;
                         if (installingWorker) {
                             console.log('[PWA] Znaleziono nowego Service Workera, instalowanie...');
-                            // Nasłuchuj na zmianę stanu nowego SW
                             installingWorker.onstatechange = () => {
                                 if (installingWorker.state === 'installed') {
                                     if (navigator.serviceWorker.controller) {
-                                        // Jeśli jest już aktywny SW, to znaczy, że to jest AKTUALIZACJA
                                         console.log('[PWA] Nowy Service Worker zainstalowany. Pokazywanie powiadomienia.');
-                                        // Pokaż powiadomienie (Toast)
                                         updateToast.show();
-                                    } else {
-                                        // To jest pierwsza instalacja
-                                        console.log('[PWA] Service Worker zainstalowany po raz pierwszy.');
-                                    }
+                                    } else { console.log('[PWA] Service Worker zainstalowany po raz pierwszy.'); }
                                 }
                             };
                         }
                     };
                 })
-                .catch(error => {
-                    console.log('[PWA] Rejestracja Service Workera nie powiodła się:', error);
-                });
-
-            // Obsługa przeładowania strony po aktywacji nowego SW
+                .catch(error => { console.log('[PWA] Rejestracja Service Workera nie powiodła się:', error); });
             let refreshing = false;
             navigator.serviceWorker.addEventListener('controllerchange', () => {
-                if (!refreshing) {
-                    console.log('[PWA] Kontroler się zmienił, przeładowywanie strony!');
-                    window.location.reload();
-                    refreshing = true;
-                }
+                if (!refreshing) { console.log('[PWA] Kontroler się zmienił, przeładowywanie strony!'); window.location.reload(); refreshing = true; }
             });
         }
     }
-
-    // Kliknięcie przycisku "Odśwież"
-    refreshButton.addEventListener('click', () => {
-        console.log('[PWA] Użytkownik kliknął "Odśwież".');
-        updateToast.hide();
-        // Po prostu przeładuj stronę. Nowy SW (już aktywowany przez skipWaiting)
-        // przejmie kontrolę podczas przeładowania.
-        window.location.reload();
-    });
-
-    // Wywołanie rejestracji SW
+    refreshButton.addEventListener('click', () => { console.log('[PWA] Użytkownik kliknął "Odśwież".'); updateToast.hide(); window.location.reload(); });
     registerServiceWorker(); 
     
-    // --- KONIEC ZAKTUALIZOWANEGO BLOKU ---
-    
 }); // Koniec DOMContentLoaded
-
-// (Usunęliśmy stąd stary blok rejestracji SW)
-
     </script>
+
+    <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content bg-dark">
+          <div class="modal-header border-secondary">
+            <h5 class="modal-title text-light" id="imageModalLabel">Podgląd zdjęcia produktu</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-center p-0">
+            <img src="" id="fullImage" class="img-fluid" alt="Powiększone zdjęcie produktu">
+          </div>
+        </div>
+      </div>
+    </div>
 </body>
 </html>

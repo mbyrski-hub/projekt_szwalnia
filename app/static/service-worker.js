@@ -1,116 +1,134 @@
-// Aplikacja: wersja 1.2.4 (z poprawioną obsługą powiadomień)
-const SW_VERSION = '1.2.4';
+// app/static/service-worker.js
 
-self.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'SKIP_WAITING') {
-        self.skipWaiting();
-    }
-    // ### NOWY KOD - ODPOWIADANIE NA PYTANIE O WERSJĘ ###
-    if (event.data && event.data.type === 'GET_VERSION') {
-        // Odpowiedz klientowi, wysyłając swoją wersję
-        event.source.postMessage({ type: 'VERSION_RESPONSE', version: SW_VERSION });
-    }
-});
+// --- WERSJONOWANIE I AKTUALIZACJE ---
+const CACHE_VERSION = 'v1.5.2'; // NOWA WERSJA
+const CACHE_NAME = `szwalnia-cache-${CACHE_VERSION}`;
+const PRECACHE_ASSETS = [];
 
-// === OBSŁUGA POWIADOMIEŃ PUSH (POPRAWIONA) ===
-self.addEventListener('push', function(event) {
-    let data = { title: 'Nowe powiadomienie', body: '', target_url: '/', app_context: 'szwalnia' };
-    
-    try {
-        const receivedData = event.data.json();
-        data.title = receivedData.title || 'Nowe powiadomienie';
-        data.body = receivedData.body || 'Otrzymano nowe powiadomienie.';
-        data.target_url = receivedData.target_url || '/'; 
-        data.app_context = receivedData.app_context || 'szwalnia'; // Zapisujemy kontekst aplikacji
-    } catch (e) {
-        console.error('Błąd parsowania JSON w powiadomieniu push, treść:', event.data.text());
-        data.body = event.data.text();
-    }
-
-    const options = {
-        body: data.body,
-        icon: '/static/mobile_assets/icon_szwalnia_192.png',
-        badge: '/static/mobile_assets/icon_szwalnia_192.png',
-        data: { // Przekazujemy wszystkie potrzebne dane do obsługi kliknięcia
-            url: data.target_url,
-            app_context: data.app_context
-        }
-    };
-
+// 1. INSTALACJA
+self.addEventListener('install', (event) => {
+    console.log('[SW] Zdarzenie: Instalacja', CACHE_VERSION);
     event.waitUntil(
-        self.registration.showNotification(data.title, options)
+        caches.open(CACHE_NAME)
+            .then((cache) => {
+                console.log("[SW] Cache'owanie wstępne zasobów...");
+                return cache.addAll(PRECACHE_ASSETS).catch(err => console.warn("[SW] Błąd cache'owania wstępnego:", err));
+            })
+            .then(() => {
+                console.log('[SW] Wymuszanie aktywacji (skipWaiting)');
+                return self.skipWaiting();
+            })
     );
 });
 
-
-// === OBSŁUGA KLIKNIĘCIA W POWIADOMIENIE (NOWA, NIEZAWODNA WERSJA) ===
-self.addEventListener('notificationclick', function(event) {
-    event.notification.close();
-    
-    const payload = event.notification.data;
-    const targetUrl = payload.url; // np. '/show_order/123'
-    const appContext = payload.app_context || 'szwalnia'; // 'krojownia' lub 'szwalnia'
-
-    let orderId = null;
-    if (targetUrl && targetUrl.startsWith('/show_order/')) {
-        orderId = targetUrl.split('/').pop();
-    }
-
+// 2. AKTYWACJA
+self.addEventListener('activate', (event) => {
+    console.log('[SW] Zdarzenie: Aktywacja', CACHE_VERSION);
     event.waitUntil(
-        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-            // Szukamy jakiegokolwiek otwartego okna naszej aplikacji
-            const appClient = clientList.find(c => 
-                c.url.includes('/mobile/krojownia') || c.url.includes('/mobile/szwalnia')
+        caches.keys().then((cacheNames) => {
+            return Promise.all(
+                cacheNames.map((cacheName) => {
+                    if (cacheName.startsWith('szwalnia-cache-') && cacheName !== CACHE_NAME) {
+                        console.log(`[SW] Usuwanie starego cache'a: ${cacheName}`);
+                        return caches.delete(cacheName);
+                    }
+                })
             );
-
-            if (appClient) {
-                // PRZYPADEK 1: Aplikacja jest już otwarta (w tle)
-                console.log('Aplikacja jest otwarta, aktywuję i wysyłam zlecenie...');
-                appClient.focus();
-                if (orderId) {
-                    appClient.postMessage({ type: 'SHOW_ORDER', orderId: orderId });
-                }
-                return;
-            }
-
-            if (clients.openWindow) {
-                // PRZYPADEK 2: Aplikacja jest zamknięta
-                console.log(`Aplikacja jest zamknięta, otwieram kontekst: ${appContext}`);
-                const appUrl = `/mobile/${appContext}`;
-                // Otwieramy właściwą aplikację, dodając ID zlecenia w hashu, aby mogła je odczytać
-                const finalUrlToOpen = orderId ? `${appUrl}#showOrder=${orderId}` : appUrl;
-                return clients.openWindow(finalUrlToOpen);
-            }
+        }).then(() => {
+            console.log('[SW] Przejęcie kontroli (clients.claim)');
+            return self.clients.claim();
         })
     );
 });
 
+// 3. POBIERANIE (Fetch)
+self.addEventListener('fetch', (event) => {
+    // Ignoruj żądania inne niż GET
+    if (event.request.method !== 'GET') {
+        return;
+    }
 
-// === INTELIGENTNA OBSŁUGA GŁĘBOKICH LINKÓW (DEEP LINKING) PO SKANIE QR ===
-self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
 
-    if (event.request.mode === 'navigate' && url.origin === self.origin && url.pathname.startsWith('/show_order/')) {
-        event.respondWith((async () => {
-            const orderId = url.pathname.split('/').pop();
-            const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-
-            const szwalniaClient = allClients.find(c => c.url.includes('/mobile/szwalnia'));
-            if (szwalniaClient) {
-                await szwalniaClient.focus();
-                szwalniaClient.postMessage({ type: 'SHOW_ORDER', orderId: orderId });
-                return Response.redirect(szwalniaClient.url, 302);
-            }
-
-            const krojowniaClient = allClients.find(c => c.url.includes('/mobile/krojownia'));
-            if (krojowniaClient) {
-                await krojowniaClient.focus();
-                krojowniaClient.postMessage({ type: 'SHOW_ORDER', orderId: orderId });
-                return Response.redirect(krojowniaClient.url, 302);
-            }
-            
-            // Jeśli żadna aplikacja nie jest otwarta, przekieruj na stronę publiczną
-            return fetch(event.request);
-        })());
+    // *** POPRAWKA: Ignoruj żądania API ORAZ rozszerzeń Chrome ***
+    if (url.pathname.startsWith('/api/') || url.protocol === 'chrome-extension:') {
+        event.respondWith(fetch(event.request));
+        return;
     }
+    
+    // Strategia "Network First"
+    event.respondWith(
+        fetch(event.request)
+            .then((networkResponse) => {
+                // Klonujemy OD RAZU
+                const responseClone = networkResponse.clone();
+                event.waitUntil(
+                    caches.open(CACHE_NAME).then((cache) => {
+                        // Zapisujemy KLONA do cache
+                        cache.put(event.request, responseClone);
+                    })
+                );
+                // Zwracamy ORYGINAŁ do przeglądarki
+                return networkResponse;
+            })
+            .catch(() => {
+                // Jeśli sieć zawiodła (offline), spróbuj pobrać z cache'a
+                console.log(`[SW] Sieć niedostępna dla ${event.request.url}. Próba pobrania z cache'a.`);
+                return caches.match(event.request);
+            })
+    );
+});
+
+// 4. OBSŁUGA WIADOMOŚCI (ODPOWIEDŹ Z WERSJĄ)
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'GET_VERSION') {
+        console.log(`[SW] Otrzymano zapytanie o wersję. Wysyłanie: ${CACHE_VERSION}`);
+        if (event.source) {
+             event.source.postMessage({ type: 'VERSION_RESPONSE', version: CACHE_VERSION });
+        } else {
+             self.clients.matchAll().then(clients => {
+                clients.forEach(client => client.postMessage({ type: 'VERSION_RESPONSE', version: CACHE_VERSION }));
+             });
+        }
+    }
+});
+
+// 5. POWIADOMIENIA PUSH (Odebranie)
+self.addEventListener('push', (event) => {
+    console.log('[SW] Otrzymano powiadomienie push!');
+    let data = {};
+    try { data = event.data.json(); } catch (e) { console.error('[SW] Błąd parsowania danych push:', e); data = { title: 'Błąd', body: event.data.text() }; }
+    const title = data.title || 'Szwalnia HOXA';
+    const options = {
+        body: data.body || 'Otrzymano nowe powiadomienie.',
+        icon: '/static/mobile_assets/icon_szwalnia_192.png',
+        badge: '/static/mobile_assets/icon_szwalnia_192.png',
+        data: { target_url: data.target_url || '/', app_context: data.app_context || 'szwalnia' }
+    };
+    event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// 6. KLIKNIĘCIE W POWIADOMIENIE
+self.addEventListener('notificationclick', (event) => {
+    console.log('[SW] Kliknięto powiadomienie.');
+    event.notification.close();
+    const targetUrl = event.notification.data.target_url || '/';
+    const appContext = event.notification.data.app_context || 'szwalnia';
+    let appUrl = '/';
+    if (appContext === 'krojownia') appUrl = '/mobile/krojownia';
+    else if (appContext === 'szwalnia') appUrl = '/mobile/szwalnia';
+    else if (appContext === 'admin') appUrl = '/mobile/admin';
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+            for (let client of clientList) {
+                if (client.url.startsWith(self.location.origin + appUrl) && 'focus' in client) {
+                    console.log(`[SW] Znaleziono pasującego klienta (${appUrl}), fokusowanie.`);
+                    client.navigate(targetUrl);
+                    return client.focus();
+                }
+            }
+            console.log(`[SW] Nie znaleziono klienta, otwieranie nowej karty: ${targetUrl}`);
+            if (clients.openWindow) return clients.openWindow(targetUrl);
+        })
+    );
 });

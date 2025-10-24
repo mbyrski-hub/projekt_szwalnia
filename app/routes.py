@@ -3122,12 +3122,12 @@ def mobile_admin():
 
 @app.route('/api/admin/kpi')
 def api_admin_kpi():
-    """Zwraca kluczowe wskaźniki dla kokpitu admina."""
+    """Zwraca kluczowe wskaźniki ORAZ listy zleceń dla kokpitu admina."""
     try:
         current_month = datetime.utcnow().month
         current_year = datetime.utcnow().year
 
-        # Używamy tej samej logiki co w /kokpit do liczenia obrotu
+        # --- Obliczanie obrotu (bez zmian) ---
         completed_orders_this_month = Order.query.filter(
             Order.status == 'ZREALIZOWANE',
             extract('month', Order.created_at) == current_month,
@@ -3139,23 +3139,26 @@ def api_admin_kpi():
             ),
             joinedload(Order.fabrics).joinedload(OrderFabric.fabric)
         ).all()
+        monthly_turnover = sum(calculate_order_total_cost(order).get('total_cost', 0.0) for order in completed_orders_this_month)
 
-        monthly_turnover = 0.0
-        for order in completed_orders_this_month:
-            cost_details = calculate_order_total_cost(order)
-            monthly_turnover += cost_details.get('total_cost', 0.0)
+        # --- Pobieranie list zleceń NOWE i W REALIZACJI ---
+        new_orders_query = Order.query.options(joinedload(Order.client)).filter_by(status='NOWE').order_by(Order.created_at.desc()).limit(10).all()
+        in_progress_orders_query = Order.query.options(joinedload(Order.client)).filter_by(status='W REALIZACJI').order_by(Order.created_at.desc()).limit(10).all()
 
-        stats = {
-            'nowe': Order.query.filter_by(status='NOWE').count(),
-            'w_realizacji': Order.query.filter_by(status='W REALIZACJI').count()
-        }
+        # Konwersja do prostych list słowników
+        new_orders_list = [{'id': o.id, 'code': o.order_code, 'client': o.client.name} for o in new_orders_query]
+        in_progress_orders_list = [{'id': o.id, 'code': o.order_code, 'client': o.client.name} for o in in_progress_orders_query]
 
+        # --- Zwracanie danych ---
         return jsonify({
             'monthly_turnover': round(monthly_turnover, 2),
-            'stats_nowe': stats['nowe'],
-            'stats_w_realizacji': stats['w_realizacji']
+            'stats_nowe': len(new_orders_list), # Licznik na podstawie pobranej listy
+            'stats_w_realizacji': len(in_progress_orders_list), # Licznik na podstawie pobranej listy
+            'new_orders': new_orders_list,
+            'in_progress_orders': in_progress_orders_list
         })
     except Exception as e:
+        current_app.logger.error(f"Błąd w api_admin_kpi: {e}") # Dodano logowanie błędów
         return jsonify({'error': str(e)}), 500
 
 
@@ -3192,13 +3195,36 @@ def api_admin_production_overview():
 
 @app.route('/api/admin/order_history')
 def api_admin_order_history():
-    """Zwraca listę zleceń zrealizowanych z paginacją (Twoja prośba nr 2)"""
+    """Zwraca listę zleceń zrealizowanych z paginacją i filtrowaniem."""
     page = request.args.get('page', 1, type=int)
     per_page = 20 # 20 zleceń na stronę
 
-    orders_page = Order.query.filter_by(status='ZREALIZOWANE') \
-        .order_by(Order.sewing_finished_at.desc().nullslast(), Order.created_at.desc()) \
-        .paginate(page=page, per_page=per_page, error_out=False)
+    # --- POCZĄTEK NOWEGO KODU: Filtrowanie ---
+    year_filter = request.args.get('year', type=int)
+    month_filter = request.args.get('month', type=int)
+
+    # Domyślnie użyj bieżącego roku i miesiąca, jeśli nie podano
+    now = datetime.utcnow()
+    if year_filter is None:
+        year_filter = now.year
+    if month_filter is None:
+        month_filter = now.month
+
+    query = Order.query.filter_by(status='ZREALIZOWANE')
+
+    # Zastosuj filtry tylko jeśli nie są "wszystkie" (np. year=0 or month=0)
+    # Przyjmujemy, że 0 oznacza "wszystkie"
+    if year_filter != 0:
+         query = query.filter(extract('year', Order.sewing_finished_at) == year_filter)
+    if month_filter != 0:
+         query = query.filter(extract('month', Order.sewing_finished_at) == month_filter)
+    # --- KONIEC NOWEGO KODU ---
+
+    # Zastosuj paginację do przefiltrowanego zapytania
+    orders_page = query.order_by(
+            Order.sewing_finished_at.desc().nullslast(),
+            Order.created_at.desc()
+        ).paginate(page=page, per_page=per_page, error_out=False)
 
     orders_list = [{
         'id': order.id,
@@ -3207,10 +3233,24 @@ def api_admin_order_history():
         'finished_date': order.sewing_finished_at.strftime('%Y-%m-%d') if order.sewing_finished_at else 'B/D'
     } for order in orders_page.items]
 
+    # --- POCZĄTEK NOWEGO KODU: Pobierz dostępne lata ---
+    # To zapytanie pobierze unikalne lata, w których zakończono zlecenia
+    years_query = db.session.query(
+        extract('year', Order.sewing_finished_at).label('year')
+        ).filter(Order.sewing_finished_at.isnot(None)
+        ).distinct().order_by(desc('year')).all()
+    # Konwertujemy na listę intów
+    available_years = [y.year for y in years_query if y.year]
+    # --- KONIEC NOWEGO KODU ---
+
+
     return jsonify({
         'orders': orders_list,
         'has_next_page': orders_page.has_next,
-        'current_page': orders_page.page
+        'current_page': orders_page.page,
+        'available_years': available_years, # Dodano dostępne lata
+        'current_year': year_filter,     # Dodano aktualny filtr roku
+        'current_month': month_filter    # Dodano aktualny filtr miesiąca
     })
 
 @app.route('/api/admin/templates')
@@ -3361,6 +3401,24 @@ def api_admin_product_search():
     results = [{'id': p.id, 'name': p.name} for p in products]
     return jsonify(results)
 
+@app.route('/api/admin/product/<int:product_id>/images')
+def api_admin_get_product_images(product_id):
+    """Zwraca listę ID istniejących obrazów dla produktu."""
+    try:
+        # Pobieramy tylko ID obrazów powiązanych z produktem
+        images = ProductImage.query.filter_by(product_id=product_id).order_by(ProductImage.id).all()
+        
+        # Tworzymy listę ID obrazów
+        image_ids = [img.image_id for img in images]
+        
+        return jsonify(image_ids)
+        
+    except Exception as e:
+        # Logowanie błędu może być pomocne
+        current_app.logger.error(f"Błąd podczas pobierania obrazów dla produktu {product_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+# --- KONIEC NOWEGO KODU ---
+
 
 @app.route('/api/admin/product/<int:product_id>/upload_image', methods=['POST'])
 def api_admin_product_upload_image(product_id):
@@ -3464,5 +3522,96 @@ def api_admin_get_products_by_category(category_id):
         return jsonify(products_list)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/admin/calculator/categories')
+def api_admin_calculator_categories():
+    """Zwraca listę kategorii dla kalkulatora mobilnego."""
+    try:
+        categories = ProductCategory.query.order_by(ProductCategory.name).all()
+        # Prosta lista słowników
+        categories_list = [{'id': c.id, 'name': c.name} for c in categories]
+        return jsonify(categories_list)
+    except Exception as e:
+        current_app.logger.error(f"Błąd pobierania kategorii dla kalkulatora: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/calculator/products')
+def api_admin_calculator_products():
+    """Zwraca dane produktów dla kalkulatora mobilnego (format jak w web)."""
+    try:
+        all_products = Product.query.options(
+            joinedload(Product.fabrics_needed),
+            joinedload(Product.materials_needed)
+        ).order_by(Product.name).all()
+        
+        products_data = { p.id: {
+            'name': p.name,
+            'production_price': p.production_price,
+            'category_id': p.category_id,
+            'fabrics_needed': [{'id': pf.fabric_id, 'usage': pf.usage_meters} for pf in p.fabrics_needed],
+            'materials_needed': [{'id': pm.material_id, 'quantity': pm.quantity} for pm in p.materials_needed]
+        } for p in all_products }
+        return jsonify(products_data)
+    except Exception as e:
+        current_app.logger.error(f"Błąd pobierania produktów dla kalkulatora: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/calculator/fabrics')
+def api_admin_calculator_fabrics():
+    """Zwraca dane tkanin dla kalkulatora mobilnego (format jak w web)."""
+    try:
+        all_fabrics = Fabric.query.options(
+            joinedload(Fabric.supplier_prices).joinedload(FabricPrice.supplier)
+        ).order_by(Fabric.name).all()
+        
+        fabrics_data = {}
+        for f in all_fabrics:
+            sorted_prices = sorted(
+                f.supplier_prices, key=lambda sp: sp.price_date or date.min, reverse=True
+            )
+            fabrics_data[f.id] = {
+                'name': f.name,
+                'default_price': f.price or 0.0,
+                'prices': [{
+                    'supplier_id': sp.supplier_id,
+                    'supplier_name': sp.supplier.name,
+                    'price': sp.price,
+                    'is_default': i == 0
+                } for i, sp in enumerate(sorted_prices)]
+            }
+        return jsonify(fabrics_data)
+    except Exception as e:
+        current_app.logger.error(f"Błąd pobierania tkanin dla kalkulatora: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/calculator/materials')
+def api_admin_calculator_materials():
+    """Zwraca dane materiałów dla kalkulatora mobilnego (format jak w web)."""
+    try:
+        all_materials = Material.query.options(
+            joinedload(Material.supplier_prices).joinedload(MaterialPrice.supplier)
+        ).order_by(Material.name).all()
+        
+        materials_data = {}
+        for m in all_materials:
+            sorted_prices = sorted(
+                m.supplier_prices, key=lambda sp: sp.price_date or date.min, reverse=True
+            )
+            materials_data[m.id] = {
+                'name': m.name,
+                'default_price': m.price or 0.0,
+                'prices': [{
+                    'supplier_id': sp.supplier_id,
+                    'supplier_name': sp.supplier.name,
+                    'price': sp.price,
+                    'is_default': i == 0
+                } for i, sp in enumerate(sorted_prices)]
+            }
+        return jsonify(materials_data)
+    except Exception as e:
+        current_app.logger.error(f"Błąd pobierania materiałów dla kalkulatora: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# --- KONIEC NOWEGO KODU: API dla Kalkulatora Mobile ---
 
 # --- KONIEC NOWEGO API ---
