@@ -9,42 +9,76 @@
     <link rel="manifest" href="{{ url_for('static', filename='mobile_assets/manifest_admin.json') }}">
     <meta name="theme-color" content="#ffc107">
     <style>
-     
-    
+
+
         body { padding-bottom: 70px; } /* Miejsce na dolne menu */
         .nav-link { font-size: 0.75rem; }
 
-        /* --- POCZĄTEK NOWEGO KODU --- */
         /* Centrowanie ikon i tekstu w linkach nawigacji dolnej */
         .navbar.fixed-bottom .nav-link {
             text-align: center; /* Centruje zawartość (ikonę i tekst) wewnątrz linku */
-            width: auto;        /* Pozwala linkowi dopasować szerokość do zawartości */
-            flex-grow: 1;       /* Pozwala linkom równomiernie zająć przestrzeń */
+            width: auto;      /* Pozwala linkowi dopasować szerokość do zawartości */
+            flex-grow: 1;      /* Pozwala linkom równomiernie zająć przestrzeń */
         }
-        /* --- KONIEC NOWEGO KODU --- */
+
+        /* --- NOWY STYL DLA PASKA STATUSU --- */
+        .server-status-bar {
+            font-size: 0.7rem; /* Mniejsza czcionka */
+            padding: 4px 15px; /* Mniejszy padding */
+            background-color: #495057; /* Ciemniejsze tło */
+            border-bottom: 1px solid #6c757d;
+            text-align: center;
+            position: sticky; /* Przyklejony pod nagłówkiem */
+            top: 56px; /* Wysokość nagłówka */
+            z-index: 999; /* Pod nagłówkiem, nad resztą treści */
+        }
+        .server-status-bar .badge {
+            font-size: 0.65rem; /* Jeszcze mniejsza czcionka w badge */
+        }
+        /* --- KONIEC NOWEGO STYLU --- */
 
     </style>
 </head>
 <body>
-    <div class="header bg-dark text-white p-3 text-center fs-5 position-sticky top-0" style="z-index: 1000;">
+    <div class="header bg-dark text-white p-3 text-center fs-5 position-sticky top-0" style="z-index: 1000; height: 56px;"> 
         Admin
         <span id="app-version" style="font-size: 0.6em; opacity: 0.8; font-weight: normal;"></span>
     </div>
+
+    
+    <div class="server-status-bar text-white-50">
+        <span class="me-3">
+            DRUK:
+            <span id="print-server-status" class="badge">
+                <i class="bi bi-question-circle"></i> Sprawdzanie...
+            </span>
+        </span>
+        <span>
+            SYNC:
+            <span id="sync-server-status" class="badge">
+                <i class="bi bi-question-circle"></i> Sprawdzanie...
+            </span>
+        </span>
+    </div>
+    
+
+
     <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
-    <div id="updateToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
-        <div class="toast-header">
-            <strong class="me-auto text-dark"><i class="bi bi-arrow-down-circle-fill text-success"></i> Dostępna aktualizacja</strong>
-            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-        <div class="toast-body text-info">
-            Nowa wersja aplikacji jest gotowa. Odśwież, aby załadować.
-            <button class="btn btn-success btn-sm w-100 mt-2" id="refresh-button">Odśwież teraz</button>
+        <div id="updateToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
+            <div class="toast-header">
+                <strong class="me-auto text-dark"><i class="bi bi-arrow-down-circle-fill text-success"></i> Dostępna aktualizacja</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body text-info">
+                Nowa wersja aplikacji jest gotowa. Odśwież, aby załadować.
+                <button class="btn btn-success btn-sm w-100 mt-2" id="refresh-button">Odśwież teraz</button>
+            </div>
         </div>
     </div>
-</div>
-    
+
     <div class="container-fluid mt-3" id="app-content">
-        </div>
+        
+    </div>
 
     <nav class="navbar navbar-dark bg-dark fixed-bottom">
         <div class="container-fluid d-flex justify-content-around">
@@ -74,7 +108,22 @@
             </div>
         </div>
     </div>
-<template id="calc-fabric-row-template">
+    
+    <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content bg-dark">
+          <div class="modal-header border-secondary">
+            <h5 class="modal-title text-light" id="imageModalLabel">Podgląd zdjęcia produktu</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-center p-0">
+            <img src="" id="fullImage" class="img-fluid" alt="Powiększone zdjęcie produktu">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <template id="calc-fabric-row-template">
         <div class="row gx-2 align-items-center mb-2 calc-fabric-row" data-price="0.0">
             <div class="col-5"><select class="form-select form-select-sm calc-item-select"></select></div>
             <div class="col-4"><select class="form-select form-select-sm calc-supplier-select" disabled><option value="default">-- Dostawca --</option></select></div>
@@ -90,23 +139,29 @@
             <div class="col-1"><button type="button" class="btn btn-danger btn-sm calc-remove-btn p-1"><i class="bi bi-trash"></i></button></div>
         </div>
     </template>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
 document.addEventListener('DOMContentLoaded', () => {
-    
-const content = document.getElementById('app-content');
+
+    const content = document.getElementById('app-content');
     const navLinks = document.querySelectorAll('.nav-link');
     const navKokpit = document.getElementById('nav-kokpit');
     const navProdukcja = document.getElementById('nav-produkcja');
     const navHistoria = document.getElementById('nav-historia');
     const navDodaj = document.getElementById('nav-dodaj');
     const navCeny = document.getElementById('nav-ceny');
-    const navProdukty = document.getElementById('nav-produkty'); 
+    const navProdukty = document.getElementById('nav-produkty');
     const navKalkulator = document.getElementById('nav-kalkulator');
 
     const detailsModal = new bootstrap.Modal(document.getElementById('orderDetailsModal'));
     const modalTitle = document.getElementById('orderDetailsModalLabel');
     const modalBody = document.getElementById('orderDetailsModalBody');
+
+    // === NOWE ZMIENNE DLA STATUSU SERWERÓW ===
+    const printStatusBadge = document.getElementById('print-server-status');
+    const syncStatusBadge = document.getElementById('sync-server-status');
+    // === KONIEC NOWYCH ZMIENNYCH ===
 
     let templatesCache = [];
     let historyPage = 1;
@@ -133,7 +188,7 @@ const content = document.getElementById('app-content');
 
     // Zmienne dla zakładki Produkty
     let currentProductId = null;
-    let imagesToUpload = []; 
+    let imagesToUpload = [];
 
     // --- NAWIGACJA ---
     function setActiveNav(activeLink) {
@@ -150,7 +205,7 @@ const content = document.getElementById('app-content');
     navHistoria.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navHistoria); loadHistoria(true); });
     navDodaj.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navDodaj); loadDodaj(); });
     navCeny.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navCeny); loadCeny(); });
-    navProdukty.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navProdukty); loadProdukty(); }); 
+    navProdukty.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navProdukty); loadProdukty(); });
     navKalkulator.addEventListener('click', (e) => { e.preventDefault(); setActiveNav(navKalkulator); loadKalkulator(); });
 
     // --- OBSŁUGA KLIKNIĘĆ W ZLECENIA ---
@@ -175,7 +230,7 @@ const content = document.getElementById('app-content');
             const data = await response.json();
 
             modalTitle.textContent = `Szczegóły: ${data.order_code}`;
-            
+
             let productsHtml = data.products.length > 0 ? '' : '<p>Brak produktów na tym zleceniu.</p>';
             data.products.forEach(p => {
                 productsHtml += `<li class="list-group-item d-flex justify-content-between"><span>${p.name} [${p.size}]</span><span class="badge bg-primary rounded-pill">${p.quantity} szt.</span></li>`;
@@ -202,7 +257,7 @@ const content = document.getElementById('app-content');
 
     // --- WIDOKI ---
 
-// 1. KOKPIT
+    // 1. KOKPIT
     async function loadKokpit() {
         content.innerHTML = `<h2 class="text-warning">Kokpit 📈</h2><p>Ładowanie...</p>`;
         try {
@@ -213,18 +268,16 @@ const content = document.getElementById('app-content');
             const data = await response.json();
 
             // Funkcja pomocnicza do renderowania rozwijanej listy zleceń
-            function renderCollapsibleOrderList(orders, cardElementId, listId, initialVisible = 5) { // Zwiększono domyślną liczbę widocznych do 5
+            function renderCollapsibleOrderList(orders, cardElementId, listId, initialVisible = 5) {
                 const cardBody = document.getElementById(cardElementId);
                 if (!cardBody || !orders) return;
 
-                // Używamy flexbox dla lepszego dopasowania
                 let listHtml = `<div class="mt-2 pt-2 border-top border-white border-opacity-25 order-list-container small">`;
 
                 if (orders.length > 0) {
                     listHtml += `<ul class="list-unstyled mb-0" id="${listId}">`;
                     orders.forEach((o, index) => {
                         const hiddenClass = index >= initialVisible ? 'd-none' : '';
-                        // Usunięto text-truncate, dodano flexbox i ikonę linku
                         listHtml += `
                             <li class="${hiddenClass}">
                                 <a href="#" class="text-white text-decoration-none d-flex justify-content-between align-items-center py-1 kokpit-order-link" data-order-id="${o.id}" title="${o.code || ''} - ${o.client || ''}">
@@ -253,7 +306,7 @@ const content = document.getElementById('app-content');
                         <h class="card-title fs-3">${data.monthly_turnover !== undefined ? data.monthly_turnover.toFixed(2) : 'B/D'} zł</h3>
                     </div>
                 </div>
-                
+
                 <div class="col-12 mb-3">
                     <div class="card text-bg-info">
                         <div class="card-header d-flex justify-content-between align-items-center">
@@ -261,7 +314,8 @@ const content = document.getElementById('app-content');
                             <span class="badge bg-light text-primary rounded-pill">${data.stats_nowe !== undefined ? data.stats_nowe : '?'}</span>
                         </div>
                         <div class="card-body pt-2" id="new-orders-card-body">
-                            </div>
+                            
+                        </div>
                     </div>
                 </div>
                 <div class="col-12 mb-3">
@@ -271,16 +325,17 @@ const content = document.getElementById('app-content');
                             <span class="badge bg-light text-info rounded-pill">${data.stats_w_realizacji !== undefined ? data.stats_w_realizacji : '?'}</span>
                         </div>
                         <div class="card-body pt-2" id="in-progress-orders-card-body">
-                            </div>
+                            
+                        </div>
                     </div>
                 </div>
                 `;
 
-            // Wywołaj funkcje renderujące listy (bez zmian)
+            // Wywołaj funkcje renderujące listy
             renderCollapsibleOrderList(data.new_orders || [], 'new-orders-card-body', 'kokpit-new-orders-list');
             renderCollapsibleOrderList(data.in_progress_orders || [], 'in-progress-orders-card-body', 'kokpit-in-progress-orders-list');
 
-            // Obsługa przycisków "Pokaż więcej/mniej" (bez zmian)
+            // Obsługa przycisków "Pokaż więcej/mniej"
             document.querySelectorAll('.toggle-order-list-btn').forEach(button => {
                 button.addEventListener('click', function() {
                     const targetListId = this.dataset.target;
@@ -295,19 +350,17 @@ const content = document.getElementById('app-content');
                     });
                     if (isExpanded) { this.textContent = `Pokaż więcej (${items.length - initialVisible})`; }
                     else { this.textContent = 'Pokaż mniej'; }
-                    // Usunięto scrollIntoView, bo może być irytujące przy dwóch listach
-                    // this.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 });
             });
 
-             // Obsługa linków do zleceń (bez zmian)
-             document.querySelectorAll('.kokpit-order-link').forEach(link => {
-                 link.addEventListener('click', function(e) {
-                     e.preventDefault();
-                     const orderId = this.dataset.orderId;
-                     showOrderDetails(orderId);
-                 });
-             });
+            // Obsługa linków do zleceń
+            document.querySelectorAll('.kokpit-order-link').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const orderId = this.dataset.orderId;
+                    showOrderDetails(orderId);
+                });
+            });
 
         } catch (err) {
             console.error("Błąd ładowania danych kokpitu:", err);
@@ -315,7 +368,7 @@ const content = document.getElementById('app-content');
         }
     }
 
-    // 2. PRODUKCJA 
+    // 2. PRODUKCJA
     async function loadProdukcja() {
         content.innerHTML = `<h2 class="text-warning">Produkcja 🏭</h2><p>Ładowanie...</p>`;
         try {
@@ -339,7 +392,7 @@ const content = document.getElementById('app-content');
         }
     }
 
- // 3. HISTORIA (z filtrowaniem - POPRAWIONA)
+    // 3. HISTORIA
     async function loadHistoria(reload = false, year = null, month = null) {
         const historyListContainerId = 'history-list';
         const loaderContainerId = 'history-loader';
@@ -348,28 +401,17 @@ const content = document.getElementById('app-content');
         const filterBtnId = 'history-filter-btn';
         const loadMoreBtnId = 'load-more-history-btn';
 
-        // --- ZMIANA: Przeniesiono pobieranie wartości filtrów na początek dla akcji 'Filtruj' ---
         let currentYear = year;
         let currentMonth = month;
 
-        // Jeśli to jest akcja filtrowania (reload=true) LUB pierwsze ładowanie (year/month=null),
-        // odczytaj wartości z dropdownów, jeśli istnieją.
         if ((reload || (year === null && month === null)) && !historyLoading) {
             const yearFilterElement = document.getElementById(yearFilterId);
             const monthFilterElement = document.getElementById(monthFilterId);
-            // Odczytaj tylko jeśli elementy istnieją (nie przy pierwszym ładowaniu strony)
-            if (yearFilterElement) {
-                currentYear = yearFilterElement.value;
-            }
-            if (monthFilterElement) {
-                currentMonth = monthFilterElement.value;
-            }
+            if (yearFilterElement) { currentYear = yearFilterElement.value; }
+            if (monthFilterElement) { currentMonth = monthFilterElement.value; }
         }
-        // Ustaw domyślne, jeśli nadal null (tylko przy pierwszym ładowaniu zakładki)
         if (currentYear === null) currentYear = new Date().getFullYear();
         if (currentMonth === null) currentMonth = new Date().getMonth() + 1;
-        // --- KONIEC ZMIANY ---
-
 
         if (reload) {
             historyPage = 1;
@@ -396,26 +438,20 @@ const content = document.getElementById('app-content');
                 <div id="${historyListContainerId}" class="list-group"></div>
                 <div id="${loaderContainerId}" class="text-center py-3"><p>Ładowanie...</p></div>`;
 
-            // *** ZMIANA: Przeniesiono listener przycisku "Filtruj" TUTAJ ***
-             // Upewnij się, że przycisk istnieje przed dodaniem listenera
-             const filterButton = document.getElementById(filterBtnId);
-             if (filterButton) {
-                 // Usuń stary listener, jeśli istniał, aby uniknąć duplikatów
-                 filterButton.replaceWith(filterButton.cloneNode(true));
-                 document.getElementById(filterBtnId).addEventListener('click', () => {
-                     // Wywołaj loadHistoria z reload=true, ale year i month ustawione na null,
-                     // aby odczytało wartości z nowo ustawionych dropdownów
-                     loadHistoria(true, null, null);
-                 });
-             }
-             // *** KONIEC ZMIANY ***
+            const filterButton = document.getElementById(filterBtnId);
+            if (filterButton) {
+                filterButton.replaceWith(filterButton.cloneNode(true)); // Usuń stary listener
+                document.getElementById(filterBtnId).addEventListener('click', () => {
+                    loadHistoria(true, null, null); // Odczytaj filtry przy kliknięciu
+                });
+            }
         }
 
         if (historyLoading) return;
         historyLoading = true;
 
         const loaderContainer = document.getElementById(loaderContainerId);
-        if (loaderContainer) loaderContainer.style.display = 'block';
+        if (loaderContainer) loaderContainer.style.display = 'block'; // Pokaż loader
 
         const apiUrl = `/api/admin/order_history?page=${historyPage}&year=${currentYear}&month=${currentMonth}`;
 
@@ -431,20 +467,19 @@ const content = document.getElementById('app-content');
 
              // Wypełnij listę lat tylko przy pierwszym ładowaniu (reload=true) LUB jeśli select jest pusty
              if (yearSelect && (reload || yearSelect.options.length <= 1) && data.available_years) {
-                 const currentSelectedYear = yearSelect.value; // Zapamiętaj co było wybrane
-                 yearSelect.innerHTML = '<option value="0">Wszystkie</option>';
-                 data.available_years.forEach(y => {
-                      // Użyj currentYear (odczytanego na początku) do ustawienia 'selected'
-                     yearSelect.innerHTML += `<option value="${y}" ${y == currentYear ? 'selected' : ''}>${y}</option>`;
-                 });
-                 // Jeśli odczytany rok nie był na liście z API, dodaj go jako wybraną opcję
-                 if (currentYear != 0 && !data.available_years.includes(parseInt(currentYear))) {
-                      yearSelect.innerHTML += `<option value="${currentYear}" selected>${currentYear}</option>`;
-                 }
-                 // Jeśli nie udało się ustawić selected w pętli (np. currentYear=0), ustaw teraz
-                 if (yearSelect.value !== String(currentYear)) {
-                     yearSelect.value = currentYear;
-                 }
+                const currentSelectedYear = yearSelect.value; // Zapamiętaj co było wybrane
+                yearSelect.innerHTML = '<option value="0">Wszystkie</option>';
+                data.available_years.forEach(y => {
+                    yearSelect.innerHTML += `<option value="${y}" ${y == currentYear ? 'selected' : ''}>${y}</option>`;
+                });
+                // Jeśli odczytany rok nie był na liście z API, dodaj go jako wybraną opcję
+                if (currentYear != 0 && !data.available_years.includes(parseInt(currentYear))) {
+                    yearSelect.innerHTML += `<option value="${currentYear}" selected>${currentYear}</option>`;
+                }
+                // Upewnij się, że wartość jest ustawiona poprawnie
+                if (yearSelect.value !== String(currentYear)) {
+                    yearSelect.value = currentYear;
+                }
             } else if (yearSelect && yearSelect.value !== String(currentYear)) {
                  // Jeśli nie przeładowujemy, ale wartość się zmieniła (np. przez API domyślnie), zaktualizuj
                  yearSelect.value = currentYear;
@@ -456,26 +491,29 @@ const content = document.getElementById('app-content');
             }
 
 
-            if (listContainer && historyPage === 1) { listContainer.innerHTML = ''; }
+            if (listContainer && historyPage === 1) { listContainer.innerHTML = ''; } // Wyczyść listę przy przeładowaniu
 
             if (listContainer && data.orders.length > 0) {
-                 data.orders.forEach(o => { listContainer.innerHTML += `<a href="#" class="list-group-item list-group-item-action" data-order-id="${o.id}"><div class="d-flex w-100 justify-content-between"><h6 class="mb-1">${o.order_code}</h6><small class="text-muted">${o.finished_date}</small></div><p class="mb-1 small">${o.client_name}</p></a>`; });
+                data.orders.forEach(o => { listContainer.innerHTML += `<a href="#" class="list-group-item list-group-item-action" data-order-id="${o.id}"><div class="d-flex w-100 justify-content-between"><h6 class="mb-1">${o.order_code}</h6><small class="text-muted">${o.finished_date}</small></div><p class="mb-1 small">${o.client_name}</p></a>`; });
             } else if (listContainer && historyPage === 1) {
-                 listContainer.innerHTML = '<p class="text-center text-muted mt-3">Brak zleceń spełniających kryteria.</p>';
+                listContainer.innerHTML = '<p class="text-center text-muted mt-3">Brak zleceń spełniających kryteria.</p>';
             }
 
+            // Usuń stary przycisk "Wczytaj więcej", jeśli istnieje
             const oldLoadMoreBtn = document.getElementById(loadMoreBtnId);
             if (oldLoadMoreBtn) oldLoadMoreBtn.remove();
 
+            // Dodaj przycisk "Wczytaj więcej", jeśli są kolejne strony
             if (data.has_next_page) {
                 historyPage++;
-                if (loaderContainer) loaderContainer.innerHTML = '';
+                if (loaderContainer) loaderContainer.innerHTML = ''; // Ukryj loader, jeśli są kolejne strony
                  listContainer.insertAdjacentHTML('afterend', `<button id="${loadMoreBtnId}" class="btn btn-outline-warning w-100 mt-3" data-year="${currentYear}" data-month="${currentMonth}">Wczytaj więcej</button>`);
                 document.getElementById(loadMoreBtnId).addEventListener('click', (e) => {
                     const btn = e.target;
-                    loadHistoria(false, btn.dataset.year, btn.dataset.month);
+                    loadHistoria(false, btn.dataset.year, btn.dataset.month); // Przekaż filtry
                 });
             } else {
+                 // Pokaż informację o końcu listy lub braku wyników
                  if (loaderContainer) loaderContainer.innerHTML = historyPage === 1 && data.orders.length === 0 ? '' : '<p class="text-center text-muted mt-3">Koniec listy.</p>';
             }
 
@@ -483,18 +521,19 @@ const content = document.getElementById('app-content');
             console.error("Błąd ładowania historii:", err);
             const loaderContainer = document.getElementById(loaderContainerId);
              if (loaderContainer) loaderContainer.innerHTML = `<div class="alert alert-danger">Błąd ładowania historii: ${err.message}</div>`;
+             // Wyczyść listę przy błędzie
              const listContainer = document.getElementById(historyListContainerId);
              if (listContainer) listContainer.innerHTML = '';
         } finally {
-             historyLoading = false;
+             historyLoading = false; // Zezwól na kolejne ładowanie
         }
     }
 
-    // 4. DODAJ ZLECENIE 
+    // 4. DODAJ ZLECENIE
     async function loadDodaj() {
         content.innerHTML = `<h2 class="text-warning mb-4">Dodaj Zlecenie ⚡</h2>`;
         if (templatesCache.length === 0) {
-            try { templatesCache = await (await fetch('/api/admin/templates')).json(); } 
+            try { templatesCache = await (await fetch('/api/admin/templates')).json(); }
             catch (err) { content.innerHTML += `<div class="alert alert-danger">Błąd ładowania szablonów.</div>`; return; }
         }
         const templateOptions = templatesCache.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
@@ -512,7 +551,7 @@ const content = document.getElementById('app-content');
             const templateId = parseInt(e.target.value, 10);
             const clientInput = document.getElementById('client-name');
             const descInput = document.getElementById('description');
-            if (templateId === 0) { clientInput.value = ''; descInput.value = ''; clientInput.readOnly = false; } 
+            if (templateId === 0) { clientInput.value = ''; descInput.value = ''; clientInput.readOnly = false; }
             else { const template = templatesCache.find(t => t.id === templateId); if (template) { clientInput.value = template.client_name; descInput.value = template.description; clientInput.readOnly = true; } }
         });
         document.getElementById('new-order-form').addEventListener('submit', handleNewOrderSubmit);
@@ -525,12 +564,12 @@ const content = document.getElementById('app-content');
         try {
             const response = await fetch('/api/admin/new_order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
             const result = await response.json();
-            if (response.ok) { msgDiv.innerHTML = `<div class="alert alert-success">Sukces! Dodano zlecenie ${result.order_code}.</div>`; e.target.reset(); } 
+            if (response.ok) { msgDiv.innerHTML = `<div class="alert alert-success">Sukces! Dodano zlecenie ${result.order_code}.</div>`; e.target.reset(); }
             else { throw new Error(result.error || 'Nieznany błąd'); }
         } catch (err) { msgDiv.innerHTML = `<div class="alert alert-danger">Błąd: ${err.message}</div>`; }
     }
 
-    // 5. WYSZUKIWARKA CEN 
+    // 5. WYSZUKIWARKA CEN
     async function loadCeny() {
         content.innerHTML = `
             <h2 class="text-warning mb-4">Wyszukiwarka Cen 💸</h2>
@@ -557,328 +596,272 @@ const content = document.getElementById('app-content');
         input.addEventListener('keyup', (e) => { if (e.key === 'Enter') performSearch(); });
     }
 
-// --- POCZĄTEK NOWEGO KODU: KALKULATOR ---
-
-    // Zmienne globalne dla danych kalkulatora (aby nie pobierać za każdym razem)
-    let calculatorData = {
-        products: null,
-        fabrics: null,
-        materials: null,
-        categories: null // Dodajemy kategorie
-    };
-
+    // 6. KALKULATOR
+    let calculatorData = { products: null, fabrics: null, materials: null, categories: null };
     async function fetchCalculatorDataIfNeeded() {
         if (!calculatorData.products || !calculatorData.fabrics || !calculatorData.materials || !calculatorData.categories) {
             console.log("Pobieranie danych dla kalkulatora...");
             try {
-                // Użyjemy Promise.all do równoległego pobierania
                 const [productsRes, fabricsRes, materialsRes, categoriesRes] = await Promise.all([
                     fetch('/api/admin/calculator/products'),
                     fetch('/api/admin/calculator/fabrics'),
                     fetch('/api/admin/calculator/materials'),
-                    fetch('/api/admin/calculator/categories') // Nowe zapytanie o kategorie
+                    fetch('/api/admin/calculator/categories')
                 ]);
-
                 if (!productsRes.ok || !fabricsRes.ok || !materialsRes.ok || !categoriesRes.ok) {
                     throw new Error('Błąd sieci podczas pobierania danych kalkulatora');
                 }
-
                 calculatorData.products = await productsRes.json();
                 calculatorData.fabrics = await fabricsRes.json();
                 calculatorData.materials = await materialsRes.json();
-                calculatorData.categories = await categoriesRes.json(); // Zapisz kategorie
-
+                calculatorData.categories = await categoriesRes.json();
                 console.log("Dane kalkulatora pobrane pomyślnie.");
             } catch (err) {
                 console.error("Błąd pobierania danych kalkulatora:", err);
                 content.innerHTML += `<div class="alert alert-danger">Nie udało się załadować danych kalkulatora. Odśwież stronę.</div>`;
-                // Rzuć błąd dalej, aby przerwać ładowanie widoku kalkulatora
                 throw err;
             }
         }
     }
-
-
     async function loadKalkulator() {
-         content.innerHTML = `<h2 class="text-warning mb-4">Kalkulator Kosztów 📱</h2><p>Ładowanie danych...</p>`;
-         try {
-             // Pobierz dane, jeśli jeszcze ich nie ma
-             await fetchCalculatorDataIfNeeded();
-
-             // Generowanie opcji dla kategorii
-             const categoryOptions = calculatorData.categories.map(cat => `<option value="${cat.id}">${cat.name}</option>`).join('');
-
-             // Generowanie opcji dla produktów
-             const productOptions = Object.entries(calculatorData.products)
-                                 .sort(([,a], [,b]) => a.name.localeCompare(b.name)) // Sortuj alfabetycznie wg nazwy
-                                 .map(([id, p]) => `<option value="${id}" data-category-id="${p.category_id || 'all'}">${p.name}</option>`).join('');
-
-             // Struktura HTML kalkulatora (uproszczona, jednokolumnowa)
-             content.innerHTML = `
-                 <h2 class="text-warning mb-4">Kalkulator Kosztów 📱</h2>
-
-                 <div class="card mb-3">
-                     <div class="card-header">Wybierz Produkt</div>
-                     <div class="card-body">
-                          <div class="mb-3">
-                             <label for="calcCategoryFilter" class="form-label">Filtruj po kategorii:</label>
-                             <select id="calcCategoryFilter" class="form-select">
-                                 <option value="all">-- Pokaż wszystkie --</option>
-                                 ${categoryOptions}
-                             </select>
-                         </div>
-                         <div class="mb-3">
-                             <label for="calcProductSelector" class="form-label">Wybierz produkt:</label>
-                             <select id="calcProductSelector" class="form-select">
-                                 <option value="custom" data-category-id="all">-- Produkt niestandardowy --</option>
-                                 ${productOptions}
-                             </select>
-                         </div>
-                     </div>
-                 </div>
-
-                 <div class="card mb-3">
-                     <div class="card-header">Składniki i Koszty</div>
-                     <div class="card-body">
-                         <h6><i class="bi bi-scissors"></i> Tkaniny</h6>
-                         <div id="calc-fabrics-list" class="mb-2"></div>
-                         <button type="button" class="btn btn-sm btn-secondary" id="calc-add-fabric-btn"><i class="bi bi-plus-circle"></i> Dodaj tkaninę</button>
-                         <hr>
-                         <h6><i class="bi bi-box-seam"></i> Materiały Dodatkowe</h6>
-                         <div id="calc-materials-list" class="mb-2"></div>
-                         <button type="button" class="btn btn-sm btn-secondary" id="calc-add-material-btn"><i class="bi bi-plus-circle"></i> Dodaj materiał</button>
-                         <hr>
-                         <h6><i class="bi bi-currency-euro"></i> Koszty Produkcji</h6>
-                         <div class="mb-2">
-                             <label for="calcProductionPrice" class="form-label">Cena Produkcji (robocizna) [zł]</label>
-                             <input type="number" id="calcProductionPrice" class="form-control form-control-sm calc-calc-input" value="0.0" step="0.01">
-                         </div>
-                     </div>
-                 </div>
-
-                 <div class="card bg-light text-dark mb-3">
-                     <div class="card-header">Wynik</div>
-                     <div class="card-body text-center">
-                         <h5 class="card-title">Sugerowana Cena Netto</h5>
-                         <p class="display-6 fw-bold text-success mb-2" id="calcFinalPrice">0.00 zł</p>
-                         <hr>
-                         <div class="text-start small">
-                             Koszt tkanin: <strong class="float-end" id="calcFabricCost">0.00 zł</strong><br>
-                             Koszt materiałów: <strong class="float-end" id="calcMaterialsCost">0.00 zł</strong><br>
-                             Koszt produkcji (przel.): <strong class="float-end" id="calcProdCost">0.00 zł</strong><br>
-                             <hr class="my-1">
-                             <strong>Koszt całkowity: <span class="float-end" id="calcTotalCost">0.00 zł</span></strong>
-                         </div>
-                     </div>
-                 </div>
-
-                 <template id="calc-fabric-row-template">
-                     <div class="row gx-2 align-items-center mb-2 calc-fabric-row" data-price="0.0">
-                         <div class="col-5"><select class="form-select form-select-sm calc-item-select"></select></div>
-                         <div class="col-4"><select class="form-select form-select-sm calc-supplier-select" disabled><option value="default">-- Dostawca --</option></select></div>
-                         <div class="col-2"><input type="number" class="form-control form-control-sm calc-item-usage calc-calc-input" placeholder="m" value="0.0" step="0.01"></div>
-                         <div class="col-1"><button type="button" class="btn btn-danger btn-sm calc-remove-btn p-1"><i class="bi bi-trash"></i></button></div>
-                     </div>
-                 </template>
-                 <template id="calc-material-row-template">
-                      <div class="row gx-2 align-items-center mb-2 calc-material-row" data-price="0.0">
-                         <div class="col-5"><select class="form-select form-select-sm calc-item-select"></select></div>
-                         <div class="col-4"><select class="form-select form-select-sm calc-supplier-select" disabled><option value="default">-- Dostawca --</option></select></div>
-                         <div class="col-2"><input type="text" class="form-control form-control-sm calc-item-usage calc-calc-input" placeholder="Ilość" value="1"></div>
-                         <div class="col-1"><button type="button" class="btn btn-danger btn-sm calc-remove-btn p-1"><i class="bi bi-trash"></i></button></div>
-                     </div>
-                 </template>
-             `;
-
-             // --- Logika kalkulatora (adaptacja z calculator.html) ---
-             setupCalculatorLogic();
-
-         } catch (err) {
-              // Błąd został już obsłużony w fetchCalculatorDataIfNeeded lub wystąpił podczas renderowania
-              console.error("Błąd ładowania widoku kalkulatora:", err);
-              // Opcjonalnie: pokaż błąd w interfejsie
-              content.innerHTML = `<h2 class="text-warning mb-4">Kalkulator Kosztów 📱</h2><div class="alert alert-danger">Nie udało się załadować kalkulatora. Spróbuj ponownie później.</div>`;
-         }
+        content.innerHTML = `<h2 class="text-warning mb-4">Kalkulator Kosztów 📱</h2><p>Ładowanie danych...</p>`;
+        try {
+            await fetchCalculatorDataIfNeeded();
+            const categoryOptions = calculatorData.categories.map(cat => `<option value="${cat.id}">${cat.name}</option>`).join('');
+            const productOptions = Object.entries(calculatorData.products)
+                .sort(([,a], [,b]) => a.name.localeCompare(b.name))
+                .map(([id, p]) => `<option value="${id}" data-category-id="${p.category_id || 'all'}">${p.name}</option>`).join('');
+            content.innerHTML = `
+                <h2 class="text-warning mb-4">Kalkulator Kosztów 📱</h2>
+                <div class="card mb-3">
+                    <div class="card-header">Wybierz Produkt</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="calcCategoryFilter" class="form-label">Filtruj po kategorii:</label>
+                            <select id="calcCategoryFilter" class="form-select">
+                                <option value="all">-- Pokaż wszystkie --</option>
+                                ${categoryOptions}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="calcProductSelector" class="form-label">Wybierz produkt:</label>
+                            <select id="calcProductSelector" class="form-select">
+                                <option value="custom" data-category-id="all">-- Produkt niestandardowy --</option>
+                                ${productOptions}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="card mb-3">
+                    <div class="card-header">Składniki i Koszty</div>
+                    <div class="card-body">
+                        <h6><i class="bi bi-scissors"></i> Tkaniny</h6>
+                        <div id="calc-fabrics-list" class="mb-2"></div>
+                        <button type="button" class="btn btn-sm btn-secondary" id="calc-add-fabric-btn"><i class="bi bi-plus-circle"></i> Dodaj tkaninę</button>
+                        <hr>
+                        <h6><i class="bi bi-box-seam"></i> Materiały Dodatkowe</h6>
+                        <div id="calc-materials-list" class="mb-2"></div>
+                        <button type="button" class="btn btn-sm btn-secondary" id="calc-add-material-btn"><i class="bi bi-plus-circle"></i> Dodaj materiał</button>
+                        <hr>
+                        <h6><i class="bi bi-currency-euro"></i> Koszty Produkcji</h6>
+                        <div class="mb-2">
+                            <label for="calcProductionPrice" class="form-label">Cena Produkcji (robocizna) [zł]</label>
+                            <input type="number" id="calcProductionPrice" class="form-control form-control-sm calc-calc-input" value="0.0" step="0.01">
+                        </div>
+                    </div>
+                </div>
+                <div class="card bg-light text-dark mb-3">
+                    <div class="card-header">Wynik</div>
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Sugerowana Cena Netto</h5>
+                        <p class="display-6 fw-bold text-success mb-2" id="calcFinalPrice">0.00 zł</p>
+                        <hr>
+                        <div class="text-start small">
+                            Koszt tkanin: <strong class="float-end" id="calcFabricCost">0.00 zł</strong><br>
+                            Koszt materiałów: <strong class="float-end" id="calcMaterialsCost">0.00 zł</strong><br>
+                            Koszt produkcji (przel.): <strong class="float-end" id="calcProdCost">0.00 zł</strong><br>
+                            <hr class="my-1">
+                            <strong>Koszt całkowity: <span class="float-end" id="calcTotalCost">0.00 zł</span></strong>
+                        </div>
+                    </div>
+                </div>
+            `;
+            setupCalculatorLogic();
+        } catch (err) {
+            console.error("Błąd ładowania widoku kalkulatora:", err);
+            content.innerHTML = `<h2 class="text-warning mb-4">Kalkulator Kosztów 📱</h2><div class="alert alert-danger">Nie udało się załadować kalkulatora. Spróbuj ponownie później.</div>`;
+        }
     }
-
     function setupCalculatorLogic() {
-         // DOM Elements dla kalkulatora
-         const calcCategoryFilter = document.getElementById('calcCategoryFilter');
-         const calcProductSelector = document.getElementById('calcProductSelector');
-         const calcProductOptions = Array.from(calcProductSelector.options);
-         const calcProductionPrice = document.getElementById('calcProductionPrice');
-         const calcFabricsList = document.getElementById('calc-fabrics-list');
-         const calcMaterialsList = document.getElementById('calc-materials-list');
-         const calcAddFabricBtn = document.getElementById('calc-add-fabric-btn');
-         const calcAddMaterialBtn = document.getElementById('calc-add-material-btn');
-         const calcFabricRowTemplate = document.getElementById('calc-fabric-row-template');
-         const calcMaterialRowTemplate = document.getElementById('calc-material-row-template');
-         const calcFinalPriceEl = document.getElementById('calcFinalPrice');
-         const calcFabricCostEl = document.getElementById('calcFabricCost');
-         const calcMaterialsCostEl = document.getElementById('calcMaterialsCost');
-         const calcProdCostEl = document.getElementById('calcProdCost');
-         const calcTotalCostEl = document.getElementById('calcTotalCost');
+        // DOM Elements dla kalkulatora
+        const calcCategoryFilter = document.getElementById('calcCategoryFilter');
+        const calcProductSelector = document.getElementById('calcProductSelector');
+        const calcProductOptions = Array.from(calcProductSelector.options);
+        const calcProductionPrice = document.getElementById('calcProductionPrice');
+        const calcFabricsList = document.getElementById('calc-fabrics-list');
+        const calcMaterialsList = document.getElementById('calc-materials-list');
+        const calcAddFabricBtn = document.getElementById('calc-add-fabric-btn');
+        const calcAddMaterialBtn = document.getElementById('calc-add-material-btn');
+        const calcFabricRowTemplate = document.getElementById('calc-fabric-row-template');
+        const calcMaterialRowTemplate = document.getElementById('calc-material-row-template');
+        const calcFinalPriceEl = document.getElementById('calcFinalPrice');
+        const calcFabricCostEl = document.getElementById('calcFabricCost');
+        const calcMaterialsCostEl = document.getElementById('calcMaterialsCost');
+        const calcProdCostEl = document.getElementById('calcProdCost');
+        const calcTotalCostEl = document.getElementById('calcTotalCost');
 
-         // Podstawowa funkcja kalkulacji
-         function calculateMobile() {
-             let totalFabricCost = 0;
-             document.querySelectorAll('.calc-fabric-row').forEach(row => {
-                 totalFabricCost += (parseFloat(row.dataset.price) || 0) * (parseFloat(row.querySelector('.calc-item-usage').value) || 0);
-             });
+        // Podstawowa funkcja kalkulacji
+        function calculateMobile() {
+            let totalFabricCost = 0;
+            document.querySelectorAll('.calc-fabric-row').forEach(row => {
+                totalFabricCost += (parseFloat(row.dataset.price) || 0) * (parseFloat(row.querySelector('.calc-item-usage').value) || 0);
+            });
 
-             let totalMaterialsCost = 0;
-             document.querySelectorAll('.calc-material-row').forEach(row => {
-                 const quantityText = (row.querySelector('.calc-item-usage').value || '0').replace(',', '.');
-                 const amount = parseFloat(quantityText.match(/(\d+\.?\d*)/)?.[0] || '0'); // Wyciąga liczbę
-                 totalMaterialsCost += (parseFloat(row.dataset.price) || 0) * amount;
-             });
+            let totalMaterialsCost = 0;
+            document.querySelectorAll('.calc-material-row').forEach(row => {
+                const quantityText = (row.querySelector('.calc-item-usage').value || '0').replace(',', '.');
+                const amount = parseFloat(quantityText.match(/(\d+\.?\d*)/)?.[0] || '0'); // Wyciąga liczbę
+                totalMaterialsCost += (parseFloat(row.dataset.price) || 0) * amount;
+            });
 
-             const rawProdPrice = parseFloat(calcProductionPrice.value) || 0;
-             const adjustedProdPrice = rawProdPrice > 0 ? (rawProdPrice * 2.5) + 2 : 0; // Użyj tej samej logiki co w web
-             const baseSubtotal = adjustedProdPrice + totalFabricCost + totalMaterialsCost;
-             const finalPrice = baseSubtotal * 1.15; // Użyj tej samej logiki co w web
+            const rawProdPrice = parseFloat(calcProductionPrice.value) || 0;
+            const adjustedProdPrice = rawProdPrice > 0 ? (rawProdPrice * 2.5) + 2 : 0;
+            const baseSubtotal = adjustedProdPrice + totalFabricCost + totalMaterialsCost;
+            const finalPrice = baseSubtotal * 1.15;
 
-             calcFabricCostEl.textContent = `${totalFabricCost.toFixed(2)} zł`;
-             calcMaterialsCostEl.textContent = `${totalMaterialsCost.toFixed(2)} zł`;
-             calcProdCostEl.textContent = `${adjustedProdPrice.toFixed(2)} zł`;
-             calcTotalCostEl.textContent = `${baseSubtotal.toFixed(2)} zł`;
-             calcFinalPriceEl.textContent = `${finalPrice.toFixed(2)} zł`;
-         }
+            calcFabricCostEl.textContent = `${totalFabricCost.toFixed(2)} zł`;
+            calcMaterialsCostEl.textContent = `${totalMaterialsCost.toFixed(2)} zł`;
+            calcProdCostEl.textContent = `${adjustedProdPrice.toFixed(2)} zł`;
+            calcTotalCostEl.textContent = `${baseSubtotal.toFixed(2)} zł`;
+            calcFinalPriceEl.textContent = `${finalPrice.toFixed(2)} zł`;
+        }
 
-         // Aktualizacja ceny wiersza na podstawie wybranego dostawcy
-         function updatePriceMobile(row) {
-             const itemSelect = row.querySelector('.calc-item-select');
-             const supplierSelect = row.querySelector('.calc-supplier-select');
-             const itemId = itemSelect.value;
-             const itemType = row.classList.contains('calc-fabric-row') ? 'fabrics' : 'materials';
-             const itemsData = calculatorData[itemType]; // Użyj pobranych danych
-             const item = itemsData[itemId];
+        // Aktualizacja ceny wiersza na podstawie wybranego dostawcy
+        function updatePriceMobile(row) {
+            const itemSelect = row.querySelector('.calc-item-select');
+            const supplierSelect = row.querySelector('.calc-supplier-select');
+            const itemId = itemSelect.value;
+            const itemType = row.classList.contains('calc-fabric-row') ? 'fabrics' : 'materials';
+            const itemsData = calculatorData[itemType];
+            const item = itemsData[itemId];
 
-             let price = item ? (item.default_price || 0.0) : 0.0; // Użyj default_price z danych
-             if (supplierSelect.value !== "default" && item && item.prices) {
-                 const supplierPrice = item.prices.find(p => p.supplier_id === parseInt(supplierSelect.value));
-                 if (supplierPrice) price = supplierPrice.price;
-             }
-             row.dataset.price = price;
-             calculateMobile();
-         }
+            let price = item ? (item.default_price || 0.0) : 0.0;
+            if (supplierSelect.value !== "default" && item && item.prices) {
+                const supplierPrice = item.prices.find(p => p.supplier_id === parseInt(supplierSelect.value));
+                if (supplierPrice) price = supplierPrice.price;
+            }
+            row.dataset.price = price;
+            calculateMobile();
+        }
 
-          // Wypełnianie listy dostawców dla wiersza
-          function populateSuppliersMobile(row) {
-             const itemSelect = row.querySelector('.calc-item-select');
-             const supplierSelect = row.querySelector('.calc-supplier-select');
-             const itemId = itemSelect.value;
-             if (!itemId || itemId === '0') {
-                 supplierSelect.innerHTML = '<option value="default">-- Dostawca --</option>';
-                 supplierSelect.disabled = true; updatePriceMobile(row); return;
-             }
-             const itemType = row.classList.contains('calc-fabric-row') ? 'fabrics' : 'materials';
-             const itemsData = calculatorData[itemType];
-             const item = itemsData[itemId];
-             supplierSelect.innerHTML = '<option value="default" style="font-weight: bold; color: #0d6efd;">-- Domyślna (Ostatnia) --</option>'; // Zmieniono kolor
-             if (item && item.prices && item.prices.length > 0) {
-                 item.prices.forEach(p => {
-                     const style = p.is_default ? 'style="font-weight: bold; color: #0d6efd;"' : '';
-                     const defaultIndicator = p.is_default ? ' (Ostatnia)' : '';
-                     supplierSelect.innerHTML += `<option value="${p.supplier_id}" ${style}>${p.supplier_name}${defaultIndicator} (${p.price.toFixed(2)})</option>`;
-                 });
-                 supplierSelect.disabled = false;
-             } else { supplierSelect.disabled = true; }
-             updatePriceMobile(row);
-          }
+         // Wypełnianie listy dostawców dla wiersza
+         function populateSuppliersMobile(row) {
+            const itemSelect = row.querySelector('.calc-item-select');
+            const supplierSelect = row.querySelector('.calc-supplier-select');
+            const itemId = itemSelect.value;
+            if (!itemId || itemId === '0') {
+                supplierSelect.innerHTML = '<option value="default">-- Dostawca --</option>';
+                supplierSelect.disabled = true; updatePriceMobile(row); return;
+            }
+            const itemType = row.classList.contains('calc-fabric-row') ? 'fabrics' : 'materials';
+            const itemsData = calculatorData[itemType];
+            const item = itemsData[itemId];
+            supplierSelect.innerHTML = '<option value="default" style="font-weight: bold; color: #0d6efd;">-- Domyślna (Ostatnia) --</option>'; // Zmieniono kolor
+            if (item && item.prices && item.prices.length > 0) {
+                item.prices.forEach(p => {
+                    const style = p.is_default ? 'style="font-weight: bold; color: #0d6efd;"' : '';
+                    const defaultIndicator = p.is_default ? ' (Ostatnia)' : '';
+                    supplierSelect.innerHTML += `<option value="${p.supplier_id}" ${style}>${p.supplier_name}${defaultIndicator} (${p.price.toFixed(2)})</option>`;
+                });
+                supplierSelect.disabled = false;
+            } else { supplierSelect.disabled = true; }
+            updatePriceMobile(row); // Przelicz cenę po zmianie produktu/dostawców
+        }
 
 
         // Tworzenie nowego wiersza tkaniny/materiału
-         function createRowMobile(type, itemId = null, usage = null) {
-             const template = type === 'fabric' ? calcFabricRowTemplate : calcMaterialRowTemplate;
-             const list = type === 'fabric' ? calcFabricsList : calcMaterialsList;
-             const newRow = template.content.cloneNode(true).firstElementChild;
-             const itemSelect = newRow.querySelector('.calc-item-select');
+        function createRowMobile(type, itemId = null, usage = null) {
+            const template = type === 'fabric' ? calcFabricRowTemplate : calcMaterialRowTemplate;
+            const list = type === 'fabric' ? calcFabricsList : calcMaterialsList;
+            const newRow = template.content.cloneNode(true).firstElementChild;
+            const itemSelect = newRow.querySelector('.calc-item-select');
 
-              // Wypełnij select dla tkanin lub materiałów
-             const itemsData = calculatorData[type === 'fabric' ? 'fabrics' : 'materials'];
-             itemSelect.innerHTML = `<option value="0">-- Wybierz ${type === 'fabric' ? 'tkaninę' : 'materiał'} --</option>`;
-             Object.entries(itemsData)
-                   .sort(([,a], [,b]) => a.name.localeCompare(b.name)) // Sortuj alfabetycznie
-                   .forEach(([id, item]) => {
-                       itemSelect.innerHTML += `<option value="${id}">${item.name}</option>`;
-                   });
+            const itemsData = calculatorData[type === 'fabric' ? 'fabrics' : 'materials'];
+            itemSelect.innerHTML = `<option value="0">-- Wybierz ${type === 'fabric' ? 'tkaninę' : 'materiał'} --</option>`;
+            Object.entries(itemsData)
+                .sort(([,a], [,b]) => a.name.localeCompare(b.name))
+                .forEach(([id, item]) => {
+                    itemSelect.innerHTML += `<option value="${id}">${item.name}</option>`;
+                });
 
-             if (itemId) itemSelect.value = itemId;
-             if (usage) newRow.querySelector('.calc-item-usage').value = usage;
+            if (itemId) itemSelect.value = itemId;
+            if (usage) newRow.querySelector('.calc-item-usage').value = usage;
 
-             list.appendChild(newRow);
-             // Dodaj listenery do nowego wiersza
-             itemSelect.addEventListener('change', () => populateSuppliersMobile(newRow));
-             newRow.querySelector('.calc-supplier-select').addEventListener('change', () => updatePriceMobile(newRow));
-             newRow.querySelector('.calc-item-usage').addEventListener('input', calculateMobile);
-             newRow.querySelector('.calc-remove-btn').addEventListener('click', () => { newRow.remove(); calculateMobile(); });
+            list.appendChild(newRow);
+            // Dodaj listenery do nowego wiersza
+            itemSelect.addEventListener('change', () => populateSuppliersMobile(newRow));
+            newRow.querySelector('.calc-supplier-select').addEventListener('change', () => updatePriceMobile(newRow));
+            newRow.querySelector('.calc-item-usage').addEventListener('input', calculateMobile);
+            newRow.querySelector('.calc-remove-btn').addEventListener('click', () => { newRow.remove(); calculateMobile(); });
 
-             // Wypełnij dostawców, jeśli produkt jest wybrany
-             if (itemId) populateSuppliersMobile(newRow);
-         }
+            if (itemId) populateSuppliersMobile(newRow); // Wypełnij dostawców
+        }
 
-         // Ładowanie danych produktu do kalkulatora
-         function loadProductDataMobile(productId) {
-             calcFabricsList.innerHTML = '';
-             calcMaterialsList.innerHTML = '';
-             const data = calculatorData.products[productId]; // Użyj pobranych danych
+        // Ładowanie danych produktu do kalkulatora
+        function loadProductDataMobile(productId) {
+            calcFabricsList.innerHTML = '';
+            calcMaterialsList.innerHTML = '';
+            const data = calculatorData.products[productId];
 
-             if (!data || productId === 'custom') {
-                 calcProductionPrice.value = "0.0";
-                 createRowMobile('fabric'); // Dodaj pusty wiersz tkaniny
-             } else {
-                 calcProductionPrice.value = data.production_price || 0.0;
-                 // Upewnij się, że fabrics_needed i materials_needed istnieją
-                 (data.fabrics_needed || []).forEach(f => createRowMobile('fabric', f.id, f.usage));
-                 (data.materials_needed || []).forEach(m => createRowMobile('material', m.id, m.quantity));
-                 // Jeśli po załadowaniu nie ma żadnej tkaniny, dodaj pusty wiersz
+            if (!data || productId === 'custom') {
+                calcProductionPrice.value = "0.0";
+                createRowMobile('fabric'); // Dodaj pusty wiersz tkaniny, jeśli produkt niestandardowy
+            } else {
+                calcProductionPrice.value = data.production_price || 0.0;
+                (data.fabrics_needed || []).forEach(f => createRowMobile('fabric', f.id, f.usage));
+                (data.materials_needed || []).forEach(m => createRowMobile('material', m.id, m.quantity));
+                // Jeśli produkt nie ma tkanin, dodaj pusty wiersz
                  if (calcFabricsList.children.length === 0) createRowMobile('fabric');
-             }
-             calculateMobile();
-         }
+            }
+            calculateMobile(); // Przelicz koszty po załadowaniu danych
+        }
 
-         // Filtrowanie listy produktów
-         function filterProductsMobile() {
-             const selectedCategoryId = calcCategoryFilter.value;
-             let isSelectedVisible = false;
+        // Filtrowanie listy produktów
+        function filterProductsMobile() {
+            const selectedCategoryId = calcCategoryFilter.value;
+            let isSelectedVisible = false;
 
-             calcProductOptions.forEach(option => {
-                 const isCustom = option.value === 'custom';
-                 const productData = calculatorData.products[option.value];
-                 const categoryId = productData ? String(productData.category_id || 'all') : 'all'; // Pobierz category_id z danych
-                 const isMatch = selectedCategoryId === 'all' || categoryId === selectedCategoryId;
-
-                 // Użyj 'd-none' Bootstrapa zamiast 'hidden'
-                 option.classList.toggle('d-none', !isCustom && !isMatch);
+            calcProductOptions.forEach(option => {
+                const isCustom = option.value === 'custom';
+                const productData = calculatorData.products[option.value];
+                const categoryId = productData ? String(productData.category_id || 'all') : 'all';
+                const isMatch = selectedCategoryId === 'all' || categoryId === selectedCategoryId;
+                option.classList.toggle('d-none', !isCustom && !isMatch);
                  if(option.selected && (isMatch || isCustom)) isSelectedVisible = true;
-             });
+            });
 
-              // Jeśli aktualnie wybrana opcja została ukryta, wybierz "Produkt niestandardowy"
+             // Jeśli aktualnie wybrana opcja została ukryta, wybierz "Produkt niestandardowy"
              if (!isSelectedVisible && calcProductSelector.value !== 'custom') {
-                  calcProductSelector.value = 'custom';
+                 calcProductSelector.value = 'custom';
              }
-             loadProductDataMobile(calcProductSelector.value); // Przeładuj dane dla (potencjalnie) nowego wyboru
-         }
+            loadProductDataMobile(calcProductSelector.value);
+        }
 
-         // Event Listeners dla kalkulatora
-         calcCategoryFilter.addEventListener('change', filterProductsMobile);
-         calcProductSelector.addEventListener('change', () => loadProductDataMobile(calcProductSelector.value));
-         calcAddFabricBtn.addEventListener('click', () => createRowMobile('fabric'));
-         calcAddMaterialBtn.addEventListener('click', () => createRowMobile('material'));
-         calcProductionPrice.addEventListener('input', calculateMobile); // Dodano listener dla ceny produkcji
+        // Event Listeners dla kalkulatora
+        calcCategoryFilter.addEventListener('change', filterProductsMobile);
+        calcProductSelector.addEventListener('change', () => loadProductDataMobile(calcProductSelector.value));
+        calcAddFabricBtn.addEventListener('click', () => createRowMobile('fabric'));
+        calcAddMaterialBtn.addEventListener('click', () => createRowMobile('material'));
+        calcProductionPrice.addEventListener('input', calculateMobile);
 
-         // Inicjalizacja
-         filterProductsMobile(); // Wywołaj filtrowanie i ładowanie danych na starcie
+        // Inicjalizacja
+        filterProductsMobile(); // Wywołaj filtrowanie i ładowanie danych na starcie
     }
 
-    // --- KONIEC NOWEGO KODU: KALKULATOR ---
-
-
-    // --- ZAKŁADKA: PRODUKTY ---
+    // 7. PRODUKTY (ZDJĘCIA)
     function loadProdukty() {
-        currentProductId = null; 
-        imagesToUpload = [];     
+        currentProductId = null;
+        imagesToUpload = [];
         content.innerHTML = `
             <h2 class="text-warning mb-4">Zdjęcia Produktów 📸</h2>
             <div id="category-filter-step">
@@ -890,24 +873,24 @@ const content = document.getElementById('app-content');
                     <div id="product-list" class="list-group"></div>
                 </div>
             </div>
-            
+
             <div id="product-photo-step" style="display: none;">
                 <h5 id="selected-product-name"></h5>
-                
+
                 <h6>Istniejące zdjęcia:</h6>
                 <div id="existing-photos-container" class="mb-3 d-flex flex-wrap gap-2" style="min-height: 50px; background-color: #343a40; border-radius: 5px; padding: 5px;">
-                    <p class="text-muted small m-2">Ładowanie...</p> 
+                    <p class="text-muted small m-2">Ładowanie...</p>
                 </div>
-                <hr> 
-                
+                <hr>
+
                 <input type="file" accept="image/*" capture="environment" id="photo-input" style="display: none;" multiple>
                 <button class="btn btn-primary w-100 my-3" id="add-photo-btn"><i class="bi bi-camera-fill"></i> Zrób/Dodaj zdjęcie</button>
-                
-                <h6>Nowe zdjęcia (podgląd):</h6> 
+
+                <h6>Nowe zdjęcia (podgląd):</h6>
                 <div id="photo-previews" class="mb-3 d-flex flex-wrap gap-2"></div>
 
                 <button class="btn btn-success w-100" id="upload-photos-btn" disabled><i class="bi bi-cloud-arrow-up-fill"></i> Wyślij zdjęcia</button>
-                <button class="btn btn-secondary w-100 mt-2" id="back-to-categories-btn">Wróć do wyboru kategorii</button> 
+                <button class="btn btn-secondary w-100 mt-2" id="back-to-categories-btn">Wróć do wyboru kategorii</button>
                 <div id="upload-status" class="mt-3"></div>
             </div>
         `;
@@ -915,23 +898,23 @@ const content = document.getElementById('app-content');
         const categoryButtonsDiv = document.getElementById('category-buttons');
         const productListContainer = document.getElementById('product-list-container');
         const productListDiv = document.getElementById('product-list');
-        
         const photoStepDiv = document.getElementById('product-photo-step');
-        const categoryFilterStepDiv = document.getElementById('category-filter-step'); 
+        const categoryFilterStepDiv = document.getElementById('category-filter-step');
         const selectedProductNameH5 = document.getElementById('selected-product-name');
         const photoInput = document.getElementById('photo-input');
         const addPhotoBtn = document.getElementById('add-photo-btn');
         const previewsDiv = document.getElementById('photo-previews');
         const uploadBtn = document.getElementById('upload-photos-btn');
-        const backBtn = document.getElementById('back-to-categories-btn'); 
+        const backBtn = document.getElementById('back-to-categories-btn');
         const uploadStatusDiv = document.getElementById('upload-status');
+        const existingPhotosContainer = document.getElementById('existing-photos-container');
 
         // Ładowanie kategorii
         async function loadCategories() {
             try {
                 const response = await fetch('/api/admin/product_categories');
                 const categories = await response.json();
-                categoryButtonsDiv.innerHTML = ''; 
+                categoryButtonsDiv.innerHTML = '';
                 categories.forEach(cat => {
                     const button = document.createElement('button');
                     button.classList.add('btn', 'btn-outline-warning', 'mb-2');
@@ -958,95 +941,87 @@ const content = document.getElementById('app-content');
                 let html = '';
                 products.forEach(p => { html += `<a href="#" class="list-group-item list-group-item-action product-select-item" data-product-id="${p.id}" data-product-name="${p.name}">${p.name}</a>`; });
                 productListDiv.innerHTML = html;
-                
+
                 // Dodaj listenery do produktów
                 document.querySelectorAll('.product-select-item').forEach(item => {
-                    item.addEventListener('click', (e) => { 
+                    item.addEventListener('click', (e) => {
                         e.preventDefault();
-                        const productIdValue = item.dataset.productId; 
-                        if (!productIdValue) { 
+                        const productIdValue = item.dataset.productId;
+                        if (!productIdValue) {
                             console.error("Błąd krytyczny: Atrybut data-product-id nie został znaleziony!", item);
                             alert("Wystąpił błąd: Nie można zidentyfikować produktu.");
-                            return; 
+                            return;
                         }
-                        const productId = productIdValue; 
-                        currentProductId = productId; 
+                        currentProductId = productIdValue; // Zapisz ID wybranego produktu
                         selectedProductNameH5.textContent = `Produkt: ${item.dataset.productName}`;
-                        categoryFilterStepDiv.style.display = 'none'; 
-                        photoStepDiv.style.display = 'block';       
-                        uploadStatusDiv.innerHTML = ''; 
-                        previewsDiv.innerHTML = ''; 
-                        imagesToUpload = []; 
-                        uploadBtn.disabled = true; 
-                        console.log("Wywołuję loadAndDisplayExistingPhotos z productId:", productId); 
-                        loadAndDisplayExistingPhotos(productId); 
+                        categoryFilterStepDiv.style.display = 'none'; // Ukryj wybór kategorii/produktu
+                        photoStepDiv.style.display = 'block';      // Pokaż krok zdjęć
+                        uploadStatusDiv.innerHTML = '';            // Wyczyść status
+                        previewsDiv.innerHTML = '';                // Wyczyść podglądy
+                        imagesToUpload = [];                       // Wyczyść listę do wysłania
+                        uploadBtn.disabled = true;                 // Zablokuj przycisk wysyłania
+                        console.log("Wywołuję loadAndDisplayExistingPhotos z productId:", currentProductId);
+                        loadAndDisplayExistingPhotos(currentProductId); // Załaduj istniejące zdjęcia
                     });
                 });
             } catch (err) { productListDiv.innerHTML = '<div class="alert alert-danger">Błąd ładowania produktów.</div>'; }
         }
 
-        // *** POPRAWKA: Definicja funkcji przeniesiona poza pętlę ***
         // Funkcja do ładowania i wyświetlania istniejących zdjęć
         async function loadAndDisplayExistingPhotos(productId) {
-            const container = document.getElementById('existing-photos-container');
-            container.innerHTML = '<p class="text-muted small m-2">Ładowanie istniejących zdjęć...</p>'; 
+             const container = existingPhotosContainer;
+             container.innerHTML = '<p class="text-muted small m-2">Ładowanie istniejących zdjęć...</p>';
 
-            try {
-                console.log(`Pobieranie zdjęć dla productId: ${productId} z URL: /api/admin/product/${productId}/images`); 
-                const response = await fetch(`/api/admin/product/${productId}/images`);
-                console.log(`Odpowiedź z API: Status ${response.status}`); 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error(`Błąd API: ${response.status}`, errorText);
-                    throw new Error(`Błąd serwera: ${response.status}`);
-                }
-                const imageIds = await response.json();
-                console.log("Otrzymano imageIds:", imageIds); 
-                container.innerHTML = ''; 
-                if (!Array.isArray(imageIds)) {
+             try {
+                 console.log(`Pobieranie zdjęć dla productId: ${productId} z URL: /api/admin/product/${productId}/images`);
+                 const response = await fetch(`/api/admin/product/${productId}/images`);
+                 console.log(`Odpowiedź z API: Status ${response.status}`);
+                 if (!response.ok) {
+                     const errorText = await response.text();
+                     console.error(`Błąd API: ${response.status}`, errorText);
+                     throw new Error(`Błąd serwera: ${response.status}`);
+                 }
+                 const imageIds = await response.json();
+                 console.log("Otrzymano imageIds:", imageIds);
+                 container.innerHTML = '';
+                 if (!Array.isArray(imageIds)) {
                      console.error("Błąd: Odpowiedź API nie jest tablicą!", imageIds);
                      throw new Error("Nieprawidłowy format danych z API.");
-                }
-                if (imageIds.length === 0) {
-                    console.log("Produkt nie ma jeszcze zdjęć.");
-                    container.innerHTML = '<p class="text-muted small m-2">Ten produkt nie ma jeszcze zdjęć.</p>';
-                } else {
-                    console.log(`Znaleziono ${imageIds.length} zdjęć. Renderowanie...`);
-                    imageIds.forEach(imageId => {
-                        console.log(` - Tworzenie img dla imageId: ${imageId}, URL: https://drive.google.com/thumbnail?id=${imageId}&sz=w100`);
-                        const imgElement = document.createElement('img');
-                        imgElement.src = `https://drive.google.com/thumbnail?id=${imageId}&sz=w100`; 
-                        imgElement.style.width = '70px'; 
-                        imgElement.style.height = '70px';
-                        imgElement.style.objectFit = 'cover';
-                        imgElement.style.borderRadius = '5px';
-                        imgElement.style.cursor = 'pointer'; 
-                        imgElement.alt = 'Istniejące zdjęcie produktu';
-                        imgElement.onerror = () => {
+                 }
+                 if (imageIds.length === 0) {
+                     console.log("Produkt nie ma jeszcze zdjęć.");
+                     container.innerHTML = '<p class="text-muted small m-2">Ten produkt nie ma jeszcze zdjęć.</p>';
+                 } else {
+                     console.log(`Znaleziono ${imageIds.length} zdjęć. Renderowanie...`);
+                     imageIds.forEach(imageId => {
+                         console.log(` - Tworzenie img dla imageId: ${imageId}, URL: https://drive.google.com/thumbnail?id=${imageId}&sz=w100`);
+                         const imgElement = document.createElement('img');
+                         imgElement.src = `https://drive.google.com/thumbnail?id=${imageId}&sz=w100`;
+                         imgElement.style.width = '70px';
+                         imgElement.style.height = '70px';
+                         imgElement.style.objectFit = 'cover';
+                         imgElement.style.borderRadius = '5px';
+                         imgElement.style.cursor = 'pointer';
+                         imgElement.alt = 'Istniejące zdjęcie produktu';
+                         imgElement.onerror = () => {
                              console.error(`Nie udało się załadować obrazka z URL: ${imgElement.src}`);
                              imgElement.alt = 'Błąd ładowania';
-                        };
-                        // *** NOWY KOD: Otwieranie obrazka w modalu ***
-                        imgElement.addEventListener('click', () => {
-                            // Znajdź element img wewnątrz modala
-                            const fullImageElement = document.getElementById('fullImage');
-                            // Ustaw źródło obrazu na wersję w większej rozdzielczości (np. sz=w1200)
-                            // Możesz dostosować rozmiar 'sz=w...' lub użyć 'sz=s0' dla potencjalnie oryginalnego rozmiaru (ale może być duży)
-                            fullImageElement.src = `https://drive.google.com/thumbnail?id=${imageId}&sz=w1200`; 
-                            
-                            // Pobierz instancję modala Bootstrapa (upewnij się, że masz bootstrap.Modal załadowane)
-                            const imageModal = new bootstrap.Modal(document.getElementById('imageModal'));
-                            // Pokaż modal
-                            imageModal.show();
-                        });
-                        container.appendChild(imgElement);
-                    });
-                    console.log("Zakończono renderowanie zdjęć.");
-                }
-            } catch (error) {
-                console.error('Błąd w funkcji loadAndDisplayExistingPhotos:', error); 
-                container.innerHTML = `<p class="text-danger small m-2">Błąd ładowania zdjęć: ${error.message}</p>`;
-            }
+                         };
+                         // Otwieranie obrazka w modalu
+                         imgElement.addEventListener('click', () => {
+                             const fullImageElement = document.getElementById('fullImage');
+                             fullImageElement.src = `https://drive.google.com/thumbnail?id=${imageId}&sz=w1200`; // Większy rozmiar
+                             const imageModal = new bootstrap.Modal(document.getElementById('imageModal'));
+                             imageModal.show();
+                         });
+                         container.appendChild(imgElement);
+                     });
+                     console.log("Zakończono renderowanie zdjęć.");
+                 }
+             } catch (error) {
+                 console.error('Błąd w funkcji loadAndDisplayExistingPhotos:', error);
+                 container.innerHTML = `<p class="text-danger small m-2">Błąd ładowania zdjęć: ${error.message}</p>`;
+             }
         }
 
         // Logika dodawania zdjęć
@@ -1054,66 +1029,69 @@ const content = document.getElementById('app-content');
         photoInput.addEventListener('change', async (event) => {
             const files = event.target.files;
             if (!files || files.length === 0) return;
-            addPhotoBtn.disabled = true; 
+            addPhotoBtn.disabled = true;
             uploadStatusDiv.innerHTML = '<div class="alert alert-info">Przetwarzanie zdjęć...</div>';
             for (const file of files) {
                 try {
-                    const processedBlob = await processImage(file, 1080, 1080, 0.9); 
-                    imagesToUpload.push(processedBlob);
+                    const processedBlob = await processImage(file, 1080, 1080, 0.9); // Przetwarzanie
+                    imagesToUpload.push(processedBlob); // Dodaj do listy do wysłania
                     const previewUrl = URL.createObjectURL(processedBlob);
                     const imgElement = document.createElement('img');
                     imgElement.src = previewUrl;
                     imgElement.style.width = '80px'; imgElement.style.height = '80px'; imgElement.style.objectFit = 'cover'; imgElement.style.borderRadius = '5px';
-                    previewsDiv.appendChild(imgElement);
+                    previewsDiv.appendChild(imgElement); // Pokaż podgląd
                 } catch (error) {
                     console.error('Błąd przetwarzania obrazu:', error);
                     uploadStatusDiv.innerHTML = `<div class="alert alert-danger">Błąd przetwarzania zdjęcia: ${file.name}.</div>`;
                     addPhotoBtn.disabled = false;
-                    return; 
+                    return; // Przerwij, jeśli był błąd
                 }
             }
-            photoInput.value = ''; 
-            addPhotoBtn.disabled = false; 
-            uploadBtn.disabled = imagesToUpload.length === 0; 
-            if(imagesToUpload.length > 0) { uploadStatusDiv.innerHTML = `<div class="alert alert-secondary">Gotowe do wysłania ${imagesToUpload.length} zdjęć.</div>`; } 
+            photoInput.value = ''; // Wyczyść input, aby można było dodać te same pliki ponownie
+            addPhotoBtn.disabled = false; // Odblokuj przycisk dodawania
+            uploadBtn.disabled = imagesToUpload.length === 0; // Odblokuj przycisk wysyłania, jeśli są zdjęcia
+            if(imagesToUpload.length > 0) { uploadStatusDiv.innerHTML = `<div class="alert alert-secondary">Gotowe do wysłania ${imagesToUpload.length} zdjęć.</div>`; }
             else { uploadStatusDiv.innerHTML = ''; }
         });
-        
+
         // Logika wysyłania zdjęć
         uploadBtn.addEventListener('click', async () => {
             if (!currentProductId || imagesToUpload.length === 0) return;
-            uploadBtn.disabled = true; backBtn.disabled = true;
+            uploadBtn.disabled = true; backBtn.disabled = true; // Zablokuj przyciski
             uploadStatusDiv.innerHTML = `<div class="alert alert-info">Wysyłanie ${imagesToUpload.length} zdjęć...</div>`;
             const formData = new FormData();
-            imagesToUpload.forEach((blob, index) => { formData.append('product_image', blob, `upload_${index + 1}.jpg`); });
+            imagesToUpload.forEach((blob, index) => { formData.append('product_image', blob, `upload_${index + 1}.jpg`); }); // Dodaj przetworzone Bloby
             try {
                 const response = await fetch(`/api/admin/product/${currentProductId}/upload_image`, { method: 'POST', body: formData });
                 const result = await response.json();
-                if (response.ok || response.status === 207) { 
-                     let message = result.message || '';
-                     if (result.warning) { message += ` ${result.warning}`; result.errors.forEach(err => message += `<br>- ${err}`); }
+                if (response.ok || response.status === 207) { // 207 Multi-Status, jeśli były częściowe błędy
+                    let message = result.message || '';
+                    if (result.warning) { message += ` ${result.warning}`; result.errors.forEach(err => message += `<br>- ${err}`); }
                     uploadStatusDiv.innerHTML = `<div class="alert alert-success">${message}</div>`;
-                    imagesToUpload = []; previewsDiv.innerHTML = '';
-                    // *** DODANO: Odśwież listę istniejących zdjęć po wysłaniu ***
-                    loadAndDisplayExistingPhotos(currentProductId); 
+                    imagesToUpload = []; previewsDiv.innerHTML = ''; // Wyczyść po wysłaniu
+                    loadAndDisplayExistingPhotos(currentProductId); // Odśwież istniejące
                 } else { throw new Error(result.error || `Błąd serwera: ${response.status}`); }
             } catch (error) {
                 console.error('Błąd wysyłania zdjęć:', error);
                 uploadStatusDiv.innerHTML = `<div class="alert alert-danger">Błąd wysyłania: ${error.message}</div>`;
-            } finally { uploadBtn.disabled = imagesToUpload.length === 0; backBtn.disabled = false; }
+            } finally {
+                uploadBtn.disabled = imagesToUpload.length === 0; // Odblokuj tylko, jeśli nie ma już zdjęć
+                backBtn.disabled = false; // Zawsze odblokuj powrót
+            }
         });
 
         // Powrót do wyboru kategorii
         backBtn.addEventListener('click', () => {
-            photoStepDiv.style.display = 'none';
-            categoryFilterStepDiv.style.display = 'block'; 
-            currentProductId = null; imagesToUpload = []; previewsDiv.innerHTML = ''; uploadStatusDiv.innerHTML = '';
+            photoStepDiv.style.display = 'none';       // Ukryj krok zdjęć
+            categoryFilterStepDiv.style.display = 'block'; // Pokaż wybór kategorii/produktu
+            currentProductId = null; imagesToUpload = []; previewsDiv.innerHTML = ''; uploadStatusDiv.innerHTML = ''; // Reset
+             // Odznacz aktywny przycisk kategorii i schowaj listę produktów
              categoryButtonsDiv.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
              productListContainer.style.display = 'none'; productListDiv.innerHTML = '';
         });
-        
+
         // Inicjalizacja: Załaduj kategorie
-        loadCategories(); 
+        loadCategories();
     }
 
     // --- FUNKCJA PRZETWARZANIA OBRAZU ---
@@ -1124,30 +1102,69 @@ const content = document.getElementById('app-content');
                 const img = new Image();
                 img.onload = () => {
                     let width = img.width, height = img.height;
-                    if (width > height) { if (width > maxWidth) { height = Math.round(height * (maxWidth / width)); width = maxWidth; } } 
+                    if (width > height) { if (width > maxWidth) { height = Math.round(height * (maxWidth / width)); width = maxWidth; } }
                     else { if (height > maxHeight) { width = Math.round(width * (maxHeight / height)); height = maxHeight; } }
                     const canvas = document.createElement('canvas');
                     canvas.width = width; canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
                     canvas.toBlob( (blob) => {
-                        if (blob) { console.log(`Obraz przetworzony: ${width}x${height}, rozmiar: ${Math.round(blob.size / 1024)} KB`); resolve(blob); } 
+                        if (blob) { console.log(`Obraz przetworzony: ${width}x${height}, rozmiar: ${Math.round(blob.size / 1024)} KB`); resolve(blob); }
                         else { reject(new Error('Nie udało się utworzyć Bloba.')); }
-                    }, 'image/jpeg', quality );
+                    }, 'image/jpeg', quality ); // Zapisz jako JPEG z określoną jakością
                 };
                 img.onerror = (error) => reject(error);
-                img.src = event.target.result; 
+                img.src = event.target.result; // Użyj wyniku readAsDataURL
             };
             reader.onerror = (error) => reject(error);
-            reader.readAsDataURL(file); 
+            reader.readAsDataURL(file); // Wczytaj plik jako Data URL
         });
     }
 
+    // === NOWA FUNKCJA DO SPRAWDZANIA STATUSU SERWERÓW ===
+    async function checkServerStatus() {
+        try {
+            const response = await fetch('/api/desktop_status');
+            if (!response.ok) { throw new Error('Błąd sieci'); }
+            const data = await response.json();
+
+            // Status serwera druku
+            if (data.print_server === 'online') {
+                printStatusBadge.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i> ONLINE';
+                printStatusBadge.className = 'badge bg-light text-success';
+            } else {
+                printStatusBadge.innerHTML = '<i class="bi bi-x-circle-fill text-danger"></i> OFFLINE';
+                printStatusBadge.className = 'badge bg-light text-danger';
+            }
+
+            // Status serwera synchronizacji
+            if (data.sync_server === 'online') {
+                syncStatusBadge.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i> ONLINE';
+                syncStatusBadge.className = 'badge bg-light text-success';
+            } else {
+                syncStatusBadge.innerHTML = '<i class="bi bi-x-circle-fill text-danger"></i> OFFLINE';
+                syncStatusBadge.className = 'badge bg-light text-danger';
+            }
+
+        } catch (error) {
+            console.error("Błąd pobierania statusu serwerów:", error);
+            printStatusBadge.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-warning"></i> BŁĄD';
+            printStatusBadge.className = 'badge bg-light text-warning';
+            syncStatusBadge.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-warning"></i> BŁĄD';
+            syncStatusBadge.className = 'badge bg-light text-warning';
+        }
+    }
+    // === KONIEC NOWEJ FUNKCJI ===
+
     // --- Inicjalizacja Aplikacji ---
-    loadKokpit(); 
-    
+    loadKokpit(); // Załaduj domyślny widok
+    // === NOWE WYWOŁANIA FUNKCJI STATUSU ===
+    checkServerStatus(); // Sprawdź od razu po załadowaniu
+    setInterval(checkServerStatus, 60000); // Sprawdzaj co minutę
+    // === KONIEC NOWYCH WYWOŁAŃ ===
+
     // --- Logika Service Workera ---
-    let serviceWorkerRegistration; 
+    let serviceWorkerRegistration;
     const updateToastElement = document.getElementById('updateToast');
     const updateToast = new bootstrap.Toast(updateToastElement);
     const refreshButton = document.getElementById('refresh-button');
@@ -1157,7 +1174,7 @@ const content = document.getElementById('app-content');
             navigator.serviceWorker.register("{{ url_for('service_worker') }}")
                 .then(registration => {
                     console.log('[PWA] Service Worker zarejestrowany pomyślnie:', registration);
-                    serviceWorkerRegistration = registration; 
+                    serviceWorkerRegistration = registration;
                     registration.onupdatefound = () => {
                         const installingWorker = registration.installing;
                         if (installingWorker) {
@@ -1181,23 +1198,9 @@ const content = document.getElementById('app-content');
         }
     }
     refreshButton.addEventListener('click', () => { console.log('[PWA] Użytkownik kliknął "Odśwież".'); updateToast.hide(); window.location.reload(); });
-    registerServiceWorker(); 
-    
+    registerServiceWorker();
+
 }); // Koniec DOMContentLoaded
     </script>
-
-    <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content bg-dark">
-          <div class="modal-header border-secondary">
-            <h5 class="modal-title text-light" id="imageModalLabel">Podgląd zdjęcia produktu</h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body text-center p-0">
-            <img src="" id="fullImage" class="img-fluid" alt="Powiększone zdjęcie produktu">
-          </div>
-        </div>
-      </div>
-    </div>
 </body>
 </html>

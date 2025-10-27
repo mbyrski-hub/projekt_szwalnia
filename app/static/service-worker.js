@@ -1,7 +1,7 @@
 // app/static/service-worker.js
 
 // --- WERSJONOWANIE I AKTUALIZACJE ---
-const CACHE_VERSION = 'v1.5.2'; // NOWA WERSJA
+const CACHE_VERSION = 'v1.6.1'; // NOWA WERSJA
 const CACHE_NAME = `szwalnia-cache-${CACHE_VERSION}`;
 const PRECACHE_ASSETS = [];
 
