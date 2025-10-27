@@ -24,6 +24,12 @@
             <option value="{{ m }}" {% if request.args.get('month') == m|string %}selected{% endif %}>{{ m }}</option>
         {% endfor %}
     </select>
+    <select name="zlecajacy" class="form-control mr-2">
+        <option value="all" {% if current_zlecajacy_filter == 'all' %}selected{% endif %}>Wszyscy zlecający</option>
+        {% for z in all_zlecajacy %}
+            <option value="{{ z }}" {% if current_zlecajacy_filter == z %}selected{% endif %}>{{ z }}</option>
+        {% endfor %}
+    </select>
     <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filtruj</button>
 </form>
 

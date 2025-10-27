@@ -27,7 +27,7 @@
     --sidebar-bg: #2c2c2c;
     --sidebar-text-color: #f0f0f0;
     --sidebar-accent-color: #ff9900;
-    
+
     --bg-color: #f4f6f9; /* ZMIANA: Jaśniejsze, czystsze tło */
     --card-bg: #ffffff;
     --text-color: #212529; /* ZMIANA: Ciemniejszy, standardowy tekst */
@@ -92,6 +92,7 @@
     transition: width 0.3s;
     display: flex;
     flex-direction: column;
+    overflow-y: auto; /* Dodano przewijanie, jeśli menu jest za długie */
 }
 
     /* Zaktualizuj to */
@@ -105,18 +106,20 @@
     color: var(--sidebar-accent-color);
     opacity: 0.9;
 }
-    
+
     .sidebar .logo img {
         max-width: 40%;
         margin-bottom: 1rem;
     }
-    
+
     .sidebar .nav-link {
     color: var(--sidebar-text-color);
     padding: 0.5rem 0.8rem; /* Było 0.6rem 1rem */
     border-radius: 5px;
     margin-bottom: 0.2rem; /* Było 0.3rem */
     transition: background-color 0.3s, color 0.3s;
+    display: flex; /* Dodano dla wyrównania ikony i tekstu */
+    align-items: center; /* Dodano dla wyrównania ikony i tekstu */
 }
 
     .sidebar .nav-link:hover, .sidebar .nav-link.active {
@@ -128,25 +131,31 @@
         margin-right: 1rem;
         width: 1.3rem;
         text-align: center;
+        flex-shrink: 0; /* Zapobiega kurczeniu się ikony */
     }
-    
+
+    /* Dodano dla ikonki strzałki */
+    .sidebar .nav-link .float-right {
+        margin-left: auto; /* Przesuwa strzałkę na prawo */
+    }
+
     .main-content {
     margin-left: 240px; /* Było 250px */
     padding: 2.6rem;
-    width: calc(100% - 220px); /* Było calc(100% - 250px) */
+    width: calc(100% - 240px); /* Dopasowano do nowej szerokości sidebar */
     transition: margin-left 0.3s, width 0.3s;
 }
-    
+
     h1, h2, h3, h4, h5 {
         color: var(--text-color);
     }
-    
+
     .card {
         background-color: var(--card-bg);
         border: 1px solid var(--border-color);
         transition: background-color 0.3s, border-color 0.3s;
     }
-    
+
     .text-muted {
         color: var(--text-muted-color) !important;
     }
@@ -162,7 +171,7 @@
     }
     .table tbody tr:hover {
         background-color: var(--hover-bg-color) !important;
-        color: var(--text-color) !important;
+        /* Kolor tekstu nie jest już potrzebny, dziedziczy z body */
     }
     .table-striped tbody tr:nth-of-type(odd) {
          background-color: rgba(0, 0, 0, 0.02);
@@ -174,7 +183,7 @@
         border-top: 1px solid var(--border-color);
         transition: border-color 0.3s;
     }
-    
+
     .form-control {
         background-color: var(--form-control-bg);
         color: var(--text-color);
@@ -187,22 +196,38 @@
         border-color: var(--primary-color);
         box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
     }
-    
+    /* Poprawka dla ciemnego motywu */
+    html.dark-mode .form-control::placeholder {
+        color: var(--text-muted-color);
+    }
+    html.dark-mode .form-control option {
+       background-color: var(--form-control-bg);
+       color: var(--text-color);
+    }
+
     .modal-content {
         background-color: var(--card-bg);
         border: 1px solid var(--border-color);
     }
+    .modal-header, .modal-footer {
+        border-bottom-color: var(--border-color); /* Poprawka dla ciemnego motywu */
+        border-top-color: var(--border-color); /* Poprawka dla ciemnego motywu */
+    }
     .close {
         color: var(--text-color);
+        opacity: 0.7; /* Lepsza widoczność w ciemnym */
     }
-    
+    html.dark-mode .close {
+         text-shadow: none; /* Usunięcie domyślnego cienia */
+    }
+
     .list-group-item {
         background-color: transparent;
         border-color: var(--border-color);
         color: var(--text-color);
     }
 
-    
+
     .sidebar-image {
         padding: 1rem 0;
         text-align: center;
@@ -212,7 +237,48 @@
         height: auto;
         opacity: 0.6;
     }
-</style>
+
+    /* Style dla submenu */
+    .sidebar .collapse .nav-link {
+        padding-left: 1.5rem; /* Wcięcie dla submenu */
+        font-size: 0.9em; /* Mniejsza czcionka */
+    }
+    .sidebar .collapse .nav-link .fas {
+        margin-right: 0.8rem; /* Mniejszy margines ikony */
+    }
+     /* Styl strzałki */
+    .sidebar .nav-link .float-right {
+        transition: transform 0.3s ease;
+    }
+    .sidebar .nav-link[aria-expanded="true"] .float-right {
+        transform: rotate(180deg);
+    }
+    /* Mniejszy odstęp między głównymi elementami */
+     #sidebarMenu > .nav > .nav-item {
+         margin-bottom: 0.1rem;
+     }
+
+    /* Style dla statusu serwerów (w kokpicie) */
+    .status-indicator {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 0;
+        border-left: 1px solid var(--border-color);
+        padding-left: 15px;
+    }
+    .status-dot { /* Zmieniono nazwę klasy z server-status-indicator */
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: #dc3545; /* Czerwony - offline */
+        transition: background-color 0.5s;
+    }
+    .status-dot.online {
+        background-color: #28a745; /* Zielony - online */
+    }
+    /* Usunięto .sidebar .small a i .sidebar .small a:hover */
+    </style>
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -222,73 +288,97 @@
                 <img src="{{ url_for('static', filename='images/hoxa_biale.png') }}" alt="Logo Firmy">
                 <div><i class="fas fa-cut"></i> Szwalnia</div>
             </div>
-            <ul class="nav flex-column">
-                <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint == 'kokpit' %}active{% endif %}" href="{{ url_for('kokpit') }}"><i class="fas fa-tachometer-alt"></i> Kokpit</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint in ['orders_list', 'new_order', 'order_detail'] %}active{% endif %}" href="{{ url_for('orders_list') }}"><i class="fas fa-list"></i> Zlecenia</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint == 'orders_history' %}active{% endif %}" href="{{ url_for('orders_history') }}"><i class="fas fa-history"></i> Historia zleceń</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint in ['order_templates', 'new_template', 'edit_template'] %}active{% endif %}" href="{{ url_for('order_templates') }}">
-                        <i class="fas fa-bookmark"></i> Szablony
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint == 'reports' %}active{% endif %}" href="{{ url_for('reports') }}">
-                        <i class="fas fa-chart-pie"></i> Zestawienia
-                    </a>
-                </li>
-                 <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint == 'calculator' %}active{% endif %}" href="{{ url_for('calculator') }}">
-                        <i class="fas fa-calculator"></i> Kalkulator
-                    </a>
-                </li>
-                 <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint == 'kanban' %}active{% endif %}" href="{{ url_for('kanban') }}">
-                        <i class="fas fa-table-columns"></i> Kto co szyje
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint == 'krojownia' %}active{% endif %}" href="{{ url_for('krojownia') }}">
-                        <i class="fas fa-scissors"></i> Krojownia
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint in ['products_list', 'add_product', 'edit_product'] %}active{% endif %}" href="{{ url_for('products_list') }}">
-                        <i class="fas fa-box-open"></i> Produkty
-                    </a>
-                </li>
-                 <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint in ['materials_management', 'add_fabric', 'edit_fabric', 'add_material', 'edit_material', 'edit_mapped_item'] %}active{% endif %}" href="{{ url_for('materials_management') }}">
-                        <i class="fas fa-scroll"></i> Tkaniny&Dodatki
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint == 'subiekt_mapping' %}active{% endif %}" href="{{ url_for('subiekt_mapping') }}">
-                        <i class="fas fa-link"></i> Mapowanie Subiekt
-                    </a>
-                </li>
-                 
-                <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint == 'label_designer' %}active{% endif %}" href="{{ url_for('label_designer') }}">
-                        <i class="fas fa-magic"></i> Kreator Metek
-                    </a>
-                </li>
-            </ul>
-        </div>
 
-       
+            <div id="sidebarMenu">
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'kokpit' %}active{% endif %}" href="{{ url_for('kokpit') }}"><i class="fas fa-tachometer-alt fa-fw"></i> Kokpit</a>
+                    </li>
 
-        <div class="sidebar-image">
-            <img src="{{ url_for('static', filename='images/menu_bg.png') }}" alt="Dekoracja">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint in ['orders_list', 'new_order', 'order_detail', 'orders_history', 'order_templates', 'new_template', 'edit_template'] %}active{% endif %}"
+                           href="#collapseZlecenia" data-toggle="collapse" role="button"
+                           aria-expanded="{% if request.endpoint in ['orders_list', 'new_order', 'order_detail', 'orders_history', 'order_templates', 'new_template', 'edit_template'] %}true{% else %}false{% endif %}" aria-controls="collapseZlecenia">
+                           <i class="fas fa-file-invoice fa-fw"></i> Zlecenia <i class="fas fa-chevron-down float-right small"></i>
+                        </a>
+                        <div class="collapse {% if request.endpoint in ['orders_list', 'new_order', 'order_detail', 'orders_history', 'order_templates', 'new_template', 'edit_template'] %}show{% endif %}" id="collapseZlecenia" data-parent="#sidebarMenu">
+                            <ul class="nav flex-column pl-3">
+                                <li class="nav-item">
+                                    <a class="nav-link {% if request.endpoint in ['orders_list', 'new_order', 'order_detail'] %}active{% endif %}" href="{{ url_for('orders_list') }}"><i class="fas fa-list fa-fw"></i> Lista Zleceń</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link {% if request.endpoint == 'orders_history' %}active{% endif %}" href="{{ url_for('orders_history') }}"><i class="fas fa-history fa-fw"></i> Historia</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link {% if request.endpoint in ['order_templates', 'new_template', 'edit_template'] %}active{% endif %}" href="{{ url_for('order_templates') }}"><i class="fas fa-bookmark fa-fw"></i> Szablony</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint in ['krojownia', 'kanban'] %}active{% endif %}"
+                           href="#collapseProdukcja" data-toggle="collapse" role="button"
+                           aria-expanded="{% if request.endpoint in ['krojownia', 'kanban'] %}true{% else %}false{% endif %}" aria-controls="collapseProdukcja">
+                           <i class="fas fa-industry fa-fw"></i> Produkcja <i class="fas fa-chevron-down float-right small"></i>
+                        </a>
+                        <div class="collapse {% if request.endpoint in ['krojownia', 'kanban'] %}show{% endif %}" id="collapseProdukcja" data-parent="#sidebarMenu">
+                            <ul class="nav flex-column pl-3">
+                                <li class="nav-item">
+                                    <a class="nav-link {% if request.endpoint == 'krojownia' %}active{% endif %}" href="{{ url_for('krojownia') }}"><i class="fas fa-scissors fa-fw"></i> Krojownia</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link {% if request.endpoint == 'kanban' %}active{% endif %}" href="{{ url_for('kanban') }}"><i class="fas fa-table-columns fa-fw"></i> Szwalnia</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint in ['products_list', 'add_product', 'edit_product', 'materials_management', 'add_fabric', 'edit_fabric', 'add_material', 'edit_material', 'edit_mapped_item', 'subiekt_mapping', 'label_designer'] %}active{% endif %}"
+                           href="#collapseZarzadzanie" data-toggle="collapse" role="button"
+                           aria-expanded="{% if request.endpoint in ['products_list', 'add_product', 'edit_product', 'materials_management', 'add_fabric', 'edit_fabric', 'add_material', 'edit_material', 'edit_mapped_item', 'subiekt_mapping', 'label_designer'] %}true{% else %}false{% endif %}" aria-controls="collapseZarzadzanie">
+                           <i class="fas fa-cogs fa-fw"></i> Zarządzanie <i class="fas fa-chevron-down float-right small"></i>
+                        </a>
+                        <div class="collapse {% if request.endpoint in ['products_list', 'add_product', 'edit_product', 'materials_management', 'add_fabric', 'edit_fabric', 'add_material', 'edit_material', 'edit_mapped_item', 'subiekt_mapping', 'label_designer'] %}show{% endif %}" id="collapseZarzadzanie" data-parent="#sidebarMenu">
+                            <ul class="nav flex-column pl-3">
+                                <li class="nav-item">
+                                    <a class="nav-link {% if request.endpoint in ['products_list', 'add_product', 'edit_product'] %}active{% endif %}" href="{{ url_for('products_list') }}"><i class="fas fa-box-open fa-fw"></i> Produkty</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link {% if request.endpoint in ['materials_management', 'add_fabric', 'edit_fabric', 'add_material', 'edit_material', 'edit_mapped_item'] %}active{% endif %}" href="{{ url_for('materials_management') }}"><i class="fas fa-scroll fa-fw"></i> Materiały</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link {% if request.endpoint == 'subiekt_mapping' %}active{% endif %}" href="{{ url_for('subiekt_mapping') }}"><i class="fas fa-link fa-fw"></i> Mapowanie Subiekt</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link {% if request.endpoint == 'label_designer' %}active{% endif %}" href="{{ url_for('label_designer') }}"><i class="fas fa-magic fa-fw"></i> Kreator Metek</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </li>
+
+                   <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint in ['reports', 'calculator'] %}active{% endif %}"
+                           href="#collapseAnalizy" data-toggle="collapse" role="button"
+                           aria-expanded="{% if request.endpoint in ['reports', 'calculator'] %}true{% else %}false{% endif %}" aria-controls="collapseAnalizy">
+                           <i class="fas fa-chart-line fa-fw"></i> Analizy <i class="fas fa-chevron-down float-right small"></i>
+                        </a>
+                        <div class="collapse {% if request.endpoint in ['reports', 'calculator'] %}show{% endif %}" id="collapseAnalizy" data-parent="#sidebarMenu">
+                            <ul class="nav flex-column pl-3">
+                                <li class="nav-item">
+                                    <a class="nav-link {% if request.endpoint == 'reports' %}active{% endif %}" href="{{ url_for('reports') }}"><i class="fas fa-chart-pie fa-fw"></i> Zestawienia</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link {% if request.endpoint == 'calculator' %}active{% endif %}" href="{{ url_for('calculator') }}"><i class="fas fa-calculator fa-fw"></i> Kalkulator</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </li>
+                </ul>
+            </div> </div> <div class="sidebar-image mt-auto"> <img src="{{ url_for('static', filename='images/menu_bg.png') }}" alt="Dekoracja">
         </div>
-        
-    </div>
-    <div class="main-content">
+    </div> <div class="main-content">
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             {% for category, message in messages %}
@@ -307,49 +397,110 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-           
 
-            // === POZOSTAŁY KOD JS ===
+
+             // === NOWY KOD SPRAWDZANIA STATUSU PRZEZ API ===
             const printStatusDot = document.getElementById('print-server-status');
             const syncStatusDot = document.getElementById('sync-server-status');
             const refreshPrintBtn = document.getElementById('refresh-print-status');
-            const refreshSyncBtn = document.getElementById('refresh-sync-status');
+            const refreshSyncBtn = document.getElementById('refresh-sync-status'); // Zakładam, że ten przycisk też istnieje
 
-            async function checkServerStatus(url, dotElement) {
+            async function checkDesktopAppStatus() {
+                // Sprawdź czy elementy istnieją ZANIM spróbujesz ich użyć
+                if (!printStatusDot || !syncStatusDot) return;
+
+                // Ustaw status na "sprawdzanie" (opcjonalne)
+                // Usunięto resetowanie klas tutaj, aby uniknąć migotania
+                // printStatusDot.classList.remove('online');
+                // syncStatusDot.classList.remove('online');
+                printStatusDot.title = 'Sprawdzanie...';
+                syncStatusDot.title = 'Sprawdzanie...';
+
                 try {
-                    const response = await fetch(url, { method: 'GET', mode: 'cors' });
+                    const response = await fetch("{{ url_for('get_desktop_status') }}"); // Odpytujemy nowe API
+                    const data = await response.json();
+
                     if (response.ok) {
-                        dotElement.classList.add('online');
+                        const ipInfo = data.last_ip ? ` (IP: ${data.last_ip}, ${data.last_seen || 'N/A'})` : ' (Brak IP)';
+                        // Aktualizuj kropkę dla serwera druku
+                        if (data.print_server === 'online') {
+                            printStatusDot.classList.add('online'); // Dodaj klasę, jeśli online
+                            printStatusDot.title = `Serwer druku online${ipInfo}`;
+                        } else {
+                            printStatusDot.classList.remove('online'); // Usuń klasę, jeśli offline
+                            printStatusDot.title = `Serwer druku offline${ipInfo}`;
+                        }
+                        // Aktualizuj kropkę dla serwera synchronizacji
+                        if (data.sync_server === 'online') {
+                            syncStatusDot.classList.add('online'); // Dodaj klasę, jeśli online
+                             syncStatusDot.title = `Serwer synchronizacji online${ipInfo}`;
+                        } else {
+                            syncStatusDot.classList.remove('online'); // Usuń klasę, jeśli offline
+                            syncStatusDot.title = `Serwer synchronizacji offline${ipInfo}`;
+                        }
+                        if(data.error){ // Display API error if present
+                             printStatusDot.title = data.error;
+                             syncStatusDot.title = data.error;
+                        }
                     } else {
-                        dotElement.classList.remove('online');
+                        const errorMsg = `Błąd API (${response.status}): ${data.error || response.statusText}`;
+                        console.error("Błąd API podczas sprawdzania statusu:", errorMsg);
+                        printStatusDot.classList.remove('online'); // Usuń klasę przy błędzie
+                        syncStatusDot.classList.remove('online'); // Usuń klasę przy błędzie
+                        printStatusDot.title = errorMsg;
+                        syncStatusDot.title = errorMsg;
                     }
                 } catch (error) {
-                    dotElement.classList.remove('online');
+                    const errorMsg = `Błąd sieci podczas sprawdzania statusu: ${error}`;
+                    console.error(errorMsg);
+                    printStatusDot.classList.remove('online'); // Usuń klasę przy błędzie
+                    syncStatusDot.classList.remove('online'); // Usuń klasę przy błędzie
+                    printStatusDot.title = errorMsg;
+                    syncStatusDot.title = errorMsg;
                 }
             }
 
-            const checkPrintStatus = () => checkServerStatus('http://127.0.0.1:5001/status', printStatusDot);
-            const checkSyncStatus = () => checkServerStatus('http://127.0.0.1:5002/status', syncStatusDot);
-
-            function checkAllStatuses() {
-                checkPrintStatus();
-                checkSyncStatus();
+            // Dodaj obsługę przycisków odświeżania, tylko jeśli istnieją
+            if (refreshPrintBtn) {
+                refreshPrintBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    checkDesktopAppStatus();
+                });
             }
-            
-            refreshPrintBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                checkPrintStatus();
+            if (refreshSyncBtn) {
+                 refreshSyncBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    checkDesktopAppStatus();
+                });
+            }
+
+            // Uruchom sprawdzanie przy ładowaniu strony i cyklicznie
+            checkDesktopAppStatus();
+            setInterval(checkDesktopAppStatus, 300000); // Sprawdzaj co 5 minut
+            // === KONIEC NOWEGO KODU SPRAWDZANIA STATUSU ===
+
+            // === Kod przełącznika motywu ===
+            const themeToggle = document.getElementById('theme-toggle');
+            const htmlEl = document.documentElement;
+
+            // Ustaw stan przełącznika na podstawie zapisanego motywu
+            if (htmlEl.classList.contains('dark-mode')) {
+                themeToggle.checked = true;
+            }
+
+            themeToggle.addEventListener('change', () => {
+                if (themeToggle.checked) {
+                    htmlEl.classList.add('dark-mode');
+                    localStorage.setItem('theme', 'dark');
+                } else {
+                    htmlEl.classList.remove('dark-mode');
+                    localStorage.setItem('theme', 'light');
+                }
+                // Możesz dodać tutaj odświeżenie wykresów, jeśli masz wykresy
+                // np. renderAllCharts();
             });
 
-            refreshSyncBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                checkSyncStatus();
-            });
-
-
-            checkAllStatuses();
-            setInterval(checkAllStatuses, 300000); // Sprawdzaj co 300 sekund
-        });
+        }); // Koniec DOMContentLoaded
     </script>
     {% block scripts %}{% endblock %}
 </body>

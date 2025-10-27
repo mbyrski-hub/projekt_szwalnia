@@ -7,13 +7,15 @@
 </div>
 
 {% if last_update_timestamp %}
-    <div class="alert alert-info">
-        <i class="fas fa-info-circle"></i> Ostatnia synchronizacja cen z Subiektem: <strong>{{ last_update_timestamp | to_local_time }}</strong>. 
-        {% if last_update_count %}
-            Przetworzono <strong>{{ last_update_count }}</strong> wpisów cenowych od dostawców.
-        {% endif %}
-    </div>
-{% endif %}
+                            <div class="alert alert-info">
+                                <strong>Info:</strong> Ostatnia synchronizacja cen z Subiektem: <strong>{{ last_update_timestamp | to_local_time }}</strong>.
+                                <br>
+                                Przetworzono łącznie: <strong>{{ last_update_count }}</strong> wpisów.
+                                {% if last_actual_update_count is not none %}
+                                    Faktycznie zaktualizowano (zmieniono) ceny dla: <strong>{{ last_actual_update_count }}</strong> pozycji.
+                                {% endif %}
+                            </div>
+                        {% endif %}
 
 <div class="row">
     <div class="col-lg-6">

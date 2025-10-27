@@ -673,22 +673,6 @@ document.addEventListener("DOMContentLoaded", function() {
     renderAllCharts();
 
     // Reszta skryptów (zegar, statusy serwerów, etc.)
-    const printStatusDot = document.getElementById('print-server-status');
-    const syncStatusDot = document.getElementById('sync-server-status');
-    function checkServerStatus(url, dotElement) {
-        if (!dotElement) return;
-        fetch(url, {cache: "no-cache"}).then(response => {
-            dotElement.classList.toggle('online', response.ok);
-        }).catch(() => {
-            dotElement.classList.remove('online');
-        });
-    }
-    const checkAllStatuses = () => {
-        checkServerStatus('http://localhost:5001/status', printStatusDot);
-        checkServerStatus('http://localhost:5002/status', syncStatusDot);
-    };
-    checkAllStatuses();
-    setInterval(checkAllStatuses, 60000);
 
     const dateTimeElement = document.getElementById('current-datetime');
     function updateDateTime() {

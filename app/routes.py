@@ -594,7 +594,7 @@ def orders_list():
     status_filter = request.args.get('status', '').strip().upper()
     year_filter = request.args.get('year', 'current')
     month_filter = request.args.get('month', 'current')
-
+    zlecajacy_filter = request.args.get('zlecajacy', 'all') # NOWY FILTR
     # ### POCZĄTEK ZMIANY: Dodajemy opcję ładowania tkanin przypisanych do zlecenia ###
     eager_loading_options = [
         # TA LINIA ZOSTAŁA DODANA, ABY ODŚWIEŻAĆ DANE O TKANINACH
@@ -615,6 +615,8 @@ def orders_list():
         orders_query = orders_query.filter(Order.status == status_filter)
     if year_filter == 'current':
         orders_query = orders_query.filter(extract('year', Order.created_at) == datetime.utcnow().year)
+        if zlecajacy_filter != 'all': # NOWY WARUNEK
+            orders_query = orders_query.filter(Order.zlecajacy == zlecajacy_filter)
     elif year_filter != 'all':
         try:
             orders_query = orders_query.filter(extract('year', Order.created_at) == int(year_filter))
@@ -640,18 +642,21 @@ def orders_list():
     years_query = db.session.query(extract('year', Order.created_at)).distinct().all()
     years = sorted({int(y[0]) for y in years_query})
     clients = Client.query.order_by(Client.name).all()
+    all_zlecajacy = [z[0] for z in db.session.query(Order.zlecajacy).distinct().order_by(Order.zlecajacy).all() if z[0]]
     
     return render_template('orders_list.html', in_progress_orders=in_progress_orders, new_orders=new_orders,
                            completed_orders=completed_orders, clients=clients, years=years,
                            current_year_filter=year_filter,
-                           current_month_filter=month_filter)
+                           current_month_filter=month_filter,
+                           all_zlecajacy=all_zlecajacy,
+                           current_zlecajacy_filter=zlecajacy_filter)
 
 @app.route('/orders/history')
 def orders_history():
     client_filter = request.args.get('client', '').strip().upper()
     year_filter = request.args.get('year', type=int)
     month_filter = request.args.get('month', type=int)
-
+    zlecajacy_filter = request.args.get('zlecajacy', 'all') # NOWY FILTR
     grouping_date = db.case(
         (Order.production_month != None, func.date(Order.production_month + '-01')),
         else_=func.date(Order.sewing_finished_at)
@@ -691,6 +696,10 @@ def orders_history():
         summary_query = summary_query.filter(extract('month', grouping_date) == month_filter)
         orders_query = orders_query.filter(extract('month', Order.sewing_finished_at) == month_filter)
 
+    if zlecajacy_filter != 'all': # NOWY WARUNEK
+        summary_query = summary_query.filter(Order.zlecajacy == zlecajacy_filter) # Dodaj do summary_query
+        orders_query = orders_query.filter(Order.zlecajacy == zlecajacy_filter)  # Dodaj do orders_query
+
     monthly_summary = summary_query.group_by('year', 'month').order_by(
         db.literal_column('year').desc(),
         db.literal_column('month').desc()
@@ -708,12 +717,15 @@ def orders_history():
     years = sorted(list(all_years), reverse=True)
     
     clients = Client.query.order_by(Client.name).all()
-    
+    all_zlecajacy = [z[0] for z in db.session.query(Order.zlecajacy).distinct().order_by(Order.zlecajacy).all() if z[0]]
+
     return render_template('orders_history.html', 
                            monthly_summary=monthly_summary, 
                            orders=all_orders,
                            clients=clients, 
-                           years=years)
+                           years=years,
+                           all_zlecajacy=all_zlecajacy,
+                           current_zlecajacy_filter=zlecajacy_filter)
 
 # W app/routes.py
 @app.route('/api/monthly_production_details/<int:year>/<int:month>')
@@ -1444,6 +1456,30 @@ def reports():
     # Top 5 klientów wg wartości
     top_clients_by_value = sorted(client_value.items(), key=lambda item: item[1], reverse=True)[:5]
     
+    # NOWA LOGIKA: Obliczanie rankingu Top Przedstawicieli w Pythonie
+    representatives_summary = defaultdict(lambda: {'count': 0, 'total_value': 0.0})
+
+    # Używamy `completed_orders`, które już pobraliśmy z uwzględnieniem filtrów
+    for order in completed_orders:
+        zlecajacy = order.zlecajacy
+        if not zlecajacy: continue # Pomiń zlecenia bez przypisanego zlecającego
+
+        # Oblicz wartość zlecenia (z marżą)
+        order_value = calculate_order_total_cost(order).get('total_cost', 0.0)
+
+        # Dodaj do podsumowania
+        representatives_summary[zlecajacy]['count'] += 1
+        representatives_summary[zlecajacy]['total_value'] += order_value
+
+    # Posortuj wyniki (np. wg wartości) i weź top 5
+    # Możesz zmienić 'total_value' na 'count', jeśli wolisz sortować wg liczby zleceń
+    sorted_representatives = sorted(
+        representatives_summary.items(),
+        key=lambda item: item[1]['count'], # Sortowanie wg liczby zlecen
+        reverse=True
+    )
+    top_representatives = sorted_representatives[:5] # Weź pierwszych 5
+
     # Dane do wykresu struktury kosztów
     cost_structure_data = {
         'Produkcja': round(total_production_cost, 2),
@@ -1499,6 +1535,7 @@ def reports():
         current_year=year_filter,
         current_month=month_filter,
         current_filter=material_filter,
+        top_representatives=top_representatives
     )
 
 @app.context_processor
@@ -1534,60 +1571,94 @@ def receive_subiekt_catalog():
 
     subiekt_products = request.get_json()
     if not subiekt_products:
-        return jsonify({'error': 'Brak danych'}), 400
+        # ZMIANA: Zwracamy sukces, jeśli lista jest pusta, ale nic nie dodajemy
+        return jsonify({
+            'status': 'success', 
+            'message': 'Otrzymano pustą listę katalogu. Nie dodano nowych towarów do zmapowania.'
+        }), 200
 
     try:
-        # Krok 1: Zbierz wszystkie istniejące symbole z bazy danych
-        existing_symbols_in_cache = {s[0] for s in db.session.query(SubiektProductCache.symbol).all()}
+        # Krok 1: Zbierz symbole TYLKO z Fabric i Material
         existing_symbols_in_fabrics = {s[0] for s in db.session.query(Fabric.subiekt_symbol).filter(Fabric.subiekt_symbol.isnot(None)).all()}
         existing_symbols_in_materials = {s[0] for s in db.session.query(Material.subiekt_symbol).filter(Material.subiekt_symbol.isnot(None)).all()}
         
-        all_existing_symbols = existing_symbols_in_cache.union(existing_symbols_in_fabrics).union(existing_symbols_in_materials)
+        # Symbole, które są już zmapowane jako Tkanina lub Materiał
+        mapped_symbols = existing_symbols_in_fabrics.union(existing_symbols_in_materials)
 
         added_count = 0
-        # Krok 2: Iteruj przez otrzymaną listę i dodawaj tylko nowe towary
+        reset_count = 0 
+        
+        # Krok 2: Iteruj przez otrzymaną listę
         for product_data in subiekt_products:
             symbol = product_data.get('symbol')
-            # Jeśli symbol istnieje i nie ma go jeszcze w naszej bazie, dodaj go do cache
-            if symbol and symbol not in all_existing_symbols:
-                cached_product = SubiektProductCache(
+            name = product_data.get('name')
+
+            if not symbol or not name: continue # Pomiń wpisy bez symbolu lub nazwy
+
+            # Sprawdź, czy symbol jest już zmapowany jako Fabric lub Material
+            if symbol in mapped_symbols:
+                continue # Jeśli tak, przejdź do następnego towaru
+
+            # Jeśli symbol NIE jest zmapowany, sprawdźmy cache
+            cached_product = SubiektProductCache.query.filter_by(symbol=symbol).first()
+
+            if cached_product:
+                # Symbol jest w cache, ale nie w Fabric/Material
+                # Może został usunięty ręcznie - resetujemy flagę is_mapped
+                if cached_product.is_mapped:
+                    cached_product.is_mapped = False
+                    reset_count += 1
+                # Zaktualizuj nazwę, jeśli się zmieniła w Subiekcie
+                if cached_product.name != name:
+                     cached_product.name = name
+            else:
+                # Symbolu nie ma ani w Fabric/Material, ani w cache - dodajemy go
+                new_cached_product = SubiektProductCache(
                     symbol=symbol,
-                    name=product_data.get('name'),
+                    name=name,
                     is_mapped=False
                 )
-                db.session.add(cached_product)
-                all_existing_symbols.add(symbol) # Dodaj do seta, aby uniknąć duplikatów w tej samej sesji
+                db.session.add(new_cached_product)
                 added_count += 1
         
         db.session.commit()
         
-        return jsonify({
-            'status': 'success', 
-            'message': f'Pomyślnie sprawdzono katalog. Dodano {added_count} nowych towarów do zmapowania.'
-        }), 200
+        message = f'Pomyślnie sprawdzono katalog.'
+        if added_count > 0:
+            message += f' Dodano {added_count} nowych towarów do zmapowania.'
+        if reset_count > 0:
+             message += f' Zresetowano status mapowania dla {reset_count} towarów (prawdopodobnie usuniętych ręcznie).'
+        if added_count == 0 and reset_count == 0:
+             message += f' Nie znaleziono nowych ani usuniętych towarów do przetworzenia.'
+
+        return jsonify({'status': 'success', 'message': message}), 200
 
     except Exception as e:
         db.session.rollback()
+        app.logger.error(f"Błąd w receive_subiekt_catalog: {e}") # Dodano logowanie błędów
         return jsonify({'error': str(e)}), 500
     
 @app.route('/subiekt-mapping')
 def subiekt_mapping():
     unmapped_products = SubiektProductCache.query.filter_by(is_mapped=False).order_by(SubiektProductCache.symbol).all()
     
-    # --- POCZĄTEK ZMIANY ---
-    # Pobranie daty ostatniej aktualizacji
+    # --- ZMIANA: Pobieramy teraz 3 wartości ---
     last_update_info = SystemInfo.query.filter_by(key='last_price_update').first()
     last_update_timestamp = last_update_info.value if last_update_info else None
     
-    # Pobranie liczby zaktualizowanych cen
     update_count_info = SystemInfo.query.filter_by(key='last_price_update_count').first()
     last_update_count = update_count_info.value if update_count_info else None
+    
+    # NOWY KOD: Pobranie liczby ZAKTUALIZOWANYCH
+    actual_update_info = SystemInfo.query.filter_by(key='last_price_actual_updates').first()
+    last_actual_update_count = actual_update_info.value if actual_update_info else None
     # --- KONIEC ZMIANY ---
     
     return render_template('subiekt_mapping.html', 
                            products=unmapped_products,
                            last_update_timestamp=last_update_timestamp,
-                           last_update_count=last_update_count) # <-- Przekazanie do szablonu
+                           last_update_count=last_update_count,
+                           last_actual_update_count=last_actual_update_count) # <-- Przekazanie nowej zmiennej
 
 @app.route('/subiekt-mapping/map', methods=['POST'])
 def map_subiekt_product():
@@ -2909,6 +2980,8 @@ def receive_price_update():
     return jsonify({'status': 'warning', 'message': 'Ten endpoint jest przestarzały. Zaktualizuj program Szwalnia_Serwer do najnowszej wersji.'}), 200
 
 # Nowy, główny endpoint do aktualizacji cen od dostawców
+# W app/routes.py
+
 @app.route('/api/v1/update-supplier-prices', methods=['POST'])
 def receive_supplier_price_update():
     auth_key = request.headers.get('X-API-KEY')
@@ -2916,12 +2989,19 @@ def receive_supplier_price_update():
         return jsonify({'error': 'Brak autoryzacji'}), 401
     
     price_data = request.get_json()
-    if not price_data:
-        return jsonify({'error': 'Brak danych'}), 400
     
-    updated_items = set() # Zbiór do śledzenia, dla których towarów zaktualizowaliśmy ceny
+    if price_data is None:
+         return jsonify({'error': 'Brak danych (json is null)'}), 400
+    
+    updated_items = set() 
+    processed_count = 0 
+    
+    # --- NOWY LICZNIK ---
+    actually_updated_count = 0 # Licznik faktycznych zmian cen
 
     try:
+        # Krok 1: Przetwórz ceny od dostawców (bez zapisu do bazy)
+        items_to_process_in_db = []
         for item_data in price_data:
             symbol = item_data.get('symbol')
             new_price = item_data.get('price')
@@ -2931,7 +3011,6 @@ def receive_supplier_price_update():
             if not (symbol and supplier_name and new_price is not None):
                 continue
 
-            # 1. Znajdź towar (tkaninę lub materiał) po symbolu Subiekta
             item = Fabric.query.filter_by(subiekt_symbol=symbol).first()
             item_type = 'fabric'
             if not item:
@@ -2939,63 +3018,115 @@ def receive_supplier_price_update():
                 item_type = 'material'
 
             if not item:
-                continue # Pomiń, jeśli towar nie jest zmapowany w systemie
+                continue 
 
-            # 2. Znajdź lub stwórz dostawcę
             supplier = Supplier.query.filter_by(name=supplier_name).first()
             if not supplier:
                 supplier = Supplier(name=supplier_name)
                 db.session.add(supplier)
-                db.session.flush() # Potrzebujemy ID dostawcy
+                db.session.flush() 
 
-            # 3. Zaktualizuj lub stwórz wpis z ceną dostawcy
             price_date = datetime.strptime(price_date_str, '%Y-%m-%d').date() if price_date_str else None
-
-            if item_type == 'fabric':
-                supplier_price_entry = FabricPrice.query.filter_by(fabric_id=item.id, supplier_id=supplier.id).first()
-                if supplier_price_entry:
-                    supplier_price_entry.price = new_price
-                    supplier_price_entry.price_date = price_date
-                else:
-                    new_price_entry = FabricPrice(price=new_price, price_date=price_date, fabric_id=item.id, supplier_id=supplier.id)
-                    db.session.add(new_price_entry)
-                updated_items.add(('fabric', item.id))
-
-            elif item_type == 'material':
-                supplier_price_entry = MaterialPrice.query.filter_by(material_id=item.id, supplier_id=supplier.id).first()
-                if supplier_price_entry:
-                    supplier_price_entry.price = new_price
-                    supplier_price_entry.price_date = price_date
-                else:
-                    new_price_entry = MaterialPrice(price=new_price, price_date=price_date, material_id=item.id, supplier_id=supplier.id)
-                    db.session.add(new_price_entry)
-                updated_items.add(('material', item.id))
+            
+            # Dodajemy do listy do późniejszego przetworzenia
+            items_to_process_in_db.append({
+                'item_id': item.id,
+                'item_type': item_type,
+                'supplier_id': supplier.id,
+                'new_price': new_price,
+                'price_date': price_date
+            })
+            processed_count += 1
         
-        db.session.commit() # Zapisz wszystkie nowe ceny i dostawców
+        # Krok 2: Zapisz ceny dostawców w bazie danych
+        for item_data in items_to_process_in_db:
+            item_id = item_data['item_id']
+            supplier_id = item_data['supplier_id']
+            new_price = item_data['new_price']
+            price_date = item_data['price_date']
 
-        # 4. Zaktualizuj główną (najnowszą) cenę dla każdego zmodyfikowanego towaru
+            if item_data['item_type'] == 'fabric':
+                supplier_price_entry = FabricPrice.query.filter_by(fabric_id=item_id, supplier_id=supplier_id).first()
+                if supplier_price_entry:
+                    supplier_price_entry.price = new_price
+                    supplier_price_entry.price_date = price_date
+                else:
+                    new_price_entry = FabricPrice(price=new_price, price_date=price_date, fabric_id=item_id, supplier_id=supplier_id)
+                    db.session.add(new_price_entry)
+                updated_items.add(('fabric', item_id))
+            else: # material
+                supplier_price_entry = MaterialPrice.query.filter_by(material_id=item_id, supplier_id=supplier_id).first()
+                if supplier_price_entry:
+                    supplier_price_entry.price = new_price
+                    supplier_price_entry.price_date = price_date
+                else:
+                    new_price_entry = MaterialPrice(price=new_price, price_date=price_date, material_id=item_id, supplier_id=supplier_id)
+                    db.session.add(new_price_entry)
+                updated_items.add(('material', item_id))
+
+        db.session.commit() # Zapisz wszystkie ceny dostawców
+
+        # Krok 3: Zaktualizuj główną cenę i ZALOGUJ ZMIANĘ
         for item_type, item_id in updated_items:
             if item_type == 'fabric':
                 latest_price_entry = FabricPrice.query.filter_by(fabric_id=item_id).order_by(FabricPrice.price_date.desc().nullslast(), FabricPrice.id.desc()).first()
                 if latest_price_entry:
                     fabric_to_update = Fabric.query.get(item_id)
-                    fabric_to_update.price = latest_price_entry.price
+                    old_price = fabric_to_update.price
+                    new_price = latest_price_entry.price
+                    
+                    if old_price != new_price:
+                        fabric_to_update.price = new_price
+                        log_entry = PriceUpdateLog(item_type='Tkanina', item_name=fabric_to_update.name, old_price=old_price, new_price=new_price)
+                        db.session.add(log_entry)
+                        actually_updated_count += 1 # Zwiększ licznik faktycznych aktualizacji
             
             elif item_type == 'material':
                 latest_price_entry = MaterialPrice.query.filter_by(material_id=item_id).order_by(MaterialPrice.price_date.desc().nullslast(), MaterialPrice.id.desc()).first()
                 if latest_price_entry:
                     material_to_update = Material.query.get(item_id)
-                    material_to_update.price = latest_price_entry.price
+                    old_price = material_to_update.price
+                    new_price = latest_price_entry.price
+                    
+                    if old_price != new_price:
+                        material_to_update.price = new_price
+                        log_entry = PriceUpdateLog(item_type='Materiał', item_name=material_to_update.name, old_price=old_price, new_price=new_price)
+                        db.session.add(log_entry)
+                        actually_updated_count += 1 # Zwiększ licznik faktycznych aktualizacji
 
-        db.session.commit() # Zapisz zaktualizowane ceny główne
+        # Krok 4: Zapisz OBA liczniki do SystemInfo
+        
+        # 1. Zapisz datę
+        last_update_info = SystemInfo.query.filter_by(key='last_price_update').first()
+        if not last_update_info:
+            last_update_info = SystemInfo(key='last_price_update')
+            db.session.add(last_update_info)
+        last_update_info.value = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
 
-        return jsonify({'status': 'success', 'message': f'Pomyślnie przetworzono {len(price_data)} wpisów cenowych.'}), 200
+        # 2. Zapisz LICZBĘ PRZETWORZONYCH (stara logika)
+        update_count_info = SystemInfo.query.filter_by(key='last_price_update_count').first()
+        if not update_count_info:
+            update_count_info = SystemInfo(key='last_price_update_count')
+            db.session.add(update_count_info)
+        update_count_info.value = str(processed_count) # Stara zmienna
+
+        # 3. Zapisz LICZBĘ FAKTYCZNIE ZAKTUALIZOWANYCH (nowa logika)
+        actual_update_count_info = SystemInfo.query.filter_by(key='last_price_actual_updates').first()
+        if not actual_update_count_info:
+            actual_update_count_info = SystemInfo(key='last_price_actual_updates')
+            db.session.add(actual_update_count_info)
+        actual_update_count_info.value = str(actually_updated_count) # Nowa zmienna
+
+        db.session.commit() 
+        
+        # Krok 5: Zmodyfikuj wiadomość zwrotną
+        message = f'Pomyślnie przetworzono {processed_count} wpisów. Zaktualizowano {actually_updated_count} cen.'
+        return jsonify({'status': 'success', 'message': message}), 200
         
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Błąd podczas aktualizacji cen od dostawców: {e}")
         return jsonify({'error': str(e)}), 500
-# ### KONIEC NOWEGO KODU ###
 
 # W app/routes.py
 
@@ -3613,5 +3744,83 @@ def api_admin_calculator_materials():
         return jsonify({'error': str(e)}), 500
 
 # --- KONIEC NOWEGO KODU: API dla Kalkulatora Mobile ---
+# NOWY ENDPOINT ODBIERAJĄCY IP Z APLIKACJI DESKTOPOWEJ
+@app.route('/api/desktop_status')
+def get_desktop_status():
+    desktop_ip = None
+    last_seen = None
+    is_sync_server_alive = False # Domyślnie offline
 
+    # Odczytaj ostatnio zgłoszony adres IP i czas z bazy danych
+    ip_info = SystemInfo.query.filter_by(key='desktop_app_last_ip').first()
+    if ip_info and ip_info.value:
+        try:
+            parts = ip_info.value.split('|')
+            desktop_ip = parts[0]
+            if len(parts) > 1:
+                last_seen = datetime.fromisoformat(parts[1])
+
+                # NOWA LOGIKA: Sprawdź, czy ostatnie zgłoszenie było niedawno
+                time_difference = datetime.utcnow() - last_seen
+                # Uznajemy za online, jeśli ostatnie zgłoszenie było mniej niż 7 minut temu
+                if time_difference < timedelta(minutes=7):
+                    is_sync_server_alive = True
+
+        except Exception as e:
+            current_app.logger.warning(f"Nieprawidłowy format zapisanego IP lub błąd daty: {ip_info.value}, Error: {e}")
+            pass # desktop_ip i last_seen pozostaną None lub z poprzedniej iteracji
+
+    results = {
+        'print_server': 'offline', # Status druku domyślnie offline
+        'sync_server': 'online' if is_sync_server_alive else 'offline', # Status sync zależy od czasu
+        'last_ip': desktop_ip,
+        'last_seen': last_seen.strftime('%Y-%m-%d %H:%M:%S UTC') if last_seen else None
+    }
+    timeout = 1 # Krótki czas oczekiwania na próbę połączenia z serwerem druku
+
+    # Nadal aktywnie sprawdzamy status serwera druku, jeśli mamy IP
+    if desktop_ip:
+        try:
+            response = requests.get(f"http://{desktop_ip}:5001/status", timeout=timeout)
+            if response.ok and response.json().get('status') == 'online':
+                results['print_server'] = 'online'
+        except requests.exceptions.RequestException:
+            pass # Pozostaje 'offline' dla serwera druku
+    else:
+         results['error'] = 'Brak zgłoszonego adresu IP aplikacji desktopowej.'
+         # Jeśli nie ma IP, oba serwery są traktowane jako offline (co już jest ustawione domyślnie)
+
+
+    return jsonify(results)
+
+
+@app.route('/api/report_desktop_ip', methods=['POST'])
+def report_desktop_ip():
+    auth_key = request.headers.get('X-API-KEY')
+    if auth_key != current_app.config['API_SECRET_KEY']:
+        return jsonify({'error': 'Brak autoryzacji'}), 401
+
+    data = request.get_json()
+    ip_address = data.get('ip_address') if data else None
+
+    if not ip_address:
+        return jsonify({'error': 'Brak adresu IP w zapytaniu'}), 400
+
+    try:
+        # Znajdź lub stwórz wpis w SystemInfo
+        ip_info = SystemInfo.query.filter_by(key='desktop_app_last_ip').first()
+        if not ip_info:
+            ip_info = SystemInfo(key='desktop_app_last_ip')
+            db.session.add(ip_info)
+        
+        # Zapisz adres IP i czas aktualizacji
+        ip_info.value = f"{ip_address}|{datetime.utcnow().isoformat()}" # Zapisujemy IP i timestamp
+        
+        db.session.commit()
+        return jsonify({'status': 'success', 'message': f'Zapisano adres IP: {ip_address}'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Błąd podczas zapisywania IP aplikacji desktopowej: {e}")
+        return jsonify({'error': str(e)}), 500
 # --- KONIEC NOWEGO API ---

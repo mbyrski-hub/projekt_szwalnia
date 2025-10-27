@@ -86,7 +86,7 @@ def create_shortcut(enable):
     shortcut_path = os.path.join(get_startup_folder(), f"{APP_NAME}.lnk")
     if enable:
         if not os.path.exists(shortcut_path):
-            target_path = sys.executable
+            target_path = sys.executable # Use sys.executable for compiled app path
             winshell.CreateShortcut(Path=shortcut_path, Target=target_path)
     else:
         if os.path.exists(shortcut_path):
@@ -193,10 +193,12 @@ def get_data_from_warehouse(queue, config_data, warehouse_symbol):
 def send_prices_to_webapp(queue, config_data, data_to_send):
     url = f"{config_data.get('web_app_url')}/api/v1/update-supplier-prices"
     headers = {'Content-Type': 'application/json', 'X-API-KEY': config_data.get('api_key')}
-    
+
+    # ZMIANA: Dodano 'name' do wysyłanych danych
     data_for_api = [
         {
             'symbol': item['symbol'],
+            'name': item.get('name'), # <-- DODANO
             'price': item.get('price'),
             'supplier': item.get('supplier'),
             'price_date': item.get('price_date')
@@ -204,10 +206,8 @@ def send_prices_to_webapp(queue, config_data, data_to_send):
         for item in data_to_send if item.get('price') is not None and item.get('supplier')
     ]
 
-    if not data_for_api:
-        log_message(queue, "Brak cen od dostawców do zaktualizowania.", color='orange', level='warning')
-        return True
-        
+    # ZMIANA: Usunięto warunek `if not data_for_api:`
+
     log_message(queue, f"Wysyłanie {len(data_for_api)} aktualizacji cen od dostawców...")
     try:
         response = requests.post(url, headers=headers, data=json.dumps(data_for_api), timeout=60)
@@ -225,13 +225,12 @@ def send_prices_to_webapp(queue, config_data, data_to_send):
 def send_catalog_to_webapp(queue, config_data, data_to_send):
     url = f"{config_data.get('web_app_url')}/api/v1/receive-subiekt-catalog"
     headers = {'Content-Type': 'application/json', 'X-API-KEY': config_data.get('api_key')}
-    
+
     unique_items = {item['symbol']: item for item in data_to_send}.values()
     catalog_for_api = [{'symbol': item['symbol'], 'name': item.get('name')} for item in unique_items]
-    
-    if not catalog_for_api:
-        log_message(queue, "Brak katalogu do wysłania.", color='orange', level='warning')
-        return True
+
+    # ZMIANA: Usunięto warunek `if not catalog_for_api:`
+
     log_message(queue, f"Wysyłanie {len(catalog_for_api)} unikalnych towarów do zmapowania...")
     try:
         response = requests.post(url, headers=headers, data=json.dumps(catalog_for_api), timeout=30)
@@ -270,31 +269,74 @@ def full_sync_task(queue, config_data):
     else:
         log_message(queue, "\n--- PEŁNA SYNCHRONIZACJA ZAKOŃCZONA Z BŁĘDAMI ---", color='red', level='error')
 
+# --- NOWA FUNKCJA DO ZGŁASZANIA IP ---
+def report_ip_to_webapp(queue, config_data):
+    """Pobiera lokalny IP i wysyła go do aplikacji webowej."""
+    current_ip = get_local_ip()
+    if not current_ip or current_ip == '127.0.0.1':
+        log_message(queue, "Nie udało się uzyskać poprawnego lokalnego adresu IP do zgłoszenia.", color='orange', level='warning')
+        return
+
+    url = f"{config_data.get('web_app_url')}/api/report_desktop_ip" # Nowy endpoint w web app
+    headers = {'Content-Type': 'application/json', 'X-API-KEY': config_data.get('api_key')}
+    payload = {'ip_address': current_ip}
+
+    log_message(queue, f"Zgłaszanie adresu IP ({current_ip}) do aplikacji webowej...")
+    try:
+        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=10)
+        if response.status_code == 200:
+            log_message(queue, "Adres IP zgłoszony pomyślnie.", color='green')
+        else:
+            log_message(queue, f"BŁĄD zgłaszania IP: {response.status_code} - {response.text}", color='red', level='error')
+    except requests.exceptions.RequestException as e:
+        log_message(queue, f"KRYTYCZNY BŁĄD zgłaszania IP: {e}", color='red', level='error')
+# --- KONIEC NOWEJ FUNKCJI ---
+
+# --- ZMODYFIKOWANA FUNKCJA WĄTKU HARMONOGRAMU ---
 def scheduler_thread_func(queue, config_data):
     log_message(queue, "Wątek harmonogramu uruchomiony.", color='gray')
     update_time = config_data.get("update_time", "15:00")
+
+    # Usuwamy stare zadania, jeśli istniały
+    schedule.clear()
+
+    # Ustawienie zadania synchronizacji
     try:
         schedule.every().day.at(update_time).do(full_sync_task, queue, config_data)
+        log_message(queue, f"Zaplanowano pełną synchronizację codziennie o {update_time}.")
     except schedule.ScheduleError:
         log_message(queue, f"BŁĄD: Nieprawidłowy format czasu '{update_time}'. Użyj formatu HH:MM.", color='red', level='error')
+
+    # NOWE ZADANIE: Zgłaszanie adresu IP co 5 minut
+    schedule.every(5).minutes.do(report_ip_to_webapp, queue, config_data)
+    log_message(queue, "Zaplanowano regularne zgłaszanie adresu IP (co 5 minut).")
+
+    # Pierwsze zgłoszenie IP od razu po starcie
+    report_ip_to_webapp(queue, config_data)
 
     while not stop_scheduler_thread.is_set():
         schedule.run_pending()
         time.sleep(1)
 
     log_message(queue, "Wątek harmonogramu zatrzymany.", color='gray')
+# --- KONIEC ZMODYFIKOWANEJ FUNKCJI ---
 
 # --- Funkcje pomocnicze ---
 def get_local_ip():
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.settimeout(0.1)
-        s.connect(("8.8.8.8", 80))
+        s.connect(("8.8.8.8", 80)) # Connect to a known external server to find the local IP
         ip = s.getsockname()[0]
         s.close()
         return ip
     except Exception:
-        return "127.0.0.1"
+        # Fallback in case of no internet or other issues
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+             return "127.0.0.1" # Last resort
+
 
 def get_available_printers():
     try:
@@ -308,23 +350,33 @@ def get_available_printers():
 def create_shortcut_in_startup(target_path, shortcut_name):
     startup_path = get_startup_folder()
     shortcut_path = os.path.join(startup_path, f"{shortcut_name}.lnk")
-    if not os.path.exists(os.path.dirname(target_path)):
-        messagebox.showwarning("Błąd", f"Nie można utworzyć skrótu, ponieważ folder docelowy nie istnieje:\n{os.path.dirname(target_path)}\n\nTa funkcja zadziała poprawnie dopiero po skompilowaniu do .exe.")
+    # Check if the target file actually exists, especially important when running from source
+    if not os.path.exists(target_path):
+         messagebox.showwarning("Błąd", f"Nie można utworzyć skrótu, ponieważ plik docelowy nie istnieje:\n{target_path}\n\nTa funkcja zadziała poprawnie dopiero po skompilowaniu do .exe.")
+         return False
+    try:
+        shell = win32com.client.Dispatch("WScript.Shell")
+        shortcut = shell.CreateShortCut(shortcut_path)
+        shortcut.Targetpath = target_path
+        shortcut.WorkingDirectory = os.path.dirname(target_path)
+        shortcut.save()
+        return True
+    except Exception as e:
+        messagebox.showerror("Błąd Autostartu", f"Nie udało się utworzyć skrótu: {e}")
         return False
-    shell = win32com.client.Dispatch("WScript.Shell")
-    shortcut = shell.CreateShortCut(shortcut_path)
-    shortcut.Targetpath = target_path
-    shortcut.WorkingDirectory = os.path.dirname(target_path)
-    shortcut.save()
-    return True
+
 
 def remove_shortcut_from_startup(shortcut_name):
     startup_path = get_startup_folder()
     shortcut_path = os.path.join(startup_path, f"{shortcut_name}.lnk")
     if os.path.exists(shortcut_path):
-        os.remove(shortcut_path)
-        return True
-    return False
+        try:
+            os.remove(shortcut_path)
+            return True
+        except Exception as e:
+            messagebox.showerror("Błąd Autostartu", f"Nie udało się usunąć skrótu: {e}")
+            return False
+    return False # Shortcut didn't exist
 
 # --- Logika Aplikacji ---
 class LogHandler:
@@ -350,10 +402,12 @@ def print_label():
     log_handler.write("Odebrano nowe żądanie drukowania...")
 
     selected_printer = APP_CONFIG.get("SELECTED_PRINTER")
-    if not selected_printer:
+    if not selected_printer or selected_printer == "Brak drukarek":
+        log_handler.write("BŁĄD: Żądanie drukowania odrzucone - brak wybranej drukarki.", color='red')
         return jsonify({'error': 'Drukarka nie została wybrana na serwerze druku.'}), 500
 
     if 'image' not in request.files:
+        log_handler.write("BŁĄD: Żądanie drukowania odrzucone - brak pliku obrazu.", color='red')
         return jsonify({'error': 'Brak pliku obrazu'}), 400
 
     try:
@@ -361,6 +415,7 @@ def print_label():
         height_mm = float(request.form.get('height_mm'))
         quantity = int(request.form.get('quantity', 1))
     except (TypeError, ValueError):
+        log_handler.write("BŁĄD: Żądanie drukowania odrzucone - niepoprawne wymiary/ilość.", color='red')
         return jsonify({'error': 'Brak lub niepoprawne wymiary/ilość w żądaniu.'}), 400
 
     try:
@@ -393,7 +448,7 @@ def print_label():
                 printer_dc.EndPage()
                 printer_dc.EndDoc()
 
-            log_handler.write("Wszystkie kopie wysłane pomyślnie przez sterownik!")
+            log_handler.write("Wszystkie kopie wysłane pomyślnie przez sterownik!", color='green')
 
         finally:
             win32print.ClosePrinter(h_printer)
@@ -401,7 +456,7 @@ def print_label():
         return jsonify({'status': f'Wydrukowano pomyślnie {quantity} kopii.'})
 
     except Exception as e:
-        log_handler.write(f"KRYTYCZNY BŁĄD PODCZAS DRUKOWANIA: {e}")
+        log_handler.write(f"KRYTYCZNY BŁĄD PODCZAS DRUKOWANIA: {e}", color='red', level='error')
         return jsonify({'error': str(e)}), 500
 
 @flask_app_print.route('/status')
@@ -415,23 +470,23 @@ def sync_status():
 @flask_app_print.route('/trigger-sync', methods=['POST'])
 def trigger_sync():
     log_handler = flask_app_print.config['LOG_HANDLER']
-    
+
     api_key_from_request = request.headers.get('X-API-KEY')
     current_config = load_config()
-    
+
     if not api_key_from_request or api_key_from_request != current_config.get('api_key'):
-        log_handler.write("Odebrano próbę zdalnego uruchomienia synchronizacji z BŁĘDNYM kluczem API.")
+        log_handler.write("Odebrano próbę zdalnego uruchomienia synchronizacji z BŁĘDNYM kluczem API.", color='red')
         return jsonify({'error': 'Brak autoryzacji'}), 401
 
     log_handler.write("Odebrano zdalne polecenie synchronizacji ze strony WWW.")
-    
+
     sync_thread = threading.Thread(
-        target=full_sync_task, 
-        args=(main_queue, current_config), 
+        target=full_sync_task,
+        args=(main_queue, current_config),
         daemon=True
     )
     sync_thread.start()
-    
+
     return jsonify({'status': 'Synchronizacja została pomyślnie uruchomiona w tle.'}), 202
 
 # --- Interfejs Graficzny (GUI Tkinter) ---
@@ -472,7 +527,7 @@ class PrintServerApp:
         printer_label.pack()
         self.available_printers = get_available_printers()
         self.selected_printer = tk.StringVar(root)
-        
+
         saved_printer = config.get('selected_printer')
         if saved_printer and saved_printer in self.available_printers:
             self.selected_printer.set(saved_printer)
@@ -481,9 +536,9 @@ class PrintServerApp:
         else:
             self.available_printers.append("Brak drukarek")
             self.selected_printer.set("Brak drukarek")
-        
+
         APP_CONFIG["SELECTED_PRINTER"] = self.selected_printer.get()
-        
+
         self.printer_menu = tk.OptionMenu(info_frame, self.selected_printer, *self.available_printers, command=self.on_printer_select)
         self.printer_menu.pack(pady=5, fill='x')
         self.ip_label = tk.Label(info_frame, text="Twój adres IP w sieci lokalnej: ?")
@@ -544,7 +599,7 @@ class PrintServerApp:
 
         data_source_frame = tk.Frame(manual_frame)
         data_source_frame.pack(fill='x', padx=5, pady=5)
-        self.warehouse_combo = ttk.Combobox(data_source_frame, textvariable=self.warehouse_var, state='disabled')
+        self.warehouse_combo = ttk.Combobox(data_source_frame, textvariable=self.warehouse_var, state='readonly') # Changed state
         self.warehouse_combo.pack(side='left', fill='x', expand=True, padx=5, pady=5)
         self.connect_button = ttk.Button(data_source_frame, text="Wczytaj magazyny", command=self.run_load_warehouses)
         self.connect_button.pack(side='left', padx=5, pady=5)
@@ -571,228 +626,371 @@ class PrintServerApp:
         self.update_ip()
         self.start_sync_server()
         self.root.protocol("WM_DELETE_WINDOW", self.minimize_to_tray)
+        
+        # --- DODANO URUCHOMIENIE WĄTKU HARMONOGRAMU ---
+        threading.Thread(target=scheduler_thread_func, args=(self.queue, self.config), daemon=True).start()
+        # --- KONIEC DODANIA ---
 
     def create_tray_image(self):
+        # Creates a simple icon for the system tray
         image = Image.new('RGB', (64, 64), 'gray')
         dc = ImageDraw.Draw(image)
         dc.rectangle((10, 10, 54, 54), fill='white')
-        dc.text((22, 22), "P", fill="black")
+        dc.text((22, 22), "S", fill="black") # Changed text to 'S' for Szwalnia
         return image
 
     def show_window(self, icon, item):
+        # Shows the main window when tray icon is clicked
         if self.tray_icon:
             self.tray_icon.stop()
-        self.root.deiconify()
+            self.tray_icon = None # Clear the reference
+        self.root.after(0, self.root.deiconify) # Use after to ensure it runs in the main thread
 
     def exit_app(self, icon, item):
+        # Exits the application via tray icon
         self.on_closing(force=True)
 
     def minimize_to_tray(self):
+        # Hides the main window and shows the tray icon
         self.root.withdraw()
         image = self.create_tray_image()
         menu = (pystray.MenuItem('Pokaż', self.show_window, default=True),
                 pystray.MenuItem('Zakończ', self.exit_app))
         self.tray_icon = pystray.Icon(APP_NAME, image, "Serwer Drukowania i Synchronizacji", menu)
+        # Run the tray icon in a separate thread to prevent blocking the main loop
         threading.Thread(target=self.tray_icon.run, daemon=True).start()
 
     def on_closing(self, force=False):
-        if force or messagebox.askokcancel("Zamknij", "Czy na pewno chcesz zamknąć serwer?"):
+        # Handles window closing: asks for confirmation or forces exit
+        if force or messagebox.askokcancel("Zamknij", "Czy na pewno chcesz zamknąć serwer? To zatrzyma drukowanie i synchronizację."):
+            log_message(self.queue, "Zamykanie aplikacji...", color='orange')
             if self.tray_icon:
                 self.tray_icon.stop()
+            # Signal the scheduler thread to stop
+            global stop_scheduler_thread
+            stop_scheduler_thread.set()
+            # Give threads a moment to shut down (optional)
+            time.sleep(0.5)
             self.root.destroy()
-            os._exit(0)
+            os._exit(0) # Force exit to ensure all threads terminate
 
     def on_printer_select(self, selected_value):
+        # Updates the selected printer in the global config
         APP_CONFIG["SELECTED_PRINTER"] = selected_value
         log_message(self.queue, f"Wybrano drukarkę: {selected_value}")
 
     def update_ip(self):
+        # Refreshes and displays the local IP address
         ip = get_local_ip()
         self.ip_label.config(text=f"Twój adres IP w sieci lokalnej: {ip}")
-        log_message(self.queue, f"Sprawdzono IP: {ip}. Ten adres należy wpisać na stronie.")
+        log_message(self.queue, f"Sprawdzono IP: {ip}.")
 
     def start_print_server(self):
+        # Starts the Flask print server in a separate thread
         if not APP_CONFIG.get("SELECTED_PRINTER") or APP_CONFIG.get("SELECTED_PRINTER") == "Brak drukarek":
             messagebox.showerror("Błąd", "Nie wybrano poprawnej drukarki!")
             return
         global flask_thread_print
+        if flask_thread_print and flask_thread_print.is_alive():
+             log_message(self.queue, "Serwer druku już działa.", color='orange')
+             return
+             
         log_message(self.queue, f"Uruchamianie serwera druku na {HOST}:{PORT_PRINT}...")
         def run_app():
+            # Disable Werkzeug logs for cleaner output
             log = logging.getLogger('werkzeug')
             log.disabled = True
             flask_app_print.logger.disabled = True
             try:
-                flask_app_print.run(host=HOST, port=PORT_PRINT, debug=False)
+                # Run Flask server without reloader and debug mode for stability
+                flask_app_print.run(host=HOST, port=PORT_PRINT, debug=False, use_reloader=False)
+            except OSError as e:
+                 log_message(self.queue, f"BŁĄD KRYTYCZNY serwera druku: Port {PORT_PRINT} jest już zajęty lub brak uprawnień. {e}", color='red', level='error')
+                 # Update UI from the main thread
+                 self.root.after(0, self.update_print_server_ui_on_error)
             except Exception as e:
                 log_message(self.queue, f"Błąd krytyczny serwera druku: {e}", color='red', level='error')
+                self.root.after(0, self.update_print_server_ui_on_error)
+
 
         flask_thread_print = threading.Thread(target=run_app, daemon=True)
         flask_thread_print.start()
-        self.status_label_print.config(text="Status serwera druku: Działa", fg="green")
+        # Initial UI update - might be premature if server fails immediately
+        self.status_label_print.config(text="Status serwera druku: Uruchamianie...", fg="orange")
         self.start_button_print.config(state=tk.DISABLED)
         self.stop_button_print.config(state=tk.NORMAL)
         self.printer_menu.config(state=tk.DISABLED)
-        log_message(self.queue, "Serwer druku uruchomiony.", color='green')
+        # Check status after a short delay
+        self.root.after(2000, self.check_print_server_startup)
+
+
+    def check_print_server_startup(self):
+         # Checks if the print server thread is alive after startup attempt
+         global flask_thread_print
+         if flask_thread_print and flask_thread_print.is_alive():
+              self.status_label_print.config(text="Status serwera druku: Działa", fg="green")
+              log_message(self.queue, "Serwer druku potwierdzony jako działający.", color='green')
+         else:
+              # If the thread died, it likely failed to start (e.g., port busy)
+              self.update_print_server_ui_on_error()
+              
+    def update_print_server_ui_on_error(self):
+         # Resets UI elements if the print server fails to start
+         self.status_label_print.config(text="Status serwera druku: Błąd startu", fg="red")
+         self.start_button_print.config(state=tk.NORMAL)
+         self.stop_button_print.config(state=tk.DISABLED)
+         self.printer_menu.config(state=tk.NORMAL) # Allow changing printer if failed
 
     def start_sync_server(self):
+        # Starts the Flask sync server (for receiving remote sync triggers)
         global flask_thread_sync
+        if flask_thread_sync and flask_thread_sync.is_alive():
+             log_message(self.queue, "Serwer synchronizacji już działa.", color='orange')
+             return
+
         log_message(self.queue, f"Uruchamianie serwera synchronizacji na {HOST}:{PORT_SYNC}...")
         def run_app():
             log = logging.getLogger('werkzeug')
             log.disabled = True
             flask_app_sync.logger.disabled = True
             try:
-                flask_app_sync.run(host=HOST, port=PORT_SYNC, debug=False)
+                flask_app_sync.run(host=HOST, port=PORT_SYNC, debug=False, use_reloader=False)
+            except OSError as e:
+                 log_message(self.queue, f"BŁĄD KRYTYCZNY serwera synchronizacji: Port {PORT_SYNC} jest już zajęty lub brak uprawnień. {e}", color='red', level='error')
+                 self.root.after(0, self.update_sync_server_ui_on_error)
             except Exception as e:
                 log_message(self.queue, f"Błąd krytyczny serwera synchronizacji: {e}", color='red', level='error')
-        
+                self.root.after(0, self.update_sync_server_ui_on_error)
+
+
         flask_thread_sync = threading.Thread(target=run_app, daemon=True)
         flask_thread_sync.start()
-        self.status_label_sync.config(text="Status serwera synchronizacji: Działa", fg="green")
-        log_message(self.queue, "Serwer synchronizacji uruchomiony.", color='green')
+        self.status_label_sync.config(text="Status serwera synchronizacji: Uruchamianie...", fg="orange")
+        self.root.after(2000, self.check_sync_server_startup)
+
+    def check_sync_server_startup(self):
+         # Checks if the sync server thread is alive
+         global flask_thread_sync
+         if flask_thread_sync and flask_thread_sync.is_alive():
+              self.status_label_sync.config(text="Status serwera synchronizacji: Działa", fg="green")
+              log_message(self.queue, "Serwer synchronizacji potwierdzony jako działający.", color='green')
+         else:
+              self.update_sync_server_ui_on_error()
+
+    def update_sync_server_ui_on_error(self):
+          # Resets sync server status label on error
+         self.status_label_sync.config(text="Status serwera synchronizacji: Błąd startu", fg="red")
 
 
     def stop_server(self):
-        log_message(self.queue, "Zatrzymywanie serwera... Aplikacja zostanie zamknięta.", color='orange')
-        self.on_closing(force=True)
+        # Stops the application gracefully
+        log_message(self.queue, "Zatrzymywanie serwera...", color='orange')
+        self.on_closing(force=True) # Use the existing closing logic
 
     def toggle_startup(self):
+        # Adds or removes the application shortcut from the Windows startup folder
         is_enabled = self.autostart_var.get()
-        if getattr(sys, 'frozen', False):
+        # Determine the correct path whether running from source or compiled
+        if getattr(sys, 'frozen', False): # Running as compiled executable
             target_path = sys.executable
-        else:
+        else: # Running as script
+            # Warn that this might not work as expected when running from source
             messagebox.showinfo("Informacja", "Funkcja autostartu tworzy skrót do pliku .exe. Aby w pełni przetestować tę funkcję, najpierw skompiluj aplikację.")
-            target_path = os.path.abspath(__file__)
+            target_path = os.path.abspath(__file__) # Path to the .py script
+
         if is_enabled:
             if create_shortcut_in_startup(target_path, APP_NAME):
                 log_message(self.queue, "Dodano aplikację do autostartu.")
+            else:
+                 # If shortcut creation failed, uncheck the box
+                 self.autostart_var.set(False)
         else:
             if remove_shortcut_from_startup(APP_NAME):
                 log_message(self.queue, "Usunięto aplikację z autostartu.")
 
+
     def open_log_file(self):
+        # Opens the log file using the default system application
         try:
+            log_path = os.path.abspath(log_file)
             if platform.system() == "Windows":
-                os.startfile(log_file)
-            elif platform.system() == "Darwin":
-                subprocess.Popen(["open", log_file])
-            else:
-                subprocess.Popen(["xdg-open", log_file])
+                os.startfile(log_path)
+            elif platform.system() == "Darwin": # macOS
+                subprocess.Popen(["open", log_path])
+            else: # Linux
+                subprocess.Popen(["xdg-open", log_path])
         except Exception as e:
-            log_message(self.queue, f"Nie można otworzyć pliku logu: {e}", color='red', level='error')
+            log_message(self.queue, f"Nie można otworzyć pliku logu '{log_path}': {e}", color='red', level='error')
+
 
     def get_current_config(self):
+        # Retrieves current configuration values from the UI variables
         return {
             'server': self.server_var.get(), 'database': self.database_var.get(), 'sql_user': self.sql_user_var.get(),
             'sql_password': self.sql_password_var.get(), 'web_app_url': self.web_app_url_var.get(), 'api_key': self.api_key_var.get(),
             'default_warehouse': self.warehouse_var.get(),
             'autostart': self.autostart_var.get(), 'update_time': self.update_time_var.get(),
-            'selected_printer': self.selected_printer.get()
+            'selected_printer': self.selected_printer.get() # Include selected printer
         }
 
     def save_current_config(self):
+        # Saves the current configuration to the JSON file and restarts the scheduler
         global config, stop_scheduler_thread
-        if not self.warehouse_var.get() and (self.autostart_var.get() or self.update_time_var.get()):
-            messagebox.showwarning("Brak magazynu", "Wybierz i zapisz domyślny magazyn, aby włączyć autostart i automatyzację.")
+        # Basic validation
+        if not self.warehouse_var.get() and (self.autostart_var.get() or self.update_time_var.get() != ""):
+            messagebox.showwarning("Brak magazynu", "Wybierz i zapisz domyślny magazyn, aby włączyć autostart i/lub automatyczną synchronizację.")
             return
 
         new_config = self.get_current_config()
         if save_config(new_config):
-            config = new_config
-            create_shortcut(config.get('autostart'))
+            config = new_config # Update global config variable
+            # Update autostart shortcut based on saved setting
+            # We call this again to ensure consistency after saving
+            self.toggle_startup() # This will read the saved autostart value
+            
             messagebox.showinfo("Sukces", "Konfiguracja została zapisana.")
             self.update_full_sync_button_state()
 
+            # Restart the scheduler thread with the new config
+            log_message(self.queue, "Restartowanie wątku harmonogramu z nową konfiguracją...", color='gray')
             stop_scheduler_thread.set()
+            # Wait briefly for the thread to notice the stop signal
             time.sleep(1.1)
             stop_scheduler_thread.clear()
-            threading.Thread(target=scheduler_thread_func, args=(self.queue, config), daemon=True).start()
+            # Start the new scheduler thread
+            scheduler_thread_instance = threading.Thread(target=scheduler_thread_func, args=(self.queue, new_config), daemon=True)
+            scheduler_thread_instance.start()
+            log_message(self.queue, "Wątek harmonogramu zrestartowany.", color='gray')
+
 
     def process_queue(self):
+        # Processes messages from the queue and updates the log widget
         try:
-            while True:
+            while True: # Process all available messages in the queue
                 data = self.queue.get_nowait()
                 self.main_log_text.configure(state='normal')
+                # Insert message with the specified color tag
                 self.main_log_text.insert(tk.END, data['msg'], data['color'])
                 self.main_log_text.configure(state='disabled')
-                self.main_log_text.see(tk.END)
+                self.main_log_text.see(tk.END) # Scroll to the end
         except queue.Empty:
-            pass
+            pass # No more messages currently
+        # Schedule the next check
         self.root.after(100, self.process_queue)
 
+
     def update_full_sync_button_state(self):
-        self.full_sync_button.config(state='normal' if self.config.get('default_warehouse') else 'disabled')
+        # Enables/disables the manual sync button based on whether a warehouse is selected
+        if self.config.get('default_warehouse'):
+             self.full_sync_button.config(state='normal')
+        else:
+             self.full_sync_button.config(state='disabled')
 
     def run_full_sync(self):
+        # Runs the full synchronization task in a separate thread
+        if not self.config.get('default_warehouse'):
+             messagebox.showwarning("Brak konfiguracji", "Najpierw skonfiguruj i zapisz domyślny magazyn.")
+             return
+        log_message(self.queue,"Ręczne uruchomienie pełnej synchronizacji...", color='blue')
         threading.Thread(target=full_sync_task, args=(self.queue, self.get_current_config()), daemon=True).start()
 
     def run_load_warehouses(self):
+        # Fetches the list of warehouses from SQL in a separate thread
+        log_message(self.queue,"Pobieranie listy magazynów...", color='blue')
         def task_wrapper():
-            warehouses = get_warehouses_from_sql(self.queue, self.get_current_config())
+            current_config_snapshot = self.get_current_config() # Get config at the time of click
+            warehouses = get_warehouses_from_sql(self.queue, current_config_snapshot)
             if warehouses:
-                self.warehouse_combo['values'] = warehouses
-                self.warehouse_combo.config(state='readonly')
-                saved_warehouse = self.config.get('default_warehouse')
-                if saved_warehouse in warehouses:
-                    self.warehouse_var.set(saved_warehouse)
-                elif warehouses:
-                    self.warehouse_var.set(warehouses[0])
+                # Update combobox in the main thread
+                def update_combo():
+                    self.warehouse_combo['values'] = warehouses
+                    self.warehouse_combo.config(state='readonly')
+                    # Try to set the previously saved value, or the first one
+                    saved_warehouse = current_config_snapshot.get('default_warehouse')
+                    if saved_warehouse in warehouses:
+                        self.warehouse_var.set(saved_warehouse)
+                    elif warehouses: # Select first if saved one not found or not set
+                        self.warehouse_var.set(warehouses[0])
+                    self.update_full_sync_button_state() # Update button state after loading
+                self.root.after(0, update_combo)
+            else:
+                 # If fetching failed, keep combobox disabled
+                 self.root.after(0, lambda: self.warehouse_combo.config(state='disabled'))
+                 self.root.after(0, self.update_full_sync_button_state) # Update button state
         threading.Thread(target=task_wrapper, daemon=True).start()
 
+
     def run_test_connection(self):
+        # Tests the SQL connection in a separate thread
         threading.Thread(target=test_sql_connection, args=(self.queue, self.get_current_config()), daemon=True).start()
 
     def run_fetch_data(self):
+        # Fetches data from the selected warehouse and shows the review window
         if not self.warehouse_var.get():
             messagebox.showwarning("Brak magazynu", "Najpierw wczytaj i wybierz magazyn.")
             return
 
+        log_message(self.queue,"Pobieranie danych do podglądu...", color='blue')
         def task_wrapper():
-            data = get_data_from_warehouse(self.queue, self.get_current_config(), self.warehouse_var.get().split(' ')[0])
+            current_config_snapshot = self.get_current_config()
+            warehouse_symbol = self.warehouse_var.get().split(' ')[0] # Get symbol part
+            data = get_data_from_warehouse(self.queue, current_config_snapshot, warehouse_symbol)
             if data is not None:
+                # Show review window in the main thread
                 self.root.after(0, self.show_review_window, data)
         threading.Thread(target=task_wrapper, daemon=True).start()
 
+
     def show_review_window(self, data):
+        # Displays the data review window (Toplevel)
         review_window = tk.Toplevel(self.root)
         review_window.title(f"Podgląd Danych ({len(data)} wpisów cenowych)")
         review_window.geometry("950x500")
-        
+        review_window.transient(self.root) # Keep window on top of main window
+        review_window.grab_set() # Modal behavior
+
         cols = ('Symbol', 'Nazwa', 'Cena Netto', 'Data Ceny', 'Dostawca')
         tree = ttk.Treeview(review_window, columns=cols, show='headings')
-        
-        tree.heading('Symbol', text='Symbol'); tree.column('Symbol', width=120)
-        tree.heading('Nazwa', text='Nazwa'); tree.column('Nazwa', width=300)
+
+        # Configure headings and column widths/alignment
+        tree.heading('Symbol', text='Symbol'); tree.column('Symbol', width=120, anchor='w')
+        tree.heading('Nazwa', text='Nazwa'); tree.column('Nazwa', width=300, anchor='w')
         tree.heading('Cena Netto', text='Cena Netto'); tree.column('Cena Netto', width=100, anchor='e')
         tree.heading('Data Ceny', text='Data Ceny'); tree.column('Data Ceny', width=100, anchor='center')
-        tree.heading('Dostawca', text='Ostatni Dostawca'); tree.column('Dostawca', width=200)
+        tree.heading('Dostawca', text='Ostatni Dostawca'); tree.column('Dostawca', width=200, anchor='w')
 
+        # Add scrollbar
         vsb = ttk.Scrollbar(review_window, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=vsb.set)
         vsb.pack(side='right', fill='y')
         tree.pack(expand=True, fill='both', padx=10, pady=5)
-        
+
+        # Populate the treeview
         for item in data:
             tree.insert("", "end", values=(
-                item['symbol'], 
-                item['name'], 
-                f"{item.get('price', 0.0):.2f} zł", 
+                item['symbol'],
+                item['name'],
+                f"{item.get('price', 0.0):.2f} zł", # Format price
                 item.get('price_date', 'Brak'),
-                item.get('supplier', 'Brak') 
+                item.get('supplier', 'Brak')
             ))
-            
+
+        # Actions for the buttons in the review window
         def send_catalog_action():
-            review_window.destroy()
+            review_window.destroy() # Close window first
+            log_message(self.queue,"Ręczne wysyłanie katalogu...", color='blue')
             threading.Thread(target=send_catalog_to_webapp, args=(self.queue, self.get_current_config(), data), daemon=True).start()
-        
+
         def send_prices_action():
-            review_window.destroy()
+            review_window.destroy() # Close window first
+            log_message(self.queue,"Ręczne wysyłanie cen dostawców...", color='blue')
             threading.Thread(target=send_prices_to_webapp, args=(self.queue, self.get_current_config(), data), daemon=True).start()
-            
+
+        # Add buttons to the review window
         button_frame = tk.Frame(review_window)
         button_frame.pack(pady=10)
-        ttk.Button(button_frame, text=f"Wyślij katalog unikalnych towarów", command=send_catalog_action).pack(side='left', padx=10)
-        ttk.Button(button_frame, text=f"Aktualizuj ceny od dostawców", command=send_prices_action).pack(side='left', padx=10)
+        ttk.Button(button_frame, text=f"Wyślij katalog ({len(set(item['symbol'] for item in data))})", command=send_catalog_action).pack(side='left', padx=10)
+        ttk.Button(button_frame, text=f"Aktualizuj ceny ({len(data)})", command=send_prices_action).pack(side='left', padx=10)
 
 if __name__ == "__main__":
     root = tk.Tk()
