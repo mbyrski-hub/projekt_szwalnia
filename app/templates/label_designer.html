@@ -749,16 +749,63 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
     
-    // Logika testowego wydruku
+    async function fetchAndSetPrinterIp(inputElement) {
+        if (!inputElement) return; // Jeśli input nie istnieje, zakończ
+        console.log("Próba pobrania IP dla elementu:", inputElement.id); // Log do debugowania
+
+        try {
+            const response = await fetch('/api/desktop_status');
+            if (!response.ok) {
+                console.warn('Nie udało się pobrać statusu serwera druku.');
+                 // Ustaw domyślny, jeśli nie ma wartości
+                if (!inputElement.value) inputElement.value = 'http://localhost:5001';
+                return;
+            }
+            const data = await response.json();
+            console.log("Otrzymano status serwera:", data); // Log do debugowania
+
+            // Sprawdź, czy serwer druku jest online i czy mamy IP
+            if (data.print_server === 'online' && data.last_ip) {
+                // Ustaw wartość tylko jeśli input jest pusty lub ma domyślny placeholder
+                if (!inputElement.value || inputElement.value === 'http://localhost:5001' || inputElement.placeholder.includes('np.')) { // Sprawdź też placeholder
+                     inputElement.value = `http://${data.last_ip}:5001`;
+                     console.log(`Automatycznie ustawiono adres serwera druku: ${inputElement.value}`);
+                } else {
+                    console.log("Input ma już wartość, nie nadpisano:", inputElement.value);
+                }
+            } else {
+                console.log('Serwer druku offline lub brak zgłoszonego IP.');
+                // Opcjonalnie: Ustaw domyślny adres, jeśli serwer jest offline i pole jest puste
+                if (!inputElement.value) {
+                    inputElement.value = 'http://localhost:5001'; // Domyślny adres
+                }
+            }
+        } catch (error) {
+            console.error('Błąd podczas pobierania statusu serwera druku:', error);
+            // Opcjonalnie: Ustaw domyślny adres w razie błędu, jeśli pole jest puste
+             if (!inputElement.value) {
+                 inputElement.value = 'http://localhost:5001';
+             }
+        }
+    }
+    // --- KONIEC DODANEJ FUNKCJI ---
+
+
+    // --- Logika testowego wydruku ---
     const testPrintBtn = document.getElementById('testPrintBtn');
+    // Użyj poprawnego ID 'printServerIp'
     const printServerIpInput = document.getElementById('printServerIp');
     const confirmPrintBtn = document.getElementById('confirmPrintBtn');
     const printStatusDiv = document.getElementById('printStatus');
     const previewImage = document.getElementById('preview-image');
     const previewText = document.getElementById('preview-text');
-    
+
     const savedIp = localStorage.getItem('printServerIp');
-    if (savedIp) printServerIpInput.value = savedIp;
+    if (savedIp) {
+         printServerIpInput.value = savedIp;
+         console.log("Załadowano zapisany IP:", savedIp);
+    }
+
 
     testPrintBtn.addEventListener('click', function() {
         printStatusDiv.innerHTML = '';
@@ -766,41 +813,56 @@ document.addEventListener('DOMContentLoaded', function () {
         previewText.style.display = 'block';
         previewText.textContent = 'Generowanie podglądu...';
         confirmPrintBtn.disabled = true;
+
+        // --- DODAJ WYWOŁANIE FUNKCJI POBIERANIA IP TUTAJ ---
+        fetchAndSetPrinterIp(printServerIpInput); // Wywołaj przy otwieraniu modala
+        // --- KONIEC DODANEGO WYWOŁANIA ---
+
         $('#printTestModal').modal('show');
 
+        // Prepare canvas for rendering (remove borders etc.)
         document.querySelectorAll('.draggable-element').forEach(el => {
             el.classList.remove('selected');
-            el.style.border = 'none'; 
+            el.style.border = 'none'; // Usuń ramkę na czas renderowania
         });
+        // Hide cut line during render
+        const cutLine = canvas.querySelector('.cut-line');
+        if(cutLine) cutLine.style.display = 'none';
+
 
         html2canvas(document.getElementById('labelCanvas'), {
-            scale: 3, useCORS: true, backgroundColor: null
+            scale: 3, // Higher scale for better quality
+            useCORS: true,
+            backgroundColor: null // Transparent background
         }).then(canvasElement => {
+            // Restore borders and cut line after rendering
             document.querySelectorAll('.draggable-element').forEach(el => {
-                el.style.border = '1px dashed #ccc';
+                el.style.border = '1px dashed #ccc'; // Przywróć ramkę
             });
+             if(cutLine) cutLine.style.display = 'block'; // Show cut line again
+
             previewImage.src = canvasElement.toDataURL('image/png');
             previewImage.style.display = 'block';
             previewText.style.display = 'none';
             confirmPrintBtn.disabled = false;
         }).catch(err => {
-            document.querySelectorAll('.draggable-element').forEach(el => {
+            // Restore borders and cut line even on error
+             document.querySelectorAll('.draggable-element').forEach(el => {
                 el.style.border = '1px dashed #ccc';
             });
+             if(cutLine) cutLine.style.display = 'block';
+
             console.error('Błąd html2canvas:', err);
             previewText.textContent = `Błąd generowania podglądu: ${err}`;
+            previewText.style.color = 'red'; // Show error in red
         });
     });
 
     confirmPrintBtn.addEventListener('click', function() {
+        // ... (reszta logiki confirmPrintBtn bez zmian) ...
         let currentIp = printServerIpInput.value.trim();
-        if (!currentIp) {
-            printStatusDiv.innerHTML = '<div class="alert alert-danger">Proszę wpisać adres IP.</div>';
-            return;
-        }
-        if (!currentIp.startsWith('http://')) {
-            currentIp = 'http://' + currentIp.replace(/^https?:\/\//, '');
-        }
+        if (!currentIp) { printStatusDiv.innerHTML = '<div class="alert alert-danger">Wpisz adres IP.</div>'; return; }
+        if (!currentIp.startsWith('http://')) { currentIp = 'http://' + currentIp.replace(/^https?:\/\//, ''); }
         localStorage.setItem('printServerIp', currentIp);
 
         fetch(previewImage.src)
@@ -811,16 +873,23 @@ document.addEventListener('DOMContentLoaded', function () {
                 formData.append('width_mm', pxToMm(canvas.offsetWidth));
                 formData.append('height_mm', pxToMm(canvas.offsetHeight));
                 formData.append('quantity', 1);
-
                 const printServerUrl = `${currentIp.replace(/\/$/, '')}/print_label`;
-                
-                printStatusDiv.innerHTML = '<div class="alert alert-info">Wysyłanie do drukarki...</div>';
+                printStatusDiv.innerHTML = '<div class="alert alert-info">Wysyłanie...</div>';
                 confirmPrintBtn.disabled = true;
-
                 return fetch(printServerUrl, { method: 'POST', body: formData });
             })
             .then(response => {
-                if (!response.ok) return response.json().then(err => { throw new Error(err.error || `Błąd serwera druku: ${response.status}`) });
+                if (!response.ok) {
+                    return response.text().then(text => { // Odczytaj jako tekst
+                        try {
+                             const err = JSON.parse(text); // Spróbuj sparsować
+                             throw new Error(err.error || `Błąd serwera: ${response.status}`);
+                        } catch (e) {
+                             // Jeśli nie JSON, rzuć tekst błędu
+                             throw new Error(`Błąd: ${response.status}. Odpowiedź: ${text.substring(0, 100)}...`);
+                        }
+                    });
+                }
                 return response.json();
             })
             .then(data => {
@@ -829,9 +898,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(error => {
                 printStatusDiv.innerHTML = `<div class="alert alert-danger"><strong>Błąd:</strong> ${error.message}</div>`;
             })
-            .finally(() => {
-                confirmPrintBtn.disabled = false;
-            });
+            .finally(() => { confirmPrintBtn.disabled = false; });
     });
 
     // --- NOWA, POPRAWIONA LOGIKA DLA MODALA GALERII ---

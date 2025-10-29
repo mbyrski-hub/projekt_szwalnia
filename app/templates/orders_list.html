@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block head %}
 <style>
-    /* Odstęp między sekcjami akordeonu */
+    /* ... (istniejące style CSS bez zmian) ... */
     #accordion .card {
         margin-bottom: 1rem;
         border: 1px solid var(--border-color);
@@ -9,13 +9,10 @@
         border-radius: .5rem !important;
         overflow: hidden;
     }
-
-    /* Nagłówki akordeonu */
     .accordion .card-header {
         padding: 0;
         border-bottom: 1px solid var(--border-color);
     }
-    
     .accordion .card-header button {
         text-decoration: none;
         font-size: 1.1rem;
@@ -30,41 +27,25 @@
         align-items: center;
         transition: background-color 0.2s ease-in-out;
     }
-
     .accordion .card-header button:hover {
         background-color: var(--hover-bg-color);
     }
-    
     .accordion .card-header button .badge {
         font-size: 0.9rem;
         padding: .5em .8em;
-        /* ZMIANA: Użycie zmiennych dla lepszego kontrastu */
         background-color: var(--sidebar-bg);
         color: var(--sidebar-text-color);
     }
-
-    /* Kolory dla tytułów sekcji akordeonu */
     #headingInProgress .btn-link { color: var(--accent-color) !important; }
     #headingNew .btn-link { color: var(--primary-color) !important; }
     #headingCompleted .btn-link { color: #28a745 !important; }
-    
-    .card-body {
-        padding: 0;
-        background-color: var(--card-bg); /* Dodane dla spójności */
-    }
-
-    .table {
-        margin-bottom: 0;
-    }
-
-    /* ZMIANA: Usunięto .thead-dark i zastosowano zmienne */
+    .card-body { padding: 0; background-color: var(--card-bg); }
+    .table { margin-bottom: 0; }
     .table thead th {
         background-color: var(--table-header-bg);
         color: var(--table-header-color);
         border-color: var(--border-color);
     }
-    
-    /* ZMIANA: Kolorowanie wierszy z użyciem RGBA i zmiennych */
     :root {
         --status-w-realizacji-bg: rgba(255, 153, 0, 0.1);
         --status-nowe-bg: rgba(0, 123, 255, 0.1);
@@ -78,24 +59,12 @@
     .status-w-realizacji { background-color: var(--status-w-realizacji-bg) !important; }
     .status-nowe { background-color: var(--status-nowe-bg) !important; }
     .status-zrealizowane { background-color: var(--status-zrealizowane-bg) !important; }
-
-    .order-details, .order-details td {
-        background-color: var(--card-bg);
-    }
-
-    tr.order-row:hover td,
-    tr.order-details:hover td {
+    .order-details, .order-details td { background-color: var(--card-bg); }
+    tr.order-row:hover td, tr.order-details:hover td {
         background-color: var(--hover-bg-color) !important;
         color: var(--text-color) !important;
     }
-    
-    /* ZMIANA: Dostosowanie kolorów badge w tabeli */
-    .badge-warning {
-        background-color: var(--accent-color);
-        color: #fff;
-    }
-
-    /* Style dla przycisku "+" (bez zmian) */
+    .badge-warning { background-color: var(--accent-color); color: #fff; }
     .btn-plus-animated {
         width: 60px; height: 60px; border-radius: 50%;
         box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
@@ -114,19 +83,11 @@
         50% { box-shadow: 0 4px 25px rgba(40, 167, 69, 0.7); }
         100% { box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4); }
     }
-
-    #label-render-container {
-        position: absolute; left: -9999px; top: -9999px;
-    }
-    
+    #label-render-container { position: absolute; left: -9999px; top: -9999px; }
     #printPreviewModal .modal-dialog { max-width: 50%; }
     #printPreviewModal .col-md-4 h4 { font-size: 1.1rem; }
     #printPreviewModal .col-md-4 p { font-size: 0.9rem; }
-    /* ZMIANA: Podgląd drukowania w trybie ciemnym */
-    html.dark-mode #print-preview-area {
-        background: #333 !important;
-    }
-
+    html.dark-mode #print-preview-area { background: #333 !important; }
 </style>
 {% endblock %}
 {% block title %}Lista Zleceń{% endblock %}
@@ -149,7 +110,6 @@
             {% endfor %}
         </select>
     </div>
-
     <div class="form-group mr-2">
         <select name="status" class="form-control">
             <option value="">Wszystkie statusy</option>
@@ -158,7 +118,7 @@
             <option value="ZREALIZOWANE" {% if request.args.get('status') == 'ZREALIZOWANE' %}selected{% endif %}>ZREALIZOWANE</option>
         </select>
     </div>
-<div class="form-group mr-2">
+    <div class="form-group mr-2">
         <select name="zlecajacy" id="zlecajacy" class="form-control">
             <option value="all" {% if current_zlecajacy_filter == 'all' %}selected{% endif %}>Wszyscy zlecający</option>
             {% for z in all_zlecajacy %}
@@ -176,7 +136,6 @@
             {% endfor %}
         </select>
     </div>
-
     <div class="form-group mr-2">
         <select name="month" id="month" class="form-control">
             <option value="current" {% if current_month_filter == 'current' %}selected{% endif %}>Bieżący miesiąc</option>
@@ -187,14 +146,14 @@
             {% endfor %}
         </select>
     </div>
-
     <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filtruj</button>
     <a href="{{ url_for('orders_list') }}" class="btn btn-secondary ml-2">Resetuj</a>
 </form>
 
 {% macro render_orders_table(orders) %}
 <div class="table-responsive p-0 m-0">
-    <table class="table table-hover m-0"> <thead>
+    <table class="table table-hover m-0">
+        <thead>
             <tr>
                 <th>Nr zlecenia</th>
                 <th>Klient</th>
@@ -218,7 +177,6 @@
                         <strong>Koniec:</strong> {{ order.sewing_finished_at | to_local_time }}
                     {% endif %}
                 </td>
-                
                 <td data-label="Status:">
                     {% if order.status == 'W REALIZACJI' %}
                         <span class="badge badge-pill badge-warning">{{ order.status }}</span>
@@ -255,102 +213,96 @@
                     {% endif %}
                 </td>
                 <td data-label="Akcje:">
-                    
                     <button class="btn btn-sm btn-secondary btn-generate-pdf"
                             data-order-id="{{ order.id }}"
                             data-has-images="{{ 'true' if order.has_images else 'false' }}"
                             title="Generuj PDF">
                         <i class="fas fa-file-pdf"></i>
                     </button>
-                    
-                    
                     <button class="btn btn-sm btn-dark btn-print-labels" data-order-id="{{ order.id }}" title="Drukuj metki">
                         <i class="fas fa-tags"></i>
                     </button>
                     <a href="{{ url_for('edit_order', order_id=order.id) }}" class="btn btn-sm btn-warning" title="Edytuj zlecenie">
-    <i class="fas fa-edit"></i>
-</a>
+                        <i class="fas fa-edit"></i>
+                    </a>
                     <form method="POST" action="{{ url_for('delete_order', order_id=order.id) }}" class="d-inline delete-order-form">
                         <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
                     </form>
                 </td>
             </tr>
-             <tr class="order-details" id="details-{{ order.id }}" style="display: none;">
-    <td colspan="7">
-        <div class="p-3"> {% if order.uwagi %}
-            <div class="alert alert-warning mb-3">
-                <h6 class="alert-heading font-weight-bold"><i class="fas fa-exclamation-triangle"></i> Uwagi do zlecenia:</h6>
-                <p class="mb-0" style="white-space: pre-wrap;">{{ order.uwagi }}</p>
-            </div>
-            {% endif %}
-            <strong>Opis:</strong> {{ order.description }}<br>
-            <strong>Zlecający:</strong> {{ order.zlecajacy }}<br>
-            <strong>Logowanie:</strong> {{ order.login_info or 'Brak' }}<br>
-            
-            {# --- POCZĄTEK ZMIANY --- #}
-            <strong>Tkanina:</strong> 
-            {% set fabrics = [] %}
-            {% for material in order.planned_materials %}
-                {% if 'metra' in material.quantity and material.name not in fabrics %}
-                    {% set _ = fabrics.append(material.name) %}
-                {% endif %}
-            {% endfor %}
-            {{ fabrics|join(', ') if fabrics else 'Brak' }}
-            <br>
-            {# --- KONIEC ZMIANY --- #}
-
-            <strong>Produkty:</strong>
-            <ul style="list-style-type: none; padding-left: 0;">
-            {% for product_name, items in order.order_items|groupby('product.name') %}
-                <li style="margin-top: 5px;">
-                    <strong>{{ product_name }}:</strong>
-                    <ul style="padding-left: 20px; list-style-type: circle;">
-                    {% for item in items %}
-                        <li>{{ item.size }} - {{ item.quantity }} szt.</li>
-                    {% endfor %}
-                    </ul>
-                </li>
-            {% endfor %}
-            </ul>
-
-            {% if order.materials_used %}
-                <br>
-                <strong>Rzeczywiste zużycie materiałów:</strong>
-                <ul>
-                    {% for material in order.materials_used %}
-                    <li>{{ material.material_name }} – {{ material.quantity }}</li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <br>
-                <strong>Planowane zużycie materiałów:</strong>
-                {% if order.planned_materials %}
-                <ul class="list-unstyled" style="padding-left: 20px;">
-                    {% for item in order.planned_materials %}
-                        <li>
-                            {{ item.name }}
-                            {% if item.supplier %}
-                                <small class="text-muted">({{ item.supplier }})</small>
+            <tr class="order-details" id="details-{{ order.id }}" style="display: none;">
+                <td colspan="7">
+                    <div class="p-3">
+                        {% if order.uwagi %}
+                        <div class="alert alert-warning mb-3">
+                            <h6 class="alert-heading font-weight-bold"><i class="fas fa-exclamation-triangle"></i> Uwagi do zlecenia:</h6>
+                            <p class="mb-0" style="white-space: pre-wrap;">{{ order.uwagi }}</p>
+                        </div>
+                        {% endif %}
+                        <strong>Opis:</strong> {{ order.description }}<br>
+                        <strong>Zlecający:</strong> {{ order.zlecajacy }}<br>
+                        <strong>Logowanie:</strong> {{ order.login_info or 'Brak' }}<br>
+                        <strong>Tkanina:</strong>
+                        {% set fabrics = [] %}
+                        {% for material in order.planned_materials %}
+                            {% if 'metra' in material.quantity and material.name not in fabrics %}
+                                {% set _ = fabrics.append(material.name) %}
                             {% endif %}
-                            : <strong>{{ item.quantity }}</strong>
-                        </li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                    <p style="margin-left: 20px;">Brak zdefiniowanych materiałów dla produktów w tym zleceniu.</p>
-                {% endif %}
-            {% endif %}
-            
-            <strong>Szacowany koszt zlecenia:</strong>
-            <ul style="padding-left: 20px; list-style-type: circle;">
-                <li>Koszt tkanin: {{ "%.2f"|format(order.cost_details.fabric_cost) }} zł</li>
-                <li>Koszt materiałów: {{ "%.2f"|format(order.cost_details.material_cost) }} zł</li>
-                <li>Koszt produkcji (przeliczony): {{ "%.2f"|format(order.cost_details.production_cost) }} zł</li>
-                <li style="margin-top: 5px;"><strong>RAZEM: {{ "%.2f"|format(order.cost_details.total_cost) }} zł</strong></li>
-            </ul>
-        </div>
-    </td>
-</tr>
+                        {% endfor %}
+                        {{ fabrics|join(', ') if fabrics else 'Brak' }}
+                        <br>
+                        <strong>Produkty:</strong>
+                        <ul style="list-style-type: none; padding-left: 0;">
+                        {% for product_name, items in order.order_items|groupby('product.name') %}
+                            <li style="margin-top: 5px;">
+                                <strong>{{ product_name }}:</strong>
+                                <ul style="padding-left: 20px; list-style-type: circle;">
+                                {% for item in items %}
+                                    <li>{{ item.size }} - {{ item.quantity }} szt.</li>
+                                {% endfor %}
+                                </ul>
+                            </li>
+                        {% endfor %}
+                        </ul>
+
+                        {% if order.materials_used %}
+                            <br>
+                            <strong>Rzeczywiste zużycie materiałów:</strong>
+                            <ul>
+                                {% for material in order.materials_used %}
+                                <li>{{ material.material_name }} – {{ material.quantity }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <br>
+                            <strong>Planowane zużycie materiałów:</strong>
+                            {% if order.planned_materials %}
+                            <ul class="list-unstyled" style="padding-left: 20px;">
+                                {% for item in order.planned_materials %}
+                                    <li>
+                                        {{ item.name }}
+                                        {% if item.supplier %}
+                                            <small class="text-muted">({{ item.supplier }})</small>
+                                        {% endif %}
+                                        : <strong>{{ item.quantity }}</strong>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}
+                                <p style="margin-left: 20px;">Brak zdefiniowanych materiałów dla produktów w tym zleceniu.</p>
+                            {% endif %}
+                        {% endif %}
+
+                        <strong>Szacowany koszt zlecenia:</strong>
+                        <ul style="padding-left: 20px; list-style-type: circle;">
+                            <li>Koszt tkanin: {{ "%.2f"|format(order.cost_details.fabric_cost) }} zł</li>
+                            <li>Koszt materiałów: {{ "%.2f"|format(order.cost_details.material_cost) }} zł</li>
+                            <li>Koszt produkcji (przeliczony): {{ "%.2f"|format(order.cost_details.production_cost) }} zł</li>
+                            <li style="margin-top: 5px;"><strong>RAZEM: {{ "%.2f"|format(order.cost_details.total_cost) }} zł</strong></li>
+                        </ul>
+                    </div>
+                </td>
+            </tr>
             {% endfor %}
         </tbody>
     </table>
@@ -404,75 +356,80 @@
     </div>
 </div>
 
+
 <div class="modal fade" id="pdfImageModal" tabindex="-1" role="dialog" aria-labelledby="pdfImageModalLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="pdfImageModalLabel">Dołączyć zdjęcia do PDF?</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      <div class="modal-body">
-        <p>Produkty w tym zleceniu posiadają zdjęcia. Czy chcesz dołączyć je do dokumentu PDF?</p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-primary" id="pdf-with-images">Tak, dołącz zdjęcia</button>
-        <button type="button" class="btn btn-secondary" data-dismiss="modal" id="pdf-no-images">Nie (sam tekst)</button>
-      </div>
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pdfImageModalLabel">Dołączyć zdjęcia do PDF?</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Produkty w tym zleceniu posiadają zdjęcia. Czy chcesz dołączyć je do dokumentu PDF?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="pdf-with-images">Tak, dołącz zdjęcia</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal" id="pdf-no-images">Nie (sam tekst)</button>
+            </div>
+        </div>
     </div>
-  </div>
 </div>
+
 
 <div class="modal fade" id="assignLabelModal" tabindex="-1" role="dialog">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Wybierz domyślne metki</h5>
-        <button type="button" class="close" data-dismiss="modal">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p>Niektóre produkty w tym zleceniu nie mają przypisanych metek. Wybierz szablony, które mają być dla nich użyte:</p>
-        <form id="assign-labels-form"></form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">Anuluj</button>
-        <button type="button" class="btn btn-primary" id="confirm-assign-btn">Przejdź do drukowania</button>
-      </div>
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Wybierz domyślne metki</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Niektóre produkty w tym zleceniu nie mają przypisanych metek. Wybierz szablony, które mają być dla nich użyte:</p>
+                <form id="assign-labels-form"></form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Anuluj</button>
+                <button type="button" class="btn btn-primary" id="confirm-assign-btn">Przejdź do drukowania</button>
+            </div>
+        </div>
     </div>
-  </div>
 </div>
 
+
 <div class="modal fade" id="printPreviewModal" tabindex="-1" role="dialog">
-  <div class="modal-dialog modal-xl" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Podgląd i Drukowanie Metek</h5>
-        <button type="button" class="close" data-dismiss="modal">&times;</button>
-      </div>
-      <div class="modal-body">
-          <div class="row">
-              <div class="col-md-8" style="height: 60vh; overflow-y: auto; background: #f0f0f0; padding: 1rem; border-radius: 8px;">
-                  <div id="print-preview-area" class="d-flex flex-wrap justify-content-center align-items-start" style="gap: 10px;">
-                      </div>
-              </div>
-              <div class="col-md-4">
-                  <h4>Ustawienia Drukarki</h4>
-                  <div class="form-group">
-                      <label for="printServerIp">Adres IP serwera drukowania</label>
-                      <input type="text" class="form-control" id="printServerIp" placeholder="np. http://192.168.1.100:5001">
-                  </div>
-                  <hr>
-                  <h4>Podsumowanie</h4>
-                  <p>Całkowita liczba metek do wydruku: <strong id="total-labels-count">0</strong></p>
-                  <button id="start-print-btn" class="btn btn-success btn-lg w-100"><i class="fas fa-print"></i> Drukuj</button>
-                  <div id="print-status" class="mt-3"></div>
-              </div>
-          </div>
-      </div>
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Podgląd i Drukowanie Metek</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-8" style="height: 60vh; overflow-y: auto; background: #f0f0f0; padding: 1rem; border-radius: 8px;">
+                        <div id="print-preview-area" class="d-flex flex-wrap justify-content-center align-items-start" style="gap: 10px;">
+                           
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <h4>Ustawienia Drukarki</h4>
+                        <div class="form-group">
+                            <label for="printServerIpModal">Adres IP serwera drukowania</label> 
+                            <input type="text" class="form-control" id="printServerIpModal" placeholder="np. http://192.168.1.100:5001"> 
+                        </div>
+                        <hr>
+                        <h4>Podsumowanie</h4>
+                        <p>Całkowita liczba metek do wydruku: <strong id="total-labels-count">0</strong></p>
+                        <button id="start-print-btn" class="btn btn-success btn-lg w-100"><i class="fas fa-print"></i> Drukuj</button>
+                        <div id="print-status" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-  </div>
 </div>
+
 
 <div id="label-render-container"></div>
 {% endblock %}
@@ -481,14 +438,11 @@
 {{ super() }}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
-// Cały blok <script> pozostaje bez zmian, jego logika jest już poprawna
 document.addEventListener('DOMContentLoaded', function() {
-    // 1. Rozwijanie/zwijanie szczegółów zamówienia po kliknięciu w wiersz
+    // 1. Rozwijanie/zwijanie szczegółów zamówienia
     document.querySelectorAll('.order-row').forEach(function(row) {
         row.addEventListener('click', function(e) {
-            if (e.target.closest('form, a, button')) {
-                return;
-            }
+            if (e.target.closest('form, a, button')) return;
             var orderId = this.getAttribute('data-order-id');
             var detailsRow = document.getElementById('details-' + orderId);
             detailsRow.style.display = (detailsRow.style.display === 'none' || detailsRow.style.display === '') ? 'table-row' : 'none';
@@ -499,29 +453,11 @@ document.addEventListener('DOMContentLoaded', function() {
     function setupAjaxStatusChange(form) {
         form.addEventListener('submit', function(e) {
             e.preventDefault();
-            var url = form.action;
-            var formData = new FormData(form);
-
-            fetch(url, {
-                method: 'POST',
-                body: formData,
-                headers: { 'X-Requested-with': 'XMLHttpRequest' }
-            })
-            .then(response => {
-                if (!response.ok) throw new Error('Błąd serwera.');
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    location.reload(); // Proste i niezawodne przeładowanie strony
-                } else {
-                    alert("Wystąpił błąd podczas zmiany statusu.");
-                }
-            })
-            .catch(err => {
-                console.error("Błąd zmiany statusu:", err);
-                alert("Wystąpił krytyczny błąd.");
-            });
+            var url = form.action; var formData = new FormData(form);
+            fetch(url, { method: 'POST', body: formData, headers: { 'X-Requested-with': 'XMLHttpRequest' } })
+                .then(response => { if (!response.ok) throw new Error('Błąd serwera.'); return response.json(); })
+                .then(data => { if (data.success) location.reload(); else alert("Wystąpił błąd podczas zmiany statusu."); })
+                .catch(err => { console.error("Błąd zmiany statusu:", err); alert("Wystąpił krytyczny błąd."); });
         });
     }
     document.querySelectorAll('.update-status-form').forEach(setupAjaxStatusChange);
@@ -529,52 +465,87 @@ document.addEventListener('DOMContentLoaded', function() {
     // 3. Logika dla modala PDF
     const pdfModal = document.getElementById('pdfImageModal');
     let orderIdForPdf;
-
     document.querySelectorAll('.btn-generate-pdf').forEach(button => {
         button.addEventListener('click', function() {
             orderIdForPdf = this.dataset.orderId;
             const hasImages = this.dataset.hasImages === 'true';
-
-            if (hasImages) {
-                $('#pdfImageModal').modal('show');
-            } else {
-                window.open(`/orders/${orderIdForPdf}/pdf?with_images=false`, '_blank');
-            }
+            if (hasImages) { $('#pdfImageModal').modal('show'); }
+            else { window.open(`/orders/${orderIdForPdf}/pdf?with_images=false`, '_blank'); }
         });
     });
-    
     document.getElementById('pdf-with-images').addEventListener('click', function() {
         window.open(`/orders/${orderIdForPdf}/pdf?with_images=true`, '_blank');
         $('#pdfImageModal').modal('hide');
     });
-
     document.getElementById('pdf-no-images').addEventListener('click', function() {
         window.open(`/orders/${orderIdForPdf}/pdf?with_images=false`, '_blank');
+        //$('#pdfImageModal').modal('hide'); // Nie trzeba zamykać, bo nie było otwarte
     });
+
+
+    // --- DODAJ TĘ FUNKCJĘ ---
+    async function fetchAndSetPrinterIp(inputElement) {
+        if (!inputElement) return;
+        console.log("Próba pobrania IP dla:", inputElement.id); // Debug
+        try {
+            const response = await fetch('/api/desktop_status');
+            if (!response.ok) {
+                console.warn('Nie udało się pobrać statusu serwera druku.');
+                if (!inputElement.value) inputElement.value = 'http://localhost:5001';
+                return;
+            }
+            const data = await response.json();
+             console.log("Status serwera:", data); // Debug
+            if (data.print_server === 'online' && data.last_ip) {
+                if (!inputElement.value || inputElement.value === 'http://localhost:5001' || inputElement.placeholder.includes('np.')) {
+                     inputElement.value = `http://${data.last_ip}:5001`;
+                     console.log(`Auto IP set: ${inputElement.value}`); // Debug
+                } else {
+                     console.log("Input ma wartość, nie nadpisano:", inputElement.value); // Debug
+                }
+            } else {
+                console.log('Serwer druku offline lub brak IP.');
+                if (!inputElement.value) inputElement.value = 'http://localhost:5001';
+            }
+        } catch (error) {
+            console.error('Błąd pobierania statusu serwera druku:', error);
+             if (!inputElement.value) inputElement.value = 'http://localhost:5001';
+        }
+    }
+    // --- KONIEC DODANEJ FUNKCJI ---
 
     // --- NOWA LOGIKA DRUKOWANIA METEK ---
     let currentOrderId = null;
-    let labelsToPrintQueue = [];
+    let labelsToPrintQueue = []; // Kolejka blobów obrazków do wydruku
 
+    // Listener na przyciski "Drukuj metki" w tabeli
     document.querySelectorAll('.btn-print-labels').forEach(button => {
         button.addEventListener('click', function() {
             currentOrderId = this.dataset.orderId;
+            // Wywołaj API, aby sprawdzić, czy są produkty bez metek
             fetch(`/api/order/${currentOrderId}/prepare_labels`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.without_labels.length > 0) {
+                        // Są produkty bez metek - pokaż modal przypisywania
                         populateAssignModal(data.without_labels, data.all_templates);
                         $('#assignLabelModal').modal('show');
                     } else {
-                        prepareAndShowPrintPreview({});
+                        // Wszystkie produkty mają metki - przejdź do podglądu
+                        prepareAndShowPrintPreview({}); // Przekaż pusty obiekt przypisań
                     }
+                })
+                .catch(err => {
+                    console.error("Błąd przygotowania metek:", err);
+                    alert("Wystąpił błąd podczas przygotowywania metek do druku.");
                 });
         });
     });
 
     const assignForm = document.getElementById('assign-labels-form');
+    // Wypełnia modal przypisywania metek
     function populateAssignModal(products, templates) {
-        assignForm.innerHTML = '';
+        assignForm.innerHTML = ''; // Wyczyść poprzednie
         products.forEach(p => {
             let options = templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
             assignForm.innerHTML += `
@@ -589,211 +560,276 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Listener na przycisk "Przejdź do drukowania" w modalu przypisywania
     document.getElementById('confirm-assign-btn').addEventListener('click', function() {
         const formData = new FormData(assignForm);
         const assignedTemplates = {};
+        let isValid = true;
+        // Sprawdź, czy wszystkie selecty zostały wybrane
+        assignForm.querySelectorAll('select').forEach(select => {
+             if (!select.value) {
+                 select.classList.add('is-invalid'); // Dodaj styl błędu
+                 isValid = false;
+             } else {
+                 select.classList.remove('is-invalid');
+             }
+        });
+
+        if (!isValid) {
+            alert("Wybierz szablon dla wszystkich produktów.");
+            return;
+        }
+
+        // Zbierz wybrane szablony
         for (let [key, value] of formData.entries()) {
             const productId = key.replace('template_for_', '');
             assignedTemplates[productId] = value;
         }
         $('#assignLabelModal').modal('hide');
-        prepareAndShowPrintPreview(assignedTemplates);
+        prepareAndShowPrintPreview(assignedTemplates); // Przejdź do podglądu z wybranymi szablonami
     });
 
+    // Elementy UI dla podglądu drukowania
     const previewArea = document.getElementById('print-preview-area');
     const totalCountEl = document.getElementById('total-labels-count');
     const startPrintBtn = document.getElementById('start-print-btn');
     const printStatusDiv = document.getElementById('print-status');
-    const printServerIpInput = document.getElementById('printServerIp');
-    
-    printServerIpInput.value = localStorage.getItem('printServerIp') || '';
+    // Użyj poprawionego ID 'printServerIpModal'
+    const printServerIpInputModal = document.getElementById('printServerIpModal');
 
+    // Wczytaj zapisany IP, jeśli istnieje
+    printServerIpInputModal.value = localStorage.getItem('printServerIp') || '';
+
+    // Generuje podgląd metek i przygotowuje kolejkę do druku
     async function prepareAndShowPrintPreview(assignedTemplates) {
         previewArea.innerHTML = '<div class="spinner-border" role="status"><span class="sr-only">Ładowanie...</span></div>';
         totalCountEl.textContent = '...';
-        $('#printPreviewModal').modal('show');
+        printStatusDiv.innerHTML = ''; // Wyczyść status poprzedniego drukowania
+        startPrintBtn.disabled = true; // Zablokuj przycisk drukowania na czas ładowania
 
-        const response = await fetch(`/api/order/${currentOrderId}/prepare_labels_for_printing`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ assigned_templates: assignedTemplates })
-        });
-        const data = await response.json();
+        // --- DODAJ WYWOŁANIE FUNKCJI POBIERANIA IP ---
+        fetchAndSetPrinterIp(printServerIpInputModal); // Wywołaj przy otwieraniu modala podglądu
+        // --- KONIEC DODANEGO WYWOŁANIA ---
 
-        previewArea.innerHTML = '';
-        labelsToPrintQueue = [];
-        let totalCount = 0;
+        $('#printPreviewModal').modal('show'); // Pokaż modal podglądu
 
-        const renderContainer = document.getElementById('label-render-container');
-        
-        for (const labelInfo of data) {
-            totalCount += labelInfo.quantity;
-            
-            const labelHtml = createLabelHtml(labelInfo.template_json, labelInfo.size);
-            renderContainer.innerHTML = labelHtml;
-            const labelElement = renderContainer.firstElementChild;
-            
-            const canvas = await html2canvas(labelElement, { scale: 3, backgroundColor: null });
-            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        try {
+            const response = await fetch(`/api/order/${currentOrderId}/prepare_labels_for_printing`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ assigned_templates: assignedTemplates })
+            });
+            if (!response.ok) throw new Error('Błąd serwera podczas pobierania danych metek.');
+            const data = await response.json();
 
-            for (let i = 0; i < labelInfo.quantity; i++) {
-                labelsToPrintQueue.push(blob);
+            previewArea.innerHTML = ''; // Wyczyść spinner
+            labelsToPrintQueue = []; // Wyczyść poprzednią kolejkę
+            let totalCount = 0;
+            const renderContainer = document.getElementById('label-render-container');
+
+            for (const labelInfo of data) {
+                totalCount += labelInfo.quantity;
+
+                // Stwórz HTML metki na podstawie szablonu JSON i rozmiaru
+                const labelHtml = createLabelHtml(labelInfo.template_json, labelInfo.size);
+                renderContainer.innerHTML = labelHtml; // Wstrzyknij HTML do ukrytego kontenera
+                const labelElement = renderContainer.firstElementChild;
+
+                if (!labelElement) {
+                     console.error("Nie udało się znaleźć elementu metki do renderowania:", labelInfo);
+                     continue; // Przejdź do następnej metki, jeśli coś poszło nie tak
+                }
+
+                // Użyj html2canvas do stworzenia obrazka
+                const canvas = await html2canvas(labelElement, { scale: 3, backgroundColor: null, useCORS: true });
+                // Konwertuj canvas na Blob (plik PNG)
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+
+                // Dodaj blob do kolejki drukowania odpowiednią liczbę razy
+                for (let i = 0; i < labelInfo.quantity; i++) {
+                    labelsToPrintQueue.push(blob);
+                }
+
+                // Stwórz element podglądu (obrazek + badge z ilością)
+                const previewWrapper = document.createElement('div');
+                previewWrapper.style.position = 'relative';
+                previewWrapper.style.margin = '5px';
+                const img = document.createElement('img');
+                img.src = canvas.toDataURL('image/png'); // Użyj DataURL dla podglądu
+                img.style.width = '100px'; // Rozmiar podglądu
+                img.style.border = '1px solid #ddd';
+                const quantityBadge = document.createElement('span');
+                quantityBadge.className = 'badge badge-primary badge-pill'; // Użyj klas Bootstrapa
+                quantityBadge.textContent = `x ${labelInfo.quantity}`;
+                quantityBadge.style.position = 'absolute';
+                quantityBadge.style.top = '5px'; quantityBadge.style.right = '5px';
+                quantityBadge.style.fontSize = '0.9rem';
+                previewWrapper.appendChild(img);
+                previewWrapper.appendChild(quantityBadge);
+                previewArea.appendChild(previewWrapper); // Dodaj podgląd do modala
             }
 
-            const previewWrapper = document.createElement('div');
-            previewWrapper.style.position = 'relative';
-            previewWrapper.style.margin = '5px';
+            renderContainer.innerHTML = ''; // Wyczyść kontener renderujący
+            totalCountEl.textContent = totalCount; // Zaktualizuj licznik
+            startPrintBtn.disabled = totalCount === 0; // Odblokuj przycisk, jeśli są metki
 
-            const img = document.createElement('img');
-            img.src = URL.createObjectURL(blob);
-            img.style.width = '100px';
-            img.style.border = '1px solid #ddd';
-            
-            const quantityBadge = document.createElement('span');
-            quantityBadge.className = 'badge badge-primary badge-pill';
-            quantityBadge.textContent = `x ${labelInfo.quantity}`;
-            quantityBadge.style.position = 'absolute';
-            quantityBadge.style.top = '5px';
-            quantityBadge.style.right = '5px';
-            quantityBadge.style.fontSize = '0.9rem';
-
-            previewWrapper.appendChild(img);
-            previewWrapper.appendChild(quantityBadge);
-            previewArea.appendChild(previewWrapper);
+        } catch (error) {
+            console.error("Błąd podczas przygotowywania podglądu:", error);
+            previewArea.innerHTML = `<div class="alert alert-danger">Błąd generowania podglądu: ${error.message}</div>`;
+            totalCountEl.textContent = 'Błąd';
+            startPrintBtn.disabled = true;
         }
-        
-        renderContainer.innerHTML = '';
-        totalCountEl.textContent = totalCount;
     }
-    
+
+    // Tworzy HTML dla pojedynczej metki na podstawie danych JSON
     function createLabelHtml(templateJson, size) {
         let elementsHtml = '';
+        if (!templateJson || !Array.isArray(templateJson.elements)) return ''; // Sprawdź poprawność danych
+
         templateJson.elements.forEach(element => {
+            if (typeof element !== 'object' || element === null) return; // Pomiń nieprawidłowe elementy
+
             let content = '';
             let extraStyles = '';
-            if (element.type === 'image') {
-                content = `<img src="${element.src}" style="width: 100%; height: auto;">`;
-            } else if (element.type === 'icon') {
-                content = `<span style="font-family: 'WashCareSymbols', sans-serif;">${element.symbol}</span>`;
-            } else if (element.type === 'dynamic') {
-                content = size;
-            } else {
-                content = element.content;
+            let inlineStyles = ''; // Dodatkowe style inline
+            const elementType = element.type || 'text';
+
+            if (elementType === 'image') {
+                content = `<img src="${element.src || ''}" style="width: 100%; height: auto; display: block;">`; // display:block dla img
+                inlineStyles += `width: ${element.width || 'auto'}; padding: 0; border: none;`; // Ustaw szerokość, usuń padding i border
+            } else if (elementType === 'icon') {
+                content = `<span style="font-family: 'WashCareSymbols', sans-serif;">${element.symbol || ''}</span>`;
+                inlineStyles += `font-size: ${element.fontSize || 12}px;`;
+            } else if (elementType === 'dynamic') {
+                content = size || '[ROZMIAR]'; // Użyj przekazanego rozmiaru lub placeholdera
+                inlineStyles += `font-size: ${element.fontSize || 12}px; font-weight: bold;`;
+            } else { // text
+                content = element.content || '';
+                inlineStyles += `font-size: ${element.fontSize || 12}px;`;
             }
 
-            if (element.isCentered) {
-                extraStyles = 'text-align: center; width: 100%; left: 0;';
+            // Obsługa centrowania
+            const isCentered = element.isCentered || false;
+            let positionStyles = '';
+            if (isCentered) {
+                 positionStyles = `left: 50%; top: ${element.y || 0}px; transform: translateX(-50%); text-align: center; width: 100%;`; // Centrowanie
+            } else {
+                 positionStyles = `left: ${element.x || 0}px; top: ${element.y || 0}px;`; // Pozycjonowanie absolutne
             }
 
             elementsHtml += `
-                <div style="position: absolute; 
-                                 transform: ${element.x === '50%' ? 'translateX(-50%)' : `translate(${element.x}px, ${element.y}px)`};
-                                 top: ${element.x === '50%' ? `${element.y}px` : '0'};
-                                 left: ${element.x === '50%' ? '50%' : '0'};
-                                 font-size: ${element.fontSize}px;
-                                 font-weight: ${element.type === 'dynamic' ? 'bold' : 'normal'};
-                                 color: ${element.color || 'black'};
-                                 width: ${element.width};
-                                 padding: 5px;
-                                 ${extraStyles}">
+                <div style="position: absolute; ${positionStyles} ${inlineStyles} color: #000; line-height: 1.1;">
                     ${content}
                 </div>
             `;
         });
 
+        // Zwróć gotowy HTML metki
+        const height = templateJson.height || '189px'; // Domyślna wysokość
         return `
-            <div class="label-canvas-render" style="width: 132px; height: ${templateJson.height}; background-color: white; position: relative; overflow: hidden;">
-                <div style="position: absolute; top: 7.5px; left: 0; width: 100%; border-top: 1px dashed #888;"></div>
+            <div class="label-canvas-render" style="width: 132px; height: ${height}; background-color: white; position: relative; overflow: hidden;">
+                <div style="position: absolute; top: 7.5px; left: 0; width: 100%; border-top: 1px dashed #ccc;"></div> 
                 ${elementsHtml}
             </div>
         `;
     }
 
+    // Rozpoczyna proces drukowania metek z kolejki
     async function processPrintQueue() {
-        startPrintBtn.disabled = true;
+        startPrintBtn.disabled = true; // Zablokuj przycisk na czas drukowania
         let successCount = 0;
         let errorCount = 0;
+        const totalToPrint = labelsToPrintQueue.length;
 
-        for (let i = 0; i < labelsToPrintQueue.length; i++) {
+        for (let i = 0; i < totalToPrint; i++) {
             const imageBlob = labelsToPrintQueue[i];
-            printStatusDiv.innerHTML = `<div class="alert alert-info">Drukowanie metki ${i + 1} z ${labelsToPrintQueue.length}...</div>`;
-            
+            printStatusDiv.innerHTML = `<div class="alert alert-info">Drukowanie metki ${i + 1} z ${totalToPrint}... <div class="progress"><div class="progress-bar" role="progressbar" style="width: ${((i+1)/totalToPrint)*100}%" aria-valuenow="${i+1}" aria-valuemin="0" aria-valuemax="${totalToPrint}"></div></div></div>`;
+
             try {
+                // Wyślij pojedynczą metkę do serwera druku
                 const success = await sendToPrintServer(imageBlob);
                 if (success) {
                     successCount++;
                 } else {
                     errorCount++;
+                    // Opcjonalnie: przerwij drukowanie po pierwszym błędzie
+                    // throw new Error("Błąd podczas wysyłania do serwera druku.");
                 }
+                 // Dodaj małe opóźnienie między wydrukami, jeśli drukarka ma problemy
+                 // await new Promise(resolve => setTimeout(resolve, 100));
             } catch (err) {
                 errorCount++;
-                console.error("Błąd podczas wysyłania metki:", err);
-            }
-
-            if (errorCount > 0) {
-                 printStatusDiv.innerHTML = `<div class="alert alert-danger">Wystąpił błąd. ${successCount}/${labelsToPrintQueue.length} wysłano poprawnie. Spróbuj ponownie.</div>`;
-                 startPrintBtn.disabled = false;
-                 return;
+                console.error("Błąd podczas wysyłania metki:", i + 1, err);
+                // Opcjonalnie: Przerwij pętlę po błędzie
+                 break;
             }
         }
-        printStatusDiv.innerHTML = `<div class="alert alert-success">Zakończono! Wydrukowano ${successCount} metek.</div>`;
-        startPrintBtn.disabled = false;
+
+        // Wyświetl wynik końcowy
+        if (errorCount > 0) {
+            printStatusDiv.innerHTML = `<div class="alert alert-danger">Wystąpił błąd. ${successCount}/${totalToPrint} wysłano poprawnie. Spróbuj ponownie.</div>`;
+        } else {
+            printStatusDiv.innerHTML = `<div class="alert alert-success">Zakończono! Wydrukowano ${successCount} metek.</div>`;
+        }
+        startPrintBtn.disabled = false; // Odblokuj przycisk po zakończeniu
     }
 
+    // Wysyła pojedynczy obraz metki (blob) do serwera druku
     async function sendToPrintServer(imageBlob) {
-        let ip = printServerIpInput.value.trim();
+        // --- ZMIANA: Odczytaj IP z inputa w modalu ---
+        let ip = printServerIpInputModal.value.trim();
+        // --- KONIEC ZMIANY ---
+
         if (!ip) {
             alert("Wpisz adres IP serwera drukowania!");
-            return false;
+            throw new Error("Brak adresu IP serwera druku."); // Rzuć błąd, aby zatrzymać kolejkę
         }
-        
-        if (!ip.startsWith('http')) {
-            ip = 'http://' + ip;
-        }
-        localStorage.setItem('printServerIp', ip);
+        if (!ip.startsWith('http')) ip = 'http://' + ip;
+        localStorage.setItem('printServerIp', ip); // Zapisz ostatnio użyty
 
         const formData = new FormData();
         formData.append('image', imageBlob, 'label.png');
-        formData.append('width_mm', 35);
-        formData.append('height_mm', 50); 
-        formData.append('quantity', 1);
+        // Te wymiary mogą być dynamiczne, jeśli metki mają różne rozmiary
+        formData.append('width_mm', 35); // Załóżmy stałą szerokość
+        formData.append('height_mm', 50); // Załóżmy stałą wysokość (można by odczytać z renderContainer)
+        formData.append('quantity', 1); // Wysyłamy pojedynczo
 
         try {
             const response = await fetch(`${ip}/print_label`, { method: 'POST', body: formData });
             if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error || 'Błąd serwera druku');
-            };
+                 // Spróbuj odczytać błąd jako JSON, a jeśli się nie uda - jako tekst
+                 let errorMsg = `Błąd serwera druku: ${response.status}`;
+                 try {
+                     const errData = await response.json();
+                     errorMsg = errData.error || errorMsg;
+                 } catch (jsonError) {
+                      const textError = await response.text();
+                      errorMsg = `Błąd ${response.status}: ${textError.substring(0,100)}...`;
+                 }
+                 throw new Error(errorMsg);
+            }
             const data = await response.json();
-            return data.status.includes('Wydrukowano');
+            return data.status.includes('Wydrukowano'); // Sprawdź, czy odpowiedź zawiera potwierdzenie
         } catch (error) {
             console.error('Błąd połączenia z serwerem druku:', error);
-            alert(`Błąd połączenia z serwerem druku: ${error.message}`);
-            return false;
+            // Wyświetl błąd w divie statusu, ale rzuć go też dalej, by zatrzymać kolejkę
+            printStatusDiv.innerHTML = `<div class="alert alert-danger">Błąd połączenia: ${error.message}</div>`;
+            throw error; // Rzuć błąd, aby processPrintQueue go złapał
         }
     }
 
+    // Listener na przycisk "Drukuj" w modalu podglądu
     startPrintBtn.addEventListener('click', processPrintQueue);
 
-    // 4. Logika dla SweetAlert przy usuwaniu
+    // 4. Logika dla SweetAlert przy usuwaniu zlecenia
     document.querySelectorAll('.delete-order-form').forEach(form => {
         form.addEventListener('submit', function(e) {
             e.preventDefault();
-
             Swal.fire({
-                title: 'Jesteś pewien?',
-                text: "Zlecenie zostanie trwale usunięte!",
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#3085d6',
-                confirmButtonText: 'Tak, usuń!',
-                cancelButtonText: 'Anuluj'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    form.submit();
-                }
-            });
+                title: 'Jesteś pewien?', text: "Zlecenie zostanie trwale usunięte!", icon: 'warning',
+                showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Tak, usuń!', cancelButtonText: 'Anuluj'
+            }).then((result) => { if (result.isConfirmed) form.submit(); });
         });
     });
 });

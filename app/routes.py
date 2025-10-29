@@ -1385,6 +1385,12 @@ def reports():
     month_filter = request.args.get('month', 'all')
     material_filter = request.args.get('material', '').strip().upper()
 
+# Definicja daty grupowania (tak jak w /orders/history)
+    grouping_date_sql = db.case(
+        (Order.production_month != None, func.date(Order.production_month + '-01')),
+        else_=func.date(Order.sewing_finished_at)
+    )
+
     query = Order.query.filter_by(status='ZREALIZOWANE').options(
         joinedload(Order.client),
         joinedload(Order.materials_used),
@@ -1396,10 +1402,10 @@ def reports():
     )
 
     if year_filter != 'all':
-        try: query = query.filter(extract('year', Order.created_at) == int(year_filter))
+        try: query = query.filter(extract('year', grouping_date_sql) == int(year_filter)) # ZMIANA
         except (ValueError, TypeError): pass
     if month_filter != 'all':
-        try: query = query.filter(extract('month', Order.created_at) == int(month_filter))
+        try: query = query.filter(extract('month', grouping_date_sql) == int(month_filter)) # ZMIANA
         except (ValueError, TypeError): pass
     
     completed_orders = query.all()
@@ -1500,9 +1506,9 @@ def reports():
         monthly_value = db.session.query(func.sum(OrderItem.quantity * Product.production_price))\
             .join(Order).join(Product)\
             .filter(Order.status == 'ZREALIZOWANE')\
-            .filter(extract('year', Order.created_at) == year)\
-            .filter(extract('month', Order.created_at) == month).scalar() or 0.0
-        
+            .filter(extract('year', grouping_date_sql) == year)\
+            .filter(extract('month', grouping_date_sql) == month).scalar() or 0.0 # ZMIANA
+
         production_trend.append({'month': f"{year}-{month:02d}", 'value': round(monthly_value, 2)})
 
     # Przygotowanie reszty danych
@@ -1510,8 +1516,11 @@ def reports():
         # ... (logika filtrowania bez zmian)
         pass
 
-    years_query = db.session.query(extract('year', Order.created_at)).distinct().all()
+    years_query = db.session.query(extract('year', grouping_date_sql))\
+    .filter(Order.status == 'ZREALIZOWANE', grouping_date_sql.isnot(None))\
+    .distinct().all() # ZMIANA
     years = sorted([y[0] for y in years_query if y[0] is not None], reverse=True)
+    
     all_materials_list = sorted(list(set(list(fabric_summary.keys()) + list(material_summary.keys()))))
 
     return render_template(
@@ -2897,34 +2906,36 @@ def get_production_period_orders(year, month):
     """
     period_str = f"{year}-{month:02d}"
 
-    # Używamy instrukcji CASE, aby ustalić "efektywny" okres dla każdego zlecenia.
-    # Jeśli production_month jest ustawiony, ma on pierwszeństwo.
-    # W przeciwnym razie, używamy miesiąca z daty zakończenia szycia.
     effective_period = db.case(
         (Order.production_month != None, Order.production_month),
         else_=func.strftime('%Y-%m', Order.sewing_finished_at)
     )
 
-    # Zapytanie, które filtruje zlecenia na podstawie ich "efektywnego" okresu.
-    # Dzięki temu zlecenie "przeniesione" zniknie z jednego widoku i pojawi się w drugim.
     all_relevant_orders = Order.query.filter(
         Order.status == 'ZREALIZOWANE',
         Order.sewing_finished_at.isnot(None),
         effective_period == period_str
+    ).options(
+        joinedload(Order.order_items).joinedload(OrderItem.product) # Dodaj eager loading dla produktów
     ).order_by(Order.sewing_finished_at.desc()).all()
 
-    # Logika do tworzenia opcji wyboru (poprzedni/bieżący/następny miesiąc)
     current_date = date(year, month, 1)
     prev_month_date = current_date - timedelta(days=1)
     next_month_date = (current_date.replace(day=28) + timedelta(days=4)).replace(day=1)
-    
+
     prev_period_str = prev_month_date.strftime('%Y-%m')
     next_period_str = next_month_date.strftime('%Y-%m')
 
     orders_list = []
     for order in all_relevant_orders:
-        # Określ aktualnie przypisany okres (dla zaznaczenia w <select>)
         assigned_period = order.production_month or order.sewing_finished_at.strftime('%Y-%m')
+
+        # ### POCZĄTEK NOWEGO KODU: Obliczanie surowego kosztu produkcji ###
+        raw_production_cost = 0.0
+        for item in order.order_items:
+            if item.product and item.product.production_price is not None:
+                raw_production_cost += item.quantity * item.product.production_price
+        # ### KONIEC NOWEGO KODU ###
 
         orders_list.append({
             'id': order.id,
@@ -2932,15 +2943,15 @@ def get_production_period_orders(year, month):
             'client_name': order.client.name,
             'finished_date': order.sewing_finished_at.strftime('%d.%m.%Y'),
             'production_value': calculate_order_total_cost(order).get('production_cost', 0),
+            'raw_production_cost': raw_production_cost, # <-- DODANO NOWE POLE
             'assigned_period': assigned_period,
-            # Opcje do wyboru na froncie
             'assignment_options': [
                 {'value': prev_period_str, 'label': f'Poprzedni ({prev_period_str})'},
                 {'value': period_str, 'label': f'Bieżący ({period_str})'},
                 {'value': next_period_str, 'label': f'Następny ({next_period_str})'},
             ]
         })
-        
+
     return jsonify(orders_list)
 
 @app.route('/api/assign_production_month', methods=['POST'])
