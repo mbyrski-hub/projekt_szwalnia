@@ -9,8 +9,6 @@
     <link rel="manifest" href="{{ url_for('static', filename='mobile_assets/manifest_admin.json') }}">
     <meta name="theme-color" content="#ffc107">
     <style>
-
-
         body { padding-bottom: 70px; } /* Miejsce na dolne menu */
         .nav-link { font-size: 0.75rem; }
 
@@ -18,7 +16,7 @@
         .navbar.fixed-bottom .nav-link {
             text-align: center; /* Centruje zawartość (ikonę i tekst) wewnątrz linku */
             width: auto;      /* Pozwala linkowi dopasować szerokość do zawartości */
-            flex-grow: 1;      /* Pozwala linkom równomiernie zająć przestrzeń */
+            flex-grow: 1;     /* Pozwala linkom równomiernie zająć przestrzeń */
         }
 
         /* --- NOWY STYL DLA PASKA STATUSU --- */
@@ -36,6 +34,25 @@
             font-size: 0.65rem; /* Jeszcze mniejsza czcionka w badge */
         }
         /* --- KONIEC NOWEGO STYLU --- */
+
+        /* --- NOWY STYL DLA AKORDEONU PRODUKCJI --- */
+        .accordion-button:not(.collapsed) {
+            background-color: var(--bs-gray-700);
+            color: var(--bs-warning);
+        }
+        .accordion-button:focus {
+            box-shadow: 0 0 0 0.25rem rgba(255, 193, 7, 0.25); /* Cień przycisku w kolorze warning */
+        }
+        .accordion-body {
+            background-color: var(--bs-gray-800);
+        }
+        .list-group-item-action {
+             background-color: var(--bs-gray-800); /* Dopasowanie tła listy do tła akordeonu */
+        }
+        .list-group-item-action:hover {
+            background-color: var(--bs-gray-700);
+        }
+        /* --- KONIEC STYLU AKORDEONU --- */
 
     </style>
 </head>
@@ -61,7 +78,6 @@
         </span>
     </div>
     
-
 
     <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
         <div id="updateToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
@@ -110,17 +126,17 @@
     </div>
     
     <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content bg-dark">
-          <div class="modal-header border-secondary">
-            <h5 class="modal-title text-light" id="imageModalLabel">Podgląd zdjęcia produktu</h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body text-center p-0">
-            <img src="" id="fullImage" class="img-fluid" alt="Powiększone zdjęcie produktu">
-          </div>
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content bg-dark">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-light" id="imageModalLabel">Podgląd zdjęcia produktu</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center p-0">
+                    <img src="" id="fullImage" class="img-fluid" alt="Powiększone zdjęcie produktu">
+                </div>
+            </div>
         </div>
-      </div>
     </div>
 
     <template id="calc-fabric-row-template">
@@ -158,10 +174,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalTitle = document.getElementById('orderDetailsModalLabel');
     const modalBody = document.getElementById('orderDetailsModalBody');
 
-    // === NOWE ZMIENNE DLA STATUSU SERWERÓW ===
+    // === ZMIENNE DLA STATUSU SERWERÓW ===
     const printStatusBadge = document.getElementById('print-server-status');
     const syncStatusBadge = document.getElementById('sync-server-status');
-    // === KONIEC NOWYCH ZMIENNYCH ===
 
     let templatesCache = [];
     let historyPage = 1;
@@ -369,28 +384,91 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 2. PRODUKCJA
+    // ========== POCZĄTEK ZMODYFIKOWANEJ SEKCJI ==========
     async function loadProdukcja() {
         content.innerHTML = `<h2 class="text-warning">Produkcja 🏭</h2><p>Ładowanie...</p>`;
         try {
             const response = await fetch('/api/admin/production_overview');
+            if (!response.ok) throw new Error(`Błąd sieci: ${response.status}`);
             const data = await response.json();
-            let html = `<h2 class="text-warning mb-4">Produkcja 🏭</h2><h4>W Krojowni (${data.krojownia.length})</h4>`;
+
+            // --- Generowanie listy HTML dla Krojowni ---
+            let krojowniaHtml = '';
             if (data.krojownia.length > 0) {
-                html += `<div class="list-group mb-4">`;
-                data.krojownia.forEach(o => { html += `<a href="#" class="list-group-item list-group-item-action" data-order-id="${o.id}"><div class="d-flex w-100 justify-content-between"><h6 class="mb-1">${o.order_code}</h6><small><span class="badge bg-secondary">${o.cutting_table || 'NOWE'}</span></small></div><p class="mb-1 small">${o.client_name}</p></a>`; });
-                html += `</div>`;
-            } else { html += `<p class="text-muted">Krojownia jest pusta.</p>`; }
-            html += `<h4>W Szwalni (${data.szwalnia.length})</h4>`;
+                // Używamy list-group-flush, aby usunąć obramowanie wewnątrz akordeonu
+                krojowniaHtml = `<div class="list-group list-group-flush">`; 
+                data.krojownia.forEach(o => {
+                    krojowniaHtml += `<a href="#" class="list-group-item list-group-item-action" data-order-id="${o.id}">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">${o.order_code}</h6>
+                            <small><span class="badge bg-secondary">${o.cutting_table || 'NOWE'}</span></small>
+                        </div>
+                        <p class="mb-1 small">${o.client_name}</p>
+                    </a>`;
+                });
+                krojowniaHtml += `</div>`;
+            } else {
+                krojowniaHtml = `<p class="text-muted p-3 mb-0">Krojownia jest pusta.</p>`;
+            }
+
+            // --- Generowanie listy HTML dla Szwalni ---
+            let szwalniaHtml = '';
             if (data.szwalnia.length > 0) {
-                html += `<div class="list-group mb-4">`;
-                data.szwalnia.forEach(o => { html += `<a href="#" class="list-group-item list-group-item-action" data-order-id="${o.id}"><div class="d-flex w-100 justify-content-between"><h6 class="mb-1">${o.order_code}</h6><small><span class="badge bg-info">${o.assigned_team || 'Czeka'}</span></small></div><p class="mb-1 small">${o.client_name}</p></a>`; });
-                html += `</div>`;
-            } else { html += `<p class="text-muted">Szwalnia czeka na zlecenia.</p>`; }
+                szwalniaHtml = `<div class="list-group list-group-flush">`; // Używamy list-group-flush
+                data.szwalnia.forEach(o => {
+                    szwalniaHtml += `<a href="#" class="list-group-item list-group-item-action" data-order-id="${o.id}">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">${o.order_code}</h6>
+                            <small><span class="badge bg-info">${o.assigned_team || 'Czeka'}</span></small>
+                        </div>
+                        <p class="mb-1 small">${o.client_name}</p>
+                    </a>`;
+                });
+                szwalniaHtml += `</div>`;
+            } else {
+                szwalniaHtml = `<p class="text-muted p-3 mb-0">Szwalnia czeka na zlecenia.</p>`;
+            }
+
+            // --- Składanie widoku z komponentem Akordeon ---
+            let html = `
+                <h2 class="text-warning mb-4">Produkcja 🏭</h2>
+                <div class="accordion" id="produkcjaAccordion">
+                
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingKrojownia">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseKrojownia" aria-expanded="true" aria-controls="collapseKrojownia">
+                                <i class="bi bi-scissors me-2"></i> W Krojowni
+                                <span class="badge bg-secondary rounded-pill ms-2">${data.krojownia.length}</span>
+                            </button>
+                        </h2>
+                        <div id="collapseKrojownia" class="accordion-collapse collapse show" aria-labelledby="headingKrojownia" data-bs-parent="#produkcjaAccordion">
+                            <div class="accordion-body p-0">
+                                ${krojowniaHtml} </div>
+                        </div>
+                    </div>
+                    
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingSzwalnia">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSzwalnia" aria-expanded="false" aria-controls="collapseSzwalnia">
+                                <i class="bi bi-rulers me-2"></i> W Szwalni
+                                <span class="badge bg-info rounded-pill ms-2">${data.szwalnia.length}</span>
+                            </button>
+                        </h2>
+                        <div id="collapseSzwalnia" class="accordion-collapse collapse" aria-labelledby="headingSzwalnia" data-bs-parent="#produkcjaAccordion">
+                            <div class="accordion-body p-0">
+                                ${szwalniaHtml} </div>
+                        </div>
+                    </div>
+                
+                </div>`;
+
             content.innerHTML = html;
         } catch (err) {
-            content.innerHTML = `<div class="alert alert-danger">Błąd ładowania danych o produkcji.</div>`;
+            console.error("Błąd ładowania danych o produkcji:", err);
+            content.innerHTML = `<div class="alert alert-danger">Błąd ładowania danych o produkcji: ${err.message}</div>`;
         }
     }
+    // ========== KONIEC ZMODYFIKOWANEJ SEKCJI ==========
 
     // 3. HISTORIA
     async function loadHistoria(reload = false, year = null, month = null) {
@@ -955,11 +1033,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         currentProductId = productIdValue; // Zapisz ID wybranego produktu
                         selectedProductNameH5.textContent = `Produkt: ${item.dataset.productName}`;
                         categoryFilterStepDiv.style.display = 'none'; // Ukryj wybór kategorii/produktu
-                        photoStepDiv.style.display = 'block';      // Pokaż krok zdjęć
-                        uploadStatusDiv.innerHTML = '';            // Wyczyść status
-                        previewsDiv.innerHTML = '';                // Wyczyść podglądy
-                        imagesToUpload = [];                       // Wyczyść listę do wysłania
-                        uploadBtn.disabled = true;                 // Zablokuj przycisk wysyłania
+                        photoStepDiv.style.display = 'block';     // Pokaż krok zdjęć
+                        uploadStatusDiv.innerHTML = '';         // Wyczyść status
+                        previewsDiv.innerHTML = '';           // Wyczyść podglądy
+                        imagesToUpload = [];                // Wyczyść listę do wysłania
+                        uploadBtn.disabled = true;            // Zablokuj przycisk wysyłania
                         console.log("Wywołuję loadAndDisplayExistingPhotos z productId:", currentProductId);
                         loadAndDisplayExistingPhotos(currentProductId); // Załaduj istniejące zdjęcia
                     });
@@ -1121,7 +1199,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // === NOWA FUNKCJA DO SPRAWDZANIA STATUSU SERWERÓW ===
+    // === FUNKCJA DO SPRAWDZANIA STATUSU SERWERÓW ===
     async function checkServerStatus() {
         try {
             const response = await fetch('/api/desktop_status');
@@ -1154,14 +1232,11 @@ document.addEventListener('DOMContentLoaded', () => {
             syncStatusBadge.className = 'badge bg-light text-warning';
         }
     }
-    // === KONIEC NOWEJ FUNKCJI ===
 
     // --- Inicjalizacja Aplikacji ---
     loadKokpit(); // Załaduj domyślny widok
-    // === NOWE WYWOŁANIA FUNKCJI STATUSU ===
     checkServerStatus(); // Sprawdź od razu po załadowaniu
     setInterval(checkServerStatus, 60000); // Sprawdzaj co minutę
-    // === KONIEC NOWYCH WYWOŁAŃ ===
 
     // --- Logika Service Workera ---
     let serviceWorkerRegistration;

@@ -181,6 +181,7 @@
 <h2><i class="fas fa-magic"></i> Kreator Metek</h2>
 
 <input type="hidden" id="currentTemplateId" value="">
+<input type="file" id="imageUploader" accept="image/png, image/jpeg, image/gif, image/svg+xml" style="display: none;">
 
 <div class="card mb-3">
     <div class="card-body form-inline">
@@ -312,7 +313,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // Wszystkie zmienne i podstawowe funkcje kreatora
+    // --- Definicje głównych zmiennych kreatora ---
     const canvas = document.getElementById('labelCanvas');
     const toolbox = document.querySelector('.toolbox');
     const propertiesContent = document.getElementById('propertiesContent');
@@ -323,17 +324,28 @@ document.addEventListener('DOMContentLoaded', function () {
     const symbolsModal = document.getElementById('symbolsModal');
     const currentTemplateIdInput = document.getElementById('currentTemplateId');
     const dimensionDisplay = document.getElementById('dimensionDisplay');
+    // --- NOWA LOGIKA: Pobranie ukrytego pola do wgrywania plików ---
+    const imageUploader = document.getElementById('imageUploader'); 
     let selectedElement = null;
     let elementCounter = 0;
 
+    /**
+     * Konwertuje piksele (px) na milimetry (mm) na podstawie standardowego 96 DPI.
+     */
     const pxToMm = (px) => (px * 25.4 / 96).toFixed(0);
 
+    /**
+     * Aktualizuje wyświetlacz wymiarów metki (w mm).
+     */
     function updateDimensionDisplay() {
         const heightPx = canvas.offsetHeight;
         const widthPx = canvas.offsetWidth;
         dimensionDisplay.textContent = `Szer: ${pxToMm(widthPx)}mm / Wys: ${pxToMm(heightPx)}mm`;
     }
 
+    /**
+     * Inicjalizuje płótno (canvas) do stanu początkowego (z linią cięcia i logo HOXA).
+     */
     function initializeCanvas() {
         canvas.innerHTML = '';
         canvas.style.height = '189px';
@@ -357,6 +369,11 @@ document.addEventListener('DOMContentLoaded', function () {
         updateDimensionDisplay();
     }
 
+    /**
+     * Tworzy nowy element na płótnie na podstawie wybranego narzędzia.
+     * @param {string} toolType - Typ narzędzia ('text', 'image', 'dynamic', 'ce_mark', 'icon').
+     * @param {object} options - Dodatkowe opcje (np. { symbol: 'A' } dla ikon).
+     */
     function createElement(toolType, options = {}) {
         const newElement = document.createElement('div');
         newElement.classList.add('draggable-element');
@@ -384,18 +401,25 @@ document.addEventListener('DOMContentLoaded', function () {
             newElement.style.fontSize = '12px';
             newElement.dataset.isCentered = 'false';
         } else if (toolType === 'image') {
-            newElement.innerHTML = '<i class="fas fa-image fa-2x"></i>';
+            // --- ZMIENIONA LOGIKA: Lepszy placeholder dla obrazka ---
+            newElement.innerHTML = '<i class="fas fa-image fa-2x text-muted"></i>'; // Placeholder icon
             newElement.dataset.type = 'image';
-            newElement.style.width = '50px';
-            newElement.style.height = '50px';
-            } else if (toolType === 'ce_mark') { // <-- NOWY BLOK DLA ZNAKU CE
-    const src = "{{ url_for('static', filename='images/znak_CE.png') }}";
-    newElement.dataset.type = 'image'; // Traktujemy go jak obrazek
-    newElement.dataset.src = src;
-    newElement.innerHTML = `<img src="${src}" style="width: 100%; height: auto; pointer-events: none;">`;
-    newElement.style.width = '25px'; // Domyślny, rozsądny rozmiar
-    newElement.style.padding = '0';
-    newElement.style.border = '1px dashed #ccc'; // Ramka do edycji
+            newElement.style.width = '50px'; // Domyślna szerokość
+            newElement.style.height = 'auto'; // Auto wysokość
+            newElement.style.padding = '0'; // Bez paddingu dla obrazków
+            newElement.style.display = 'flex'; // Centrowanie ikony
+            newElement.style.justifyContent = 'center';
+            newElement.style.alignItems = 'center';
+            newElement.style.overflow = 'hidden'; // Ukryj nadmiar
+            newElement.dataset.src = ''; // Zainicjuj pusty atrybut src
+        } else if (toolType === 'ce_mark') {
+            const src = "{{ url_for('static', filename='images/znak_CE.png') }}";
+            newElement.dataset.type = 'image'; // Traktujemy jak obrazek
+            newElement.dataset.src = src;
+            newElement.innerHTML = `<img src="${src}" style="width: 100%; height: auto; pointer-events: none;">`;
+            newElement.style.width = '25px'; // Domyślny rozmiar
+            newElement.style.padding = '0';
+            newElement.style.border = '1px dashed #ccc';
         } else if (toolType === 'dynamic') {
             newElement.textContent = '[ ROZMIAR ]';
             newElement.dataset.type = 'dynamic';
@@ -406,8 +430,20 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         canvas.appendChild(newElement);
         makeElementInteractive(newElement);
+
+        // --- NOWA LOGIKA: Automatyczne zaznaczenie i wyzwolenie uploadu dla nowego obrazka ---
+        if (toolType === 'image') {
+            // Symuluj kliknięcie, aby zaznaczyć element i pokazać właściwości
+            newElement.dispatchEvent(new Event('tap'));
+            // Wyzwól okno wyboru pliku
+            imageUploader.dataset.targetElementId = newElement.dataset.id; // Zapisz ID celu
+            imageUploader.click();
+        }
     }
 
+    /**
+     * Nasłuchuje na kliknięcia w przyborniku, aby dodać nowe elementy.
+     */
     toolbox.addEventListener('click', function(event) {
         const toolItem = event.target.closest('.tool-item');
         if (toolItem && toolItem.dataset.tool !== 'icon') {
@@ -415,6 +451,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    /**
+     * Nasłuchuje na kliknięcia w modalu wyboru symboli.
+     */
     symbolsModal.addEventListener('click', function(event) {
         const symbolPicker = event.target.closest('.symbol-picker');
         if (symbolPicker) {
@@ -424,6 +463,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    /**
+     * Używa biblioteki Interact.js, aby uczynić element przesuwalnym i klikalnym.
+     * @param {HTMLElement} element - Element do uczynienia interaktywnym.
+     */
     function makeElementInteractive(element) {
         interact(element)
             .draggable({
@@ -436,6 +479,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         target.setAttribute('data-x', x);
                         target.setAttribute('data-y', y);
                         
+                        // Dynamiczna zmiana wysokości płótna, jeśli element jest przeciągany w dół
                         let maxHeight = 189;
                         const canvasRect = canvas.getBoundingClientRect();
                         canvas.querySelectorAll('.draggable-element').forEach(el => {
@@ -453,108 +497,189 @@ document.addEventListener('DOMContentLoaded', function () {
                 inertia: true
             })
             .on('tap', function (event) {
-    // Usuń zaznaczenie ze wszystkich innych elementów
-    document.querySelectorAll('.draggable-element').forEach(el => el.classList.remove('selected'));
-    
-    // Ustaw nowo kliknięty element jako globalnie "wybrany"
-    selectedElement = event.currentTarget; 
-    
-    // Dodaj klasę wizualną do nowo wybranego elementu
-    selectedElement.classList.add('selected'); 
-    
-    // Zaktualizuj panel boczny dla nowo wybranego elementu
-    updatePropertiesPanel(selectedElement); 
-});
+                // Usuń zaznaczenie ze wszystkich innych elementów
+                document.querySelectorAll('.draggable-element').forEach(el => el.classList.remove('selected'));
+                
+                // Ustaw nowo kliknięty element jako globalnie "wybrany"
+                selectedElement = event.currentTarget; 
+                
+                // Dodaj klasę wizualną do nowo wybranego elementu
+                selectedElement.classList.add('selected'); 
+                
+                // Zaktualizuj panel boczny dla nowo wybranego elementu
+                updatePropertiesPanel(selectedElement); 
+            });
     }
 
+    /**
+     * Aktualizuje boczny panel właściwości na podstawie zaznaczonego elementu.
+     * @param {HTMLElement} element - Aktualnie zaznaczony element.
+     */
     function updatePropertiesPanel(element) {
-    propertiesContent.innerHTML = '';
-    const type = element.dataset.type;
-    let contentHtml = `<p>Typ: <strong>${type}</strong></p>`;
+        propertiesContent.innerHTML = '';
+        const type = element.dataset.type;
+        const elementId = element.dataset.id; // --- NOWA LOGIKA: Pobranie ID elementu
+        let contentHtml = `<p>Typ: <strong>${type}</strong></p>`;
 
-    // --- BLOK DLA TEKSTU, IKON I POLA DYNAMICZNEGO ---
-    if (type === 'text' || type === 'dynamic' || type === 'icon') {
-        if (type !== 'dynamic') {
-            contentHtml += `<div class="form-group"><label>Tekst:</label><input type="text" class="form-control form-control-sm" value="${element.textContent}" oninput="updateElement(this, '${element.dataset.id}', 'textContent')"></div>`;
+        // --- BLOK DLA TEKSTU, IKON I POLA DYNAMICZNEGO ---
+        if (type === 'text' || type === 'dynamic' || type === 'icon') {
+            if (type !== 'dynamic') {
+                contentHtml += `<div class="form-group"><label>Tekst:</label><input type="text" class="form-control form-control-sm" value="${element.textContent}" oninput="updateElement(this, '${element.dataset.id}', 'textContent')"></div>`;
+            }
+            contentHtml += `<div class="form-group"><label>Rozmiar (px):</label><input type="number" class="form-control form-control-sm" value="${element.dataset.fontSize}" oninput="updateElement(this, '${element.dataset.id}', 'fontSize')"></div>`;
+            
+            if (type === 'text' || type === 'dynamic') {
+                const isChecked = element.dataset.isCentered === 'true' ? 'checked' : '';
+                contentHtml += `
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" ${isChecked} onchange="updateElement(this, '${element.dataset.id}', 'isCentered')">
+                        <label class="form-check-label">Wyśrodkuj</label>
+                    </div>
+                `;
+            }
         }
-        contentHtml += `<div class="form-group"><label>Rozmiar (px):</label><input type="number" class="form-control form-control-sm" value="${element.dataset.fontSize}" oninput="updateElement(this, '${element.dataset.id}', 'fontSize')"></div>`;
-        
-        if (type === 'text' || type === 'dynamic') {
-            const isChecked = element.dataset.isCentered === 'true' ? 'checked' : '';
+
+        // --- ZMIENIONA LOGIKA: Blok dla obrazków z opcją uploadu i wklejania URL ---
+        if (type === 'image') {
+            const currentWidth = parseInt(element.style.width, 10) || 50;
+            const currentSrc = element.dataset.src || ''; // Pobierz URL z dataset
+
             contentHtml += `
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" ${isChecked} onchange="updateElement(this, '${element.dataset.id}', 'isCentered')">
-                    <label class="form-check-label">Wyśrodkuj</label>
+                <div class="form-group">
+                    <label>Szerokość (px):</label>
+                    <input type="number" class="form-control form-control-sm" 
+                           value="${currentWidth}" 
+                           oninput="updateElement(this, '${elementId}', 'width')">
+                </div>
+                <div class="form-group">
+                    <label>Źródło obrazka:</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control" value="${currentSrc}" placeholder="URL obrazka" readonly>
+                        <div class="input-group-append">
+                            <button class="btn btn-outline-secondary" type="button" onclick="triggerImageUpload('${elementId}')">
+                                <i class="fas fa-upload"></i> Wgraj
+                            </button>
+                        </div>
+                    </div>
+                    <small class="form-text text-muted">Wgraj plik lub wklej URL poniżej.</small>
+                    <input type="text" class="form-control form-control-sm mt-1" value="${currentSrc}" placeholder="Wklej URL obrazka" oninput="updateElement(this, '${elementId}', 'srcUrl')">
                 </div>
             `;
         }
+        // --- KONIEC ZMIENIONEJ LOGIKI ---
+
+        contentHtml += `<button class="btn btn-outline-danger btn-sm mt-3" onclick="deleteElement('${element.dataset.id}')"><i class="fas fa-trash-alt"></i> Usuń element</button>`;
+        propertiesContent.innerHTML = contentHtml;
     }
 
-    // --- POPRAWIONY BLOK DLA OBRAZKÓW (przeniesiony poza poprzedni if) ---
-    if (type === 'image') {
-        const currentWidth = parseInt(element.style.width, 10) || 50;
-        contentHtml += `
-            <div class="form-group">
-                <label>Szerokość (px):</label>
-                <input type="number" class="form-control form-control-sm" 
-                       value="${currentWidth}" 
-                       oninput="updateElement(this, '${element.dataset.id}', 'width')">
-            </div>
-        `;
+    // --- NOWA LOGIKA: Funkcja pomocnicza do wyzwalania uploadu ---
+    /**
+     * Wyzwala ukryte pole input[type=file] dla konkretnego elementu.
+     * @param {string} elementId - ID elementu, który ma otrzymać obrazek.
+     */
+    window.triggerImageUpload = function(elementId) {
+        console.log(`Wyzwalanie uploadu dla elementu: ${elementId}`);
+        imageUploader.dataset.targetElementId = elementId; // Zapisz ID celu w inpucie
+        imageUploader.click(); // Otwórz okno wyboru pliku
     }
+    // --- KONIEC NOWEJ LOGIKI ---
 
-    contentHtml += `<button class="btn btn-outline-danger btn-sm mt-3" onclick="deleteElement('${element.dataset.id}')"><i class="fas fa-trash-alt"></i> Usuń element</button>`;
-    propertiesContent.innerHTML = contentHtml;
-}
-
+    /**
+     * Globalna funkcja do aktualizowania właściwości elementu z panelu bocznego.
+     * @param {HTMLElement} input - Element <input> lub <checkbox>, który wywołał zmianę.
+     * @param {string} elementId - ID elementu na płótnie do zmodyfikowania.
+     * @param {string} property - Nazwa właściwości do zmiany ('textContent', 'fontSize', 'isCentered', 'width', 'srcUrl').
+     */
     window.updateElement = function(input, elementId, property) {
-    const element = document.querySelector(`[data-id="${elementId}"]`);
-    if (!element) return;
+        const element = document.querySelector(`[data-id="${elementId}"]`);
+        if (!element) return;
 
-    if (property === 'textContent') {
-        element.textContent = input.value;
-    } else if (property === 'fontSize') {
-        element.style.fontSize = `${input.value}px`;
-        element.dataset.fontSize = input.value;
-    } else if (property === 'isCentered') {
-        element.dataset.isCentered = input.checked;
-        if (input.checked) {
-            const y = parseFloat(element.getAttribute('data-y')) || 0;
-            const canvasWidth = canvas.offsetWidth;
-            const elementWidth = element.offsetWidth;
-            const newX = (canvasWidth / 2) - (elementWidth / 2);
-            element.style.transform = `translate(${newX}px, ${y}px)`;
-            element.setAttribute('data-x', newX);
-        }
-        // Celowo nie ma 'else', element pozostaje na miejscu po odznaczeniu
-    } else if (property === 'width') { // POPRAWIONY BLOK ZMIANY SZEROKOŚCI
-        const newWidth = parseInt(input.value, 10);
-        if (newWidth > 0) {
-            element.style.width = `${newWidth}px`;
-        }
-    }
-};
-   window.deleteElement = function(elementId) {
-    const element = document.querySelector(`[data-id="${elementId}"]`);
-    if (element) {
-        Swal.fire({
-            title: 'Usunąć element?',
-            text: "Tej operacji nie można cofnąć.",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Tak, usuń!',
-            cancelButtonText: 'Anuluj'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                element.remove();
-                propertiesContent.innerHTML = '<p class="text-muted">Kliknij na element, aby edytować.</p>';
+        if (property === 'textContent') {
+            element.textContent = input.value;
+        } else if (property === 'fontSize') {
+            element.style.fontSize = `${input.value}px`;
+            element.dataset.fontSize = input.value;
+        } else if (property === 'isCentered') {
+            element.dataset.isCentered = input.checked;
+            if (input.checked) {
+                const y = parseFloat(element.getAttribute('data-y')) || 0;
+                const canvasWidth = canvas.offsetWidth;
+                const elementWidth = element.offsetWidth;
+                const newX = (canvasWidth / 2) - (elementWidth / 2);
+                element.style.transform = `translate(${newX}px, ${y}px)`;
+                element.setAttribute('data-x', newX);
             }
-        });
-    }
-};
+            // Brak 'else' - element zostaje na miejscu po odznaczeniu
+        } else if (property === 'width') {
+            const newWidth = parseInt(input.value, 10);
+            if (newWidth > 0) {
+                element.style.width = `${newWidth}px`;
+                element.style.height = 'auto'; // Zachowaj auto-wysokość przy zmianie szerokości
 
+                // --- NOWA LOGIKA: Ponowne centrowanie po zmianie szerokości ---
+                if (element.dataset.isCentered === 'true') {
+                    const y = parseFloat(element.getAttribute('data-y')) || 0;
+                    const canvasWidth = canvas.offsetWidth;
+                    // Opóźnienie, aby przeglądarka zdążyła przeliczyć nową szerokość
+                    setTimeout(() => {
+                        const elementWidth = element.offsetWidth;
+                        const newX = (canvasWidth / 2) - (elementWidth / 2);
+                        element.style.transform = `translate(${newX}px, ${y}px)`;
+                        element.setAttribute('data-x', newX);
+                    }, 50);
+                }
+            }
+        } 
+        // --- NOWA LOGIKA: Aktualizacja obrazka po wklejeniu URL ---
+        else if (property === 'srcUrl') {
+            const newUrl = input.value.trim();
+            element.dataset.src = newUrl; // Zapisz URL w dataset
+            if (newUrl) {
+                // Wstaw obrazek
+                element.innerHTML = `<img src="${newUrl}" style="width: 100%; height: auto; pointer-events: none; display: block;">`;
+                element.style.padding = '0'; // Usuń padding
+                element.style.height = 'auto'; // Ustaw auto-wysokość
+            } else {
+                // Przywróć placeholder, jeśli URL jest pusty
+                element.innerHTML = '<i class="fas fa-image fa-2x text-muted"></i>';
+                element.style.padding = '5px'; // Przywróć padding
+                element.style.height = '50px'; // Przywróć domyślną wysokość
+            }
+            // Zaktualizuj też drugie pole (readonly) w panelu właściwości
+            const srcInput = propertiesContent.querySelector('input[placeholder="URL obrazka"]');
+            if (srcInput) srcInput.value = newUrl;
+        }
+        // --- KONIEC NOWEJ LOGIKI ---
+    };
+
+    /**
+     * Globalna funkcja do usuwania elementu z płótna.
+     * @param {string} elementId - ID elementu do usunięcia.
+     */
+    window.deleteElement = function(elementId) {
+        const element = document.querySelector(`[data-id="${elementId}"]`);
+        if (element) {
+            Swal.fire({
+                title: 'Usunąć element?',
+                text: "Tej operacji nie można cofnąć.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Tak, usuń!',
+                cancelButtonText: 'Anuluj'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    element.remove();
+                    propertiesContent.innerHTML = '<p class="text-muted">Kliknij na element, aby edytować.</p>';
+                }
+            });
+        }
+    };
+
+    /**
+     * Zapisuje aktualny stan płótna jako nowy szablon lub aktualizuje istniejący.
+     */
     saveBtn.addEventListener('click', function() {
         const templateName = templateNameInput.value.trim();
         const currentId = currentTemplateIdInput.value;
@@ -563,6 +688,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         
+        // Zbieranie danych o wszystkich elementach
         const elementsData = [];
         canvas.querySelectorAll('.draggable-element').forEach(el => {
             let x = 0, y = 0;
@@ -581,7 +707,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 content: (el.dataset.type === 'image' || el.dataset.type === 'icon') ? '' : el.textContent,
                 symbol: el.dataset.symbol || '',
                 fontSize: el.dataset.fontSize,
-                src: el.dataset.src || '',
+                src: el.dataset.src || '', // Ważne: Zapisuje URL obrazka
                 width: el.style.width,
                 height: el.style.height,
                 isCentered: el.dataset.isCentered === 'true'
@@ -599,11 +725,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         let url = '/api/label-templates';
         let method = 'POST';
+        // Jeśli edytujemy istniejący szablon, zmień URL i metodę
         if (currentId) {
             url = `/api/label-templates/${currentId}`;
             method = 'PUT';
         }
 
+        // Wysłanie szablonu do API
         fetch(url, {
             method: method,
             headers: {'Content-Type': 'application/json'},
@@ -621,8 +749,12 @@ document.addEventListener('DOMContentLoaded', function () {
         .catch((error) => console.error('Error:', error));
     });
 
+    /**
+     * Wczytuje dane szablonu z API i renderuje je na płótnie.
+     * @param {object} templateData - Obiekt szablonu pobrany z API.
+     */
     function loadTemplate(templateData) {
-        canvas.innerHTML = '';
+        canvas.innerHTML = ''; // Wyczyść płótno
         elementCounter = 0;
         currentTemplateIdInput.value = templateData.id;
 
@@ -642,6 +774,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 newElement.style.padding = '5px';
                 newElement.dataset.id = elData.id || `element-${elementCounter++}`;
                 newElement.dataset.type = elData.type;
+
                 if (elData.type === 'text' || elData.type === 'dynamic') {
                     newElement.dataset.isCentered = elData.isCentered || 'false';
                     if (elData.isCentered) {
@@ -661,9 +794,22 @@ document.addEventListener('DOMContentLoaded', function () {
                     newElement.setAttribute('data-y', y);
                 }
 
+                // Logika renderowania na podstawie typu
                 if (elData.type === 'image') {
                     newElement.dataset.src = elData.src;
-                    newElement.innerHTML = `<img src="${elData.src}" style="width: 100%; height: auto; pointer-events: none;">`;
+                    // --- ZMIENIONA LOGIKA: Prawidłowe renderowanie obrazka lub placeholdera ---
+                    if (elData.src) {
+                        newElement.innerHTML = `<img src="${elData.src}" style="width: 100%; height: auto; pointer-events: none; display: block;">`;
+                        newElement.style.padding = '0';
+                        newElement.style.height = 'auto';
+                    } else {
+                        // Jeśli src jest pusty, pokaż placeholder
+                        newElement.innerHTML = '<i class="fas fa-image fa-2x text-muted"></i>';
+                        newElement.style.display = 'flex';
+                        newElement.style.justifyContent = 'center';
+                        newElement.style.alignItems = 'center';
+                        newElement.style.overflow = 'hidden';
+                    }
                     newElement.style.width = elData.width;
                 } else if (elData.type === 'icon') {
                     newElement.classList.add('care-symbol-element');
@@ -671,7 +817,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     newElement.textContent = elData.symbol;
                     newElement.style.fontSize = `${elData.fontSize}px`;
                     newElement.dataset.fontSize = elData.fontSize;
-                } else {
+                } else { // text, dynamic
                     newElement.textContent = elData.content;
                     newElement.style.fontSize = `${elData.fontSize}px`;
                     newElement.dataset.fontSize = elData.fontSize;
@@ -687,14 +833,19 @@ document.addEventListener('DOMContentLoaded', function () {
         updateDimensionDisplay();
     }
 
+    /**
+     * Nasłuchuje na zmianę w selektorze szablonów.
+     */
     templateSelector.addEventListener('change', function() {
         const templateId = this.value;
         if (templateId) {
+            // Wczytaj wybrany szablon
             fetch(`/api/label-templates/${templateId}`)
                 .then(response => response.json())
                 .then(data => loadTemplate(data))
                 .catch(error => console.error('Błąd wczytywania szablonu:', error));
         } else {
+            // "Nowy szablon" - zresetuj płótno
             initializeCanvas();
             templateNameInput.value = '';
             deleteBtn.style.display = 'none';
@@ -702,53 +853,59 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    /**
+     * Nasłuchuje na kliknięcie przycisku usuwania szablonu.
+     */
     deleteBtn.addEventListener('click', function() {
-    const selectedId = templateSelector.value;
-    if (!selectedId) {
-        alert('Wybierz szablon, który chcesz usunąć.');
-        return;
-    }
-    const templateName = templateSelector.options[templateSelector.selectedIndex].text;
-
-    Swal.fire({
-        title: 'Jesteś pewien?',
-        text: `Szablon "${templateName}" zostanie trwale usunięty!`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Tak, usuń szablon!',
-        cancelButtonText: 'Anuluj'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            fetch(`/api/label-templates/${selectedId}`, { method: 'DELETE' })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    // Używamy Swala także do potwierdzenia sukcesu
-                    Swal.fire(
-                        'Usunięto!',
-                        'Szablon został usunięty.',
-                        'success'
-                    ).then(() => {
-                        window.location.reload();
-                    });
-                } else {
-                    Swal.fire(
-                        'Błąd!',
-                        'Wystąpił błąd: ' + data.message,
-                        'error'
-                    );
-                }
-            })
-            .catch(error => {
-                console.error('Błąd usuwania:', error);
-                Swal.fire('Błąd!', 'Wystąpił nieoczekiwany błąd.', 'error');
-            });
+        const selectedId = templateSelector.value;
+        if (!selectedId) {
+            alert('Wybierz szablon, który chcesz usunąć.');
+            return;
         }
+        const templateName = templateSelector.options[templateSelector.selectedIndex].text;
+
+        Swal.fire({
+            title: 'Jesteś pewien?',
+            text: `Szablon "${templateName}" zostanie trwale usunięty!`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Tak, usuń szablon!',
+            cancelButtonText: 'Anuluj'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                fetch(`/api/label-templates/${selectedId}`, { method: 'DELETE' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        Swal.fire(
+                            'Usunięto!',
+                            'Szablon został usunięty.',
+                            'success'
+                        ).then(() => {
+                            window.location.reload();
+                        });
+                    } else {
+                        Swal.fire(
+                            'Błąd!',
+                            'Wystąpił błąd: ' + data.message,
+                            'error'
+                        );
+                    }
+                })
+                .catch(error => {
+                    console.error('Błąd usuwania:', error);
+                    Swal.fire('Błąd!', 'Wystąpił nieoczekiwany błąd.', 'error');
+                });
+            }
+        });
     });
-});
     
+    /**
+     * Pobiera status serwera druku i automatycznie ustawia IP w polu.
+     * @param {HTMLElement} inputElement - Pole <input>, w którym ma być ustawione IP.
+     */
     async function fetchAndSetPrinterIp(inputElement) {
         if (!inputElement) return; // Jeśli input nie istnieje, zakończ
         console.log("Próba pobrania IP dla elementu:", inputElement.id); // Log do debugowania
@@ -768,8 +925,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (data.print_server === 'online' && data.last_ip) {
                 // Ustaw wartość tylko jeśli input jest pusty lub ma domyślny placeholder
                 if (!inputElement.value || inputElement.value === 'http://localhost:5001' || inputElement.placeholder.includes('np.')) { // Sprawdź też placeholder
-                     inputElement.value = `http://${data.last_ip}:5001`;
-                     console.log(`Automatycznie ustawiono adres serwera druku: ${inputElement.value}`);
+                    inputElement.value = `http://${data.last_ip}:5001`;
+                    console.log(`Automatycznie ustawiono adres serwera druku: ${inputElement.value}`);
                 } else {
                     console.log("Input ma już wartość, nie nadpisano:", inputElement.value);
                 }
@@ -788,25 +945,25 @@ document.addEventListener('DOMContentLoaded', function () {
              }
         }
     }
-    // --- KONIEC DODANEJ FUNKCJI ---
-
 
     // --- Logika testowego wydruku ---
     const testPrintBtn = document.getElementById('testPrintBtn');
-    // Użyj poprawnego ID 'printServerIp'
     const printServerIpInput = document.getElementById('printServerIp');
     const confirmPrintBtn = document.getElementById('confirmPrintBtn');
     const printStatusDiv = document.getElementById('printStatus');
     const previewImage = document.getElementById('preview-image');
     const previewText = document.getElementById('preview-text');
 
+    // Wczytaj zapisane IP z localStorage
     const savedIp = localStorage.getItem('printServerIp');
     if (savedIp) {
          printServerIpInput.value = savedIp;
          console.log("Załadowano zapisany IP:", savedIp);
     }
 
-
+    /**
+     * Nasłuchuje na kliknięcie przycisku "Testowy Wydruk".
+     */
     testPrintBtn.addEventListener('click', function() {
         printStatusDiv.innerHTML = '';
         previewImage.style.display = 'none';
@@ -814,39 +971,37 @@ document.addEventListener('DOMContentLoaded', function () {
         previewText.textContent = 'Generowanie podglądu...';
         confirmPrintBtn.disabled = true;
 
-        // --- DODAJ WYWOŁANIE FUNKCJI POBIERANIA IP TUTAJ ---
-        fetchAndSetPrinterIp(printServerIpInput); // Wywołaj przy otwieraniu modala
-        // --- KONIEC DODANEGO WYWOŁANIA ---
+        // Spróbuj pobrać i ustawić IP serwera druku
+        fetchAndSetPrinterIp(printServerIpInput);
 
         $('#printTestModal').modal('show');
 
-        // Prepare canvas for rendering (remove borders etc.)
+        // Przygotuj płótno do zrzutu ekranu (usuń obramowania)
         document.querySelectorAll('.draggable-element').forEach(el => {
             el.classList.remove('selected');
             el.style.border = 'none'; // Usuń ramkę na czas renderowania
         });
-        // Hide cut line during render
         const cutLine = canvas.querySelector('.cut-line');
-        if(cutLine) cutLine.style.display = 'none';
+        if(cutLine) cutLine.style.display = 'none'; // Ukryj linię cięcia
 
-
+        // Wygeneruj zrzut ekranu płótna
         html2canvas(document.getElementById('labelCanvas'), {
-            scale: 3, // Higher scale for better quality
+            scale: 3, // Wyższa skala dla lepszej jakości
             useCORS: true,
-            backgroundColor: null // Transparent background
+            backgroundColor: null // Przezroczyste tło
         }).then(canvasElement => {
-            // Restore borders and cut line after rendering
+            // Przywróć obramowania po renderowaniu
             document.querySelectorAll('.draggable-element').forEach(el => {
                 el.style.border = '1px dashed #ccc'; // Przywróć ramkę
             });
-             if(cutLine) cutLine.style.display = 'block'; // Show cut line again
+             if(cutLine) cutLine.style.display = 'block'; // Pokaż linię cięcia
 
             previewImage.src = canvasElement.toDataURL('image/png');
             previewImage.style.display = 'block';
             previewText.style.display = 'none';
             confirmPrintBtn.disabled = false;
         }).catch(err => {
-            // Restore borders and cut line even on error
+            // Przywróć obramowania także w razie błędu
              document.querySelectorAll('.draggable-element').forEach(el => {
                 el.style.border = '1px dashed #ccc';
             });
@@ -854,17 +1009,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
             console.error('Błąd html2canvas:', err);
             previewText.textContent = `Błąd generowania podglądu: ${err}`;
-            previewText.style.color = 'red'; // Show error in red
+            previewText.style.color = 'red';
         });
     });
 
+    /**
+     * Nasłuchuje na kliknięcie przycisku "Drukuj" w modalu testowym.
+     */
     confirmPrintBtn.addEventListener('click', function() {
-        // ... (reszta logiki confirmPrintBtn bez zmian) ...
         let currentIp = printServerIpInput.value.trim();
         if (!currentIp) { printStatusDiv.innerHTML = '<div class="alert alert-danger">Wpisz adres IP.</div>'; return; }
         if (!currentIp.startsWith('http://')) { currentIp = 'http://' + currentIp.replace(/^https?:\/\//, ''); }
-        localStorage.setItem('printServerIp', currentIp);
+        localStorage.setItem('printServerIp', currentIp); // Zapisz IP
 
+        // Konwertuj podgląd z DataURL na Blob
         fetch(previewImage.src)
             .then(res => res.blob())
             .then(imageBlob => {
@@ -874,18 +1032,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 formData.append('height_mm', pxToMm(canvas.offsetHeight));
                 formData.append('quantity', 1);
                 const printServerUrl = `${currentIp.replace(/\/$/, '')}/print_label`;
+                
                 printStatusDiv.innerHTML = '<div class="alert alert-info">Wysyłanie...</div>';
                 confirmPrintBtn.disabled = true;
+                
+                // Wyślij żądanie do serwera druku
                 return fetch(printServerUrl, { method: 'POST', body: formData });
             })
             .then(response => {
                 if (!response.ok) {
-                    return response.text().then(text => { // Odczytaj jako tekst
+                    // Obsługa błędów serwera druku
+                    return response.text().then(text => {
                         try {
-                             const err = JSON.parse(text); // Spróbuj sparsować
+                             const err = JSON.parse(text);
                              throw new Error(err.error || `Błąd serwera: ${response.status}`);
                         } catch (e) {
-                             // Jeśli nie JSON, rzuć tekst błędu
                              throw new Error(`Błąd: ${response.status}. Odpowiedź: ${text.substring(0, 100)}...`);
                         }
                     });
@@ -901,7 +1062,13 @@ document.addEventListener('DOMContentLoaded', function () {
             .finally(() => { confirmPrintBtn.disabled = false; });
     });
 
-    // --- NOWA, POPRAWIONA LOGIKA DLA MODALA GALERII ---
+    // --- Logika Modala Galerii ---
+    /**
+     * Renderuje uproszczony HTML metki (bez interaktywności) na potrzeby podglądu w galerii.
+     * @param {object} templateJson - Obiekt JSON szablonu.
+     * @param {string} size - Przykładowy rozmiar do wstawienia w pole [ROZMIAR].
+     * @returns {string} - Ciąg HTML reprezentujący metkę.
+     */
     function renderLabelHtmlForPreview(templateJson, size = 'M') {
         let elementsHtml = '';
         if (!templateJson || !Array.isArray(templateJson.elements)) return '';
@@ -917,7 +1084,7 @@ document.addEventListener('DOMContentLoaded', function () {
             } else if (elementType === 'icon') {
                 content = `<span style="font-family: 'WashCareSymbols', sans-serif;">${element.symbol || ''}</span>`;
             } else if (elementType === 'dynamic') {
-                content = size;
+                content = size; // Wstaw przykładowy rozmiar
             } else {
                 content = element.content || '';
             }
@@ -948,14 +1115,18 @@ document.addEventListener('DOMContentLoaded', function () {
         `;
     }
 
+    /**
+     * Obsługuje otwarcie modala galerii, wczytuje szablony i generuje ich podglądy.
+     */
     $('#galleryModal').on('show.bs.modal', function () {
         const modalBody = document.getElementById('galleryModalBody');
-        const renderContainer = document.getElementById('label-render-container');
+        const renderContainer = document.getElementById('label-render-container'); // Kontener do renderowania poza ekranem
 
         fetch("{{ url_for('label_gallery_content') }}")
             .then(response => response.text())
             .then(html => {
                 modalBody.innerHTML = html;
+                // Iteruj przez każdy element galerii
                 modalBody.querySelectorAll('.gallery-item').forEach(async (item) => {
                     const previewContainer = item.querySelector('.preview-container');
                     previewContainer.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>'; // Pokaż spinner
@@ -963,24 +1134,28 @@ document.addEventListener('DOMContentLoaded', function () {
                     const templateDataJson = item.querySelector('.template-data').textContent;
                     
                     try {
-                        const templateData = JSON.parse(JSON.parse(templateDataJson)); // Podwójne parsowanie
+                        const templateData = JSON.parse(JSON.parse(templateDataJson)); // Podwójne parsowanie (błąd w zapisie?)
+                        // Renderuj HTML metki w ukrytym kontenerze
                         renderContainer.innerHTML = renderLabelHtmlForPreview(templateData);
                         const labelElement = renderContainer.firstElementChild;
 
                         if (!labelElement) throw new Error("Nie udało się wyrenderować HTML metki.");
 
+                        // Użyj html2canvas na wyrenderowanym elemencie
                         const canvasElement = await html2canvas(labelElement, { scale: 2, backgroundColor: null, useCORS: true });
                         
+                        // Stwórz obrazek z wygenerowanego canvasu
                         const img = document.createElement('img');
                         img.src = canvasElement.toDataURL('image/png');
                         img.alt = item.dataset.templateName;
-                        previewContainer.innerHTML = '';
-                        previewContainer.appendChild(img);
+                        previewContainer.innerHTML = ''; // Usuń spinner
+                        previewContainer.appendChild(img); // Dodaj podgląd
 
+                        // Dodaj listener kliknięcia do wczytania szablonu
                         item.addEventListener('click', function() {
                             const templateId = this.dataset.templateId;
                             templateSelector.value = templateId;
-                            templateSelector.dispatchEvent(new Event('change'));
+                            templateSelector.dispatchEvent(new Event('change')); // Wyzwól zmianę
                             $('#galleryModal').modal('hide');
                         });
 
@@ -988,12 +1163,92 @@ document.addEventListener('DOMContentLoaded', function () {
                         console.error("Błąd generowania podglądu dla szablonu:", item.dataset.templateName, e);
                         previewContainer.innerHTML = '<p class="text-danger small">Błąd</p>';
                     } finally {
-                        renderContainer.innerHTML = '';
+                        renderContainer.innerHTML = ''; // Wyczyść kontener renderujący
                     }
                 });
             });
     });
     
+    // --- NOWA LOGIKA: Główny listener dla wgrywanego pliku ---
+    /**
+     * Nasłuchuje na zdarzenie 'change' ukrytego pola input[type=file].
+     * Obsługuje wysłanie pliku na serwer i aktualizację elementu obrazka.
+     */
+    imageUploader.addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        const targetElementId = imageUploader.dataset.targetElementId; // Pobierz ID elementu docelowego
+
+        if (!file || !targetElementId) {
+            console.log("Nie wybrano pliku lub brak ID celu.");
+            return; // Nie wybrano pliku lub brak celu
+        }
+
+        const targetElement = document.querySelector(`[data-id="${targetElementId}"]`);
+        if (!targetElement) {
+             console.error(`Element docelowy ${targetElementId} nie znaleziony!`);
+             return; // Nie znaleziono elementu docelowego
+        }
+
+        const formData = new FormData();
+        formData.append('image_file', file);
+
+        // Pokaż spinner w elemencie podczas wgrywania
+        targetElement.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>';
+        targetElement.style.height = '50px'; // Ustaw stałą wysokość na czas ładowania
+
+        // Wyślij plik do API
+        fetch('/api/label-designer/upload_image', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                // Spróbuj sparsować błąd JSON z serwera
+                return response.json().then(errData => {
+                    throw new Error(errData.error || `Błąd HTTP ${response.status}`);
+                }).catch(() => {
+                    // Fallback, jeśli odpowiedź błędu nie jest JSON-em
+                    throw new Error(`Błąd HTTP ${response.status}`);
+                });
+            }
+            return response.json(); // Sukces, pars_json
+         })
+        .then(data => {
+            console.log("Wgrywanie zakończone sukcesem:", data);
+            if (data.success && data.url) {
+                // Aktualizuj element na płótnie
+                 targetElement.dataset.src = data.url; // Zapisz URL w dataset
+                 targetElement.innerHTML = `<img src="${data.url}" style="width: 100%; height: auto; pointer-events: none; display: block;">`;
+                 targetElement.style.padding = '0'; // Usuń padding
+                 targetElement.style.height = 'auto'; // Ustaw auto-wysokość
+
+                // Jeśli ten element jest nadal zaznaczony, odśwież panel właściwości
+                if (selectedElement && selectedElement.dataset.id === targetElementId) {
+                    updatePropertiesPanel(targetElement);
+                }
+            } else {
+                 console.error("API zwróciło sukces=fałsz lub brak URL:", data);
+                throw new Error(data.error || 'Nie udało się wgrać obrazka.');
+            }
+        })
+        .catch(error => {
+            console.error('Błąd podczas wgrywania obrazka:', error);
+             // Przywróć placeholder w razie błędu
+             targetElement.innerHTML = '<i class="fas fa-image fa-2x text-muted"></i>';
+             targetElement.style.padding = '5px';
+             targetElement.style.height = '50px';
+            alert(`Błąd wgrywania: ${error.message}`);
+        })
+         .finally(() => {
+            // Wyczyść input pliku, aby umożliwić ponowne wgranie tego samego pliku
+            imageUploader.value = null; 
+             imageUploader.removeAttribute('data-target-element-id'); // Wyczyść ID celu
+             console.log("Proces wgrywania zakończony.");
+        });
+    });
+    // --- KONIEC NOWEJ LOGIKI ---
+
+    // Inicjalizacja płótna przy starcie strony
     initializeCanvas();
 });
 </script>

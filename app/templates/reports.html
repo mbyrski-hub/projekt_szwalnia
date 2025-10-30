@@ -30,6 +30,11 @@
         height: 300px; /* Zmniejszona wysokość dla spójności */
         width: 100%;
     }
+    /* --- NOWY STYL DLA LISTY PRODUKTÓW --- */
+    .product-list-body {
+        max-height: 300px; /* Wysokość dopasowana do wykresów */
+        overflow-y: auto;
+    }
 </style>
 {% endblock %}
 
@@ -60,11 +65,45 @@
 </div>
 
 <div class="row">
-    <div class="col-lg-8 mb-4">
-        <div class="card h-100"><div class="card-header"><h4>Trend Wartości Produkcji (ostatnie 12 miesięcy)</h4></div><div class="card-body"><div class="chart-container"><canvas id="productionTrendChart"></canvas></div></div></div>
+    <div class="col-lg-5 mb-4">
+        <div class="card h-100">
+            <div class="card-header"><h4>Trend Wartości Produkcji (ostatnie 12 miesięcy)</h4></div>
+            <div class="card-body"><div class="chart-container"><canvas id="productionTrendChart"></canvas></div></div>
+        </div>
     </div>
+
     <div class="col-lg-4 mb-4">
-        <div class="card h-100"><div class="card-header"><h4>Struktura Kosztów (dla okresu)</h4></div><div class="card-body"><div class="chart-container"><canvas id="costStructureChart"></canvas></div></div></div>
+        <div class="card h-100">
+            <div class="card-header"><h4><i class="fas fa-tshirt"></i> Najczęściej Szyte Produkty</h4></div>
+            <div class="card-body product-list-body p-0">
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th class="pl-3">Produkt</th>
+                            <th class="text-right pr-3">Ilość</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for product_name, quantity in sorted_products %}
+                        <tr>
+                            <td class="pl-3">{{ product_name }}</td>
+                            <td class="text-right pr-3"><strong>{{ quantity }} szt.</strong></td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="2" class="text-center text-muted">Brak danych</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 mb-4">
+        <div class="card h-100">
+            <div class="card-header"><h4>Struktura Kosztów (dla okresu)</h4></div>
+            <div class="card-body"><div class="chart-container"><canvas id="costStructureChart"></canvas></div></div>
+        </div>
     </div>
 </div>
 
